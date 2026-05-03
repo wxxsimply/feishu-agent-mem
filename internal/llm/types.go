@@ -24,9 +24,10 @@ type DecisionExtract struct {
 	Rationale       string           `json:"rationale"`
 	SuggestedTopic  string           `json:"suggested_topic"`
 	ImpactLevel     string           `json:"impact_level"`
-	PhaseScope      string           `json:"phase_scope"`
+	PhaseScope      string           `json:"phase_scope,omitempty"`
 	Proposer        string           `json:"proposer"`
 	Executor        string           `json:"executor"`
+	DecisionType    string           `json:"decision_type,omitempty"`
 	RelatedEntities RelatedEntities  `json:"related_entities"`
 }
 

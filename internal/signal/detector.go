@@ -12,7 +12,7 @@ import (
 // 设计原则：
 // 1. 不再依赖单个关键词的"命中/未命中"二元判断
 // 2. 从多个维度综合评分，超过阈值才判定为决策信号
-// 3. 内置反信号机制，过滤闲聊/问候/不确定讨论
+// 3. 内置反信号机制，过滤闲聊/问候/不确定讨论/进度同步/信息分享等噪声
 // ============================================================
 
 // DecisionLevel 决策信号等级
@@ -90,7 +90,7 @@ func (d *EnhancedDetector) Analyze(content string, ctx *DetectContext) *Detectio
 	result.AntiSignals = antiSignals
 	antiScore := d.calculateAntiScore(antiSignals)
 	result.Factors.AntiScore = antiScore
-	if antiScore >= 0.7 {
+	if antiScore >= 0.6 {
 		result.Level = LevelNone
 		result.IsDecision = false
 		return result
@@ -166,6 +166,37 @@ func (d *EnhancedDetector) detectAntiSignals(content string) []string {
 		signals = append(signals, "small_talk:"+matched[0])
 	}
 
+	// 状态更新/进度同步
+	if matched := containsAny(content, []string{
+		"已完成", "正在处理", "进度", "进展", "更新一下",
+		"update", "完工", "当前状态", "目前",
+	}); len(matched) > 0 {
+		signals = append(signals, "status_update:"+matched[0])
+	}
+
+	// 信息分享
+	if matched := containsAny(content, []string{
+		"分享", "通知", "告知", "FYI", "fyi",
+		"仅供参考", "参考",
+	}); len(matched) > 0 {
+		signals = append(signals, "information_sharing:"+matched[0])
+	}
+
+	// 计划性表述（未定）
+	if matched := containsAny(content, []string{
+		"打算", "想试试", "准备做", "计划做", "考虑使用",
+		"考虑采用",
+	}); len(matched) > 0 {
+		signals = append(signals, "aspirational:"+matched[0])
+	}
+
+	// 转述他人
+	if matched := containsAny(content, []string{
+		"他说", "她说", "反馈说", "提到", "提及",
+	}); len(matched) > 0 {
+		signals = append(signals, "reporting_others:"+matched[0])
+	}
+
 	return signals
 }
 
@@ -186,6 +217,14 @@ func (d *EnhancedDetector) calculateAntiScore(signals []string) float64 {
 			score += 0.3
 		case strings.HasPrefix(s, "small_talk:"):
 			score += 0.5
+		case strings.HasPrefix(s, "status_update:"):
+			score += 0.5
+		case strings.HasPrefix(s, "information_sharing:"):
+			score += 0.4
+		case strings.HasPrefix(s, "aspirational:"):
+			score += 0.3
+		case strings.HasPrefix(s, "reporting_others:"):
+			score += 0.35
 		default:
 			score += 0.2
 		}
@@ -217,14 +256,10 @@ func (d *EnhancedDetector) calculateCategoryScore(signals []SignalDetail) float6
 
 // computeFinalScore 综合加权计算
 func (d *EnhancedDetector) computeFinalScore(lexical, structural, dynamic, pattern, anti float64) float64 {
-	final := lexical*0.40 + structural*0.20 + dynamic*0.10 + pattern*0.30
+	final := lexical*0.45 + structural*0.15 + dynamic*0.05 + pattern*0.35
 
 	if pattern >= 0.7 && final < pattern {
 		final = final*0.5 + pattern*0.5
-	}
-
-	if lexical >= 0.7 && structural < 0.3 && pattern < 0.3 {
-		final *= 0.7
 	}
 
 	final *= (1.0 - anti*0.5)
@@ -242,7 +277,7 @@ func (d *EnhancedDetector) classifyLevel(score float64) DecisionLevel {
 	switch {
 	case score >= 0.65:
 		return LevelHigh
-	case score >= 0.40:
+	case score >= 0.50:
 		return LevelMedium
 	case score >= 0.20:
 		return LevelLow
@@ -301,7 +336,7 @@ func NewLexicalAnalyzer() *LexicalAnalyzer {
 			{keywords: []string{"责任人", "负责", "执行人", "owner"}, weight: 0.50, name: "assign_owner"},
 		},
 		lowWeight: []weightedPattern{
-			{keywords: []string{"可以", "没问题", "ok", "OK", "好的"}, weight: 0.30, name: "agreement"},
+			{keywords: []string{"可以", "没问题", "ok", "OK", "好的"}, weight: 0.20, name: "agreement"},
 			{keywords: []string{"对比", "比较", "vs", "还是", "或者", "alternative"}, weight: 0.35, name: "comparison"},
 			{keywords: []string{"我觉", "我认为", "个人认为", "观点"}, weight: 0.25, name: "opinion"},
 			{keywords: []string{"计划", "安排", "排期", "时间"}, weight: 0.30, name: "planning"},
@@ -494,13 +529,15 @@ func compilePatterns() []*decisionPattern {
 	}{
 		{name: "adopt_solution", regex: `(采用|选用|使用|用)\s*[，,。.\s]*(方案|方式|方法|技术|框架|工具)`, weight: 0.75},
 		{name: "decide_solution", regex: `就[用定选]`, weight: 0.70},
-		{name: "final_plan", regex: `(最终|最后)[的决定的方案]`, weight: 0.70},
-		{name: "confirm_plan", regex: `(可以|没问题|ok|好的|行)[，,。.．！!\s]*(就|按|照|这样)`, weight: 0.65},
+		{name: "decided_action", regex: `(决定|确认|同意)\s*(使用|采用|用|选|选择)`, weight: 0.80},
+		{name: "final_plan", regex: `(最终|最后)[的决定的方案]`, weight: 0.50},
+		{name: "confirm_plan", regex: `(可以|没问题|ok|好的|行)[，,。.．！!\s]*(就|按|照|这样)`, weight: 0.45},
 		{name: "approve_proposal", regex: `(同意|批准|通过|approve)\s*(这个|该|此)`, weight: 0.80},
 		{name: "preference", regex: `(倾向于|偏向|建议|推荐)\s*(使用|采用|选|用)`, weight: 0.60},
 		{name: "recommend", regex: `我\s*(建议|推荐|觉得)\s*[我们]?\s*[采用使用选用]`, weight: 0.55},
-		{name: "conclusion_therefore", regex: `(因此|所以|那[就么]|那就)`, weight: 0.50},
+		{name: "conclusion_therefore", regex: `(因此|所以|那[就么]|那就)`, weight: 0.30},
 		{name: "conclusion_finally", regex: `总结[一下]?[：:,，]`, weight: 0.65},
+		{name: "conclusion_statement", regex: `结论[是就]`, weight: 0.75},
 		{name: "assign_task", regex: `(由|让|请)\s*[@]?\S{1,10}[来去]\s*(负责|处理|跟进|做|完成)`, weight: 0.55},
 		{name: "owner_assign", regex: `([\p{Han}\w]{2,10})\s*(负责|owner|owner是)`, weight: 0.50},
 		{name: "ab_selection", regex: `(用|选|采用)\s*\S{1,10}\s*(还是|或|or|vs)\s*\S{1,10}`, weight: 0.45},
@@ -577,7 +614,9 @@ func isMostlyEmoji(s string) bool {
 
 func isPureQuestion(s string) bool {
 	s = strings.TrimSpace(s)
-	if !strings.HasSuffix(s, "?") && !strings.HasSuffix(s, "？") && !strings.HasSuffix(s, "吗") {
+	if !strings.HasSuffix(s, "?") && !strings.HasSuffix(s, "？") &&
+		!strings.HasSuffix(s, "吗") && !strings.HasSuffix(s, "吧") &&
+		!strings.HasSuffix(s, "么") {
 		return false
 	}
 	if len(containsAny(s, []string{"决定", "确认", "通过", "用", "选"})) > 0 {

@@ -60,13 +60,9 @@ func (e *IMEmitter) EmitSignal(result *larkadapter.DetectResult) (*StateChangeSi
 			decisionSignals = append(decisionSignals, "pin")
 		}
 		if ch.Type == "new_text" || ch.Type == "new_post" {
-			matched := e.MatchKeywords(ch.Summary)
-			if len(matched) >= 2 {
-				strength = maxStrength(strength, StrengthMedium)
-			} else if len(matched) == 1 {
-				strength = maxStrength(strength, StrengthWeak)
-			}
-			keywords = append(keywords, matched...)
+			// 强度判断交由 EnhancedDetector（多因子检测）统一处理
+			// Emitter 只做关键词标记，不做强度决策
+			keywords = append(keywords, e.MatchKeywords(ch.Summary)...)
 			decisionSignals = append(decisionSignals, e.matchDecisionWords(ch.Summary)...)
 		}
 	}

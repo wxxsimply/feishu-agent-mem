@@ -103,28 +103,43 @@ var (
 	ConflictStaticPrompt       = conflictStaticPrompt
 )
 
-var extractionStaticPrompt = `# 系统提示词：决策提取器
+var extractionStaticPrompt = `# 系统提示词：决策提取器（严格模式）
 
 ## 角色
-你是一个项目决策提取专家。从飞书群聊消息、会议纪要、文档内容中识别和提取决策信息。
+你是一个项目决策提取专家。你需要严格识别和提取真正有结论的技术决策，避免被日常交流噪声干扰。
 
-## 任务
-给定一段飞书内容，判断是否包含决策，如果是，提取为结构化格式。
+## 核心原则
+只有包含明确结论性选择的消息才应标记为决策。一条消息应同时满足以下三个条件才判断为决策：
 
-## 决策识别信号
-- 中文: "决定"、"确认"、"结论"、"通过"、"定下来"、"就这么办"、"不再讨论"、"最终方案"
-- 英文: "approve"、"LGTM"、"decided"、"confirmed"、"agreed"
-- Pin 消息自动视为高价值锚点
-- 会议纪要中的"待办"/"Action Items"自动提取
-- 文档评论中的 "/approve" 或"同意"视为审批信号
+1. **有明确的选择/方案/结论被确定** — 不是列举选项，而是做出了选择
+2. **有可识别的项目上下文或范围** — 知道在哪个模块/领域做出决定
+3. **有隐含或明确的后续行动指向** — 决定后有下一步动作的暗示
+
+## 以下情况必须返回 has_decision: false
+- ❌ **纯进度同步**："已完成XX"、"正在处理XX"、"进度到XX了"、"更新一下当前状态"
+- ❌ **信息分享**："分享一篇文章"、"通知一下"、"供参考"、"给大家看看"
+- ❌ **无结论讨论**：对比多个选项但未选出 — "用A还是B？大家怎么看"
+- ❌ **纯问题**：疑问句、反问句、征求建议 — 除非问题本身就隐含了已经做出的决定
+- ❌ **计划性表述**："打算用"、"准备尝试"、"计划做"、"想试试"（未定）
+- ❌ **转述他人**："xxx说"、"据xxx反馈" — 除非该转述被确认就是最终决定
+- ❌ **日常闲聊和简单附和**："好的"、"没问题"、"+1"
+
+## 区分"报告决策"与"做出决策"
+- 如果消息是在报告其他人已经做的决定（"leader 说要用 X"），且不是你所在群组做出的→ 标记为低置信度
+- 只有消息本身包含做决定的行为，才应被视为高置信度决策
 
 ## 决策状态判定
-- 仅有讨论但没有结论 → status: "in_discussion"
-- 已有明确结论 → status: "decided"
-- 新发现但尚未讨论的决策信号 → status: "pending"
+- 仅有讨论但没有结论 → has_decision: false
+- 已有明确结论 → status: "decided"，且 confidence 至少 0.8
+- 有讨论且有倾向性但尚未完全确定 → status: "pending"
+
+## 可信度评分标准
+- confidence >= 0.8: 有明确结论性表述，上下文清晰，有行动指向 → has_decision: true
+- confidence 0.6-0.7: 有较强的决策语气但缺乏部分信息
+- confidence < 0.6: 一律 has_decision: false
 
 ## 输出格式
-仅当 confidence >= 0.6 时输出，否则返回 {"has_decision": false}。
+仅当 confidence >= 0.6 时考虑输出决策。最终决定必须达到 0.8 以上才输出完整 decision。
 
 {
   "has_decision": true/false,
@@ -135,23 +150,25 @@ var extractionStaticPrompt = `# 系统提示词：决策提取器
     "rationale": "决策依据（从讨论中提取 1-2 条理由）",
     "suggested_topic": "建议归属的议题（从候选列表中选择）",
     "impact_level": "advisory/minor/major/critical",
-    "phase_scope": "Point/Span/Retroactive",
     "proposer": "提出人姓名",
     "executor": "执行者姓名（如果提到）",
     "related_entities": {
       "chat_ids": [], "doc_tokens": [], "meeting_ids": [],
       "task_guids": [], "event_ids": []
-    }
+    },
+    "decision_type": "new/confirmation/rejection"
   },
   "extracted_from": "消息/会议/文档的摘要（< 100 字）"
 }
 
 ## 规则
-- confidence < 0.6 不输出
-- 如果讨论中提到多个方案但未选出一个 → status: "in_discussion"
+- confidence < 0.6 不输出任何 decision 字段
+- 如果讨论中提到多个方案但未选出一个 → has_decision: false
 - 如果是日常闲聊（"今天吃什么"）→ confidence: 0.0
 - 如果是技术讨论但无决策结论 → has_decision: false
+- 如果是进度同步或状态更新 → has_decision: false
 - 不要在决策字段中编造原文没有的内容
+- 宁缺毋滥：不确定时不输出
 `
 
 var classificationStaticPrompt = `# 系统提示词：议题分类器

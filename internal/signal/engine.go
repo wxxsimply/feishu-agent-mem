@@ -78,7 +78,7 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 					result.Decision.Title, result.Decision.SuggestedTopic)
 			}
 
-			if result.HasDecision && result.Confidence > 0.5 && result.Decision != nil {
+			if result.HasDecision && result.Confidence >= 0.6 && result.Decision != nil {
 				newNode = decision.NewDecisionNode(
 					GenerateSDRID(),
 					result.Decision.Title,
@@ -93,10 +93,15 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 				newNode.Status = decision.StatusPending
 
 				log.Printf("[SignalEngine] Decision extracted from LLM: %s", result.Decision.Title)
+			} else if !result.HasDecision {
+				log.Printf("[SignalEngine] LLM determined no decision, skipping entirely")
+				log.Println("========== SIGNAL ENGINE END ==========")
+				return nil, nil
 			} else {
-				log.Printf("[SignalEngine] LLM didn't find a confident decision, using fallback (HasDecision=%v, Confidence=%.2f)",
-					result.HasDecision, result.Confidence)
-				newNode = e.createDecisionFallback(proposer, content)
+				log.Printf("[SignalEngine] LLM confidence too low (%.2f < 0.6), skipping",
+					result.Confidence)
+				log.Println("========== SIGNAL ENGINE END ==========")
+				return nil, nil
 			}
 		}
 	} else {
