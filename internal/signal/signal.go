@@ -61,6 +61,8 @@ type SignalContext struct {
 	EmbeddedURLs    []EmbeddedURL `json:"embedded_urls"`
 	ContentSnippet  string        `json:"content_snippet"`
 	EventTime       time.Time     `json:"event_time"`
+	Score           float64       `json:"score"`       // 检测器综合评分
+	IsDecision      bool          `json:"is_decision"` // 是否被判定为决策
 }
 
 // EmbeddedURL 嵌入的 URL
