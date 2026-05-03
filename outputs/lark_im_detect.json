@@ -1,15 +1,7 @@
 {
-  "has_changes": true,
+  "has_changes": false,
   "source": "lark_im",
-  "detected_at": "2026-04-30T18:49:22.176883044Z",
-  "last_check": "2026-04-30T18:47:30.21371059Z",
-  "changes": [
-    {
-      "type": "new_text",
-      "entity_type": "group_message",
-      "entity_id": "om_x100b500e0c288ca4b37892eefb353a2",
-      "summary": "[群聊] 莫文豪: 决定：消息队列换成Kafka，执行人吴九，影响级别major",
-      "timestamp": 1777574940
-    }
-  ]
+  "detected_at": "2026-05-02T16:55:30.487725+08:00",
+  "last_check": "2026-05-02T16:55:25.815198+08:00",
+  "changes": null
 }

@@ -1,23 +1,17 @@
-// internal/llm/agent.go
-// LLM 模块主入口
-
 package llm
 
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
-	"feishu-mem/internal/llm/budget"
 	"feishu-mem/internal/llm/prompts"
-	"feishu-mem/internal/llm/tools"
 )
 
 // MemoryAgent 记忆系统专用 Agent
 type MemoryAgent struct {
 	promptMgr *prompts.PromptManager
-	tools     *tools.ToolRegistry
-	budget    *budget.BudgetTracker
 	fallback  *Fallback
 	llmClient *Client
 }
@@ -26,8 +20,6 @@ type MemoryAgent struct {
 func NewMemoryAgent() *MemoryAgent {
 	return &MemoryAgent{
 		promptMgr: prompts.NewPromptManager(),
-		tools:     tools.NewToolRegistry(),
-		budget: budget.NewBudgetTracker(budget.DefaultBudget()),
 		fallback:  NewFallback(),
 		llmClient: NewClient(),
 	}
@@ -35,17 +27,16 @@ func NewMemoryAgent() *MemoryAgent {
 
 // ========== 核心工作流 ==========
 
-// ProcessSignal 处理信号（主入口）
-func (a *MemoryAgent) ProcessSignal(sig any) (*DecisionResult, error) {
-	return &DecisionResult{
-		CreatedAt: time.Now(),
-	}, nil
-}
-
 // ExtractDecision 提取决策
 func (a *MemoryAgent) ExtractDecision(content string, topics []string) (*ExtractionResult, error) {
+	log.Println("========== EXTRACT DECISION START ==========")
+	log.Printf("[Agent] Content length: %d", len(content))
+	log.Printf("[Agent] Topics: %v", topics)
+
 	// 检查 LLM 是否可用
 	if !a.llmClient.IsAvailable() {
+		log.Println("[Agent] LLM not available, returning fallback")
+		log.Println("========== EXTRACT DECISION END ==========")
 		return &ExtractionResult{
 			HasDecision:    false,
 			Confidence:     0.0,
@@ -54,8 +45,11 @@ func (a *MemoryAgent) ExtractDecision(content string, topics []string) (*Extract
 	}
 
 	// 构建提示词
+	log.Println("[Agent] Building extraction prompts...")
 	systemPrompt, userPrompt, err := a.buildExtractionPrompts(content, topics)
 	if err != nil {
+		log.Printf("[Agent] Build prompts failed: %v", err)
+		log.Println("========== EXTRACT DECISION END ==========")
 		return &ExtractionResult{
 			HasDecision:    false,
 			Confidence:     0.0,
@@ -63,12 +57,18 @@ func (a *MemoryAgent) ExtractDecision(content string, topics []string) (*Extract
 		}, err
 	}
 
+	log.Printf("[Agent] System prompt (first 500 chars): %s", truncateForLog(systemPrompt, 500))
+	log.Printf("[Agent] User prompt (first 500 chars): %s", truncateForLog(userPrompt, 500))
+
 	// 调用 LLM
+	log.Println("[Agent] Calling LLM...")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	llmResponse, err := a.llmClient.Call(ctx, systemPrompt, userPrompt)
 	if err != nil {
+		log.Printf("[Agent] LLM call failed: %v", err)
+		log.Println("========== EXTRACT DECISION END ==========")
 		return &ExtractionResult{
 			HasDecision:    false,
 			Confidence:     0.0,
@@ -76,74 +76,85 @@ func (a *MemoryAgent) ExtractDecision(content string, topics []string) (*Extract
 		}, err
 	}
 
+	log.Printf("[Agent] Raw LLM response: %s", llmResponse)
+
 	// 解析 LLM 响应
+	log.Println("[Agent] Parsing LLM response...")
 	result, err := ParseExtractionResult(llmResponse)
 	if err != nil {
+		log.Printf("[Agent] Parse failed: %v, using fallback", err)
+		log.Println("========== EXTRACT DECISION END ==========")
 		return &ExtractionResult{
 			HasDecision:    false,
 			Confidence:     0.0,
 			ExtractedFrom: content,
 		}, err
+	}
+
+	log.Printf("[Agent] Parse result: HasDecision=%v, Confidence=%.2f", result.HasDecision, result.Confidence)
+	if result.Decision != nil {
+		log.Printf("[Agent] Decision title: %s", result.Decision.Title)
+		log.Printf("[Agent] Decision content: %s", truncateForLog(result.Decision.Decision, 200))
 	}
 
 	result.ExtractedFrom = content
+	log.Println("========== EXTRACT DECISION END ==========")
 	return result, nil
 }
 
 // ClassifyTopic 分类议题
 func (a *MemoryAgent) ClassifyTopic(decision string, topics []string) (*ClassificationResult, error) {
-	// 快速路径：关键词匹配
+	log.Printf("[Agent] ClassifyTopic called: decision=%s, topics=%v", truncateForLog(decision, 100), topics)
+
 	quickResult := a.fallback.ClassifyTopic(decision, topics)
 	if quickResult.Topic != "" {
+		log.Printf("[Agent] Fallback result: %s", quickResult.Topic)
 		return quickResult, nil
 	}
 
-	// 检查 LLM 是否可用
 	if !a.llmClient.IsAvailable() {
+		log.Println("[Agent] LLM not available, returning fallback")
 		return quickResult, nil
 	}
 
-	// 构建提示词
 	systemPrompt, userPrompt, err := a.buildClassificationPrompts(decision, topics)
 	if err != nil {
+		log.Printf("[Agent] Build classification prompts failed: %v", err)
 		return quickResult, err
 	}
 
-	// 调用 LLM
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	llmResponse, err := a.llmClient.Call(ctx, systemPrompt, userPrompt)
 	if err != nil {
+		log.Printf("[Agent] LLM call failed: %v", err)
 		return quickResult, nil
 	}
 
-	// 解析 LLM 响应
 	result, err := ParseClassificationResult(llmResponse)
 	if err != nil {
+		log.Printf("[Agent] Parse classification failed: %v", err)
 		return quickResult, nil
 	}
 
+	log.Printf("[Agent] Classification result: %s", result.Topic)
 	return result, nil
 }
 
 // DetectCrossTopic 检测跨议题
 func (a *MemoryAgent) DetectCrossTopic(node any) (*CrossTopicResult, error) {
-	// 快速路径：降级策略
 	quickResult := a.fallback.DetectCrossTopic(node)
 
-	// 检查 LLM 是否可用
 	if !a.llmClient.IsAvailable() {
 		return quickResult, nil
 	}
 
-	// 构建提示词
 	systemPrompt, userPrompt, err := a.buildCrossTopicPrompts(node)
 	if err != nil {
 		return quickResult, err
 	}
 
-	// 调用 LLM
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -152,7 +163,6 @@ func (a *MemoryAgent) DetectCrossTopic(node any) (*CrossTopicResult, error) {
 		return quickResult, nil
 	}
 
-	// 解析 LLM 响应
 	result, err := ParseCrossTopicResult(llmResponse)
 	if err != nil {
 		return quickResult, nil
@@ -163,7 +173,6 @@ func (a *MemoryAgent) DetectCrossTopic(node any) (*CrossTopicResult, error) {
 
 // ResolveConflict 解决冲突
 func (a *MemoryAgent) ResolveConflict(nodeA, nodeB any) (*ConflictResult, error) {
-	// 默认结果
 	result := &ConflictResult{
 		ContradictionScore: 0.0,
 		ContradictionType:  "none",
@@ -172,18 +181,15 @@ func (a *MemoryAgent) ResolveConflict(nodeA, nodeB any) (*ConflictResult, error)
 		NeedsUser:          false,
 	}
 
-	// 检查 LLM 是否可用
 	if !a.llmClient.IsAvailable() {
 		return result, nil
 	}
 
-	// 构建提示词
 	systemPrompt, userPrompt, err := a.buildConflictPrompts(nodeA, nodeB)
 	if err != nil {
 		return result, nil
 	}
 
-	// 调用 LLM
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -192,7 +198,6 @@ func (a *MemoryAgent) ResolveConflict(nodeA, nodeB any) (*ConflictResult, error)
 		return result, nil
 	}
 
-	// 解析 LLM 响应
 	llmResult, err := ParseConflictResult(llmResponse)
 	if err != nil {
 		return result, nil
@@ -206,14 +211,14 @@ func (a *MemoryAgent) IsAvailable() bool {
 	return a.llmClient.IsAvailable()
 }
 
-// GetTools 获取工具列表
-func (a *MemoryAgent) GetTools() []*tools.ToolHint {
-	return a.tools.GetAllHints()
+// GetTools 获取工具列表 (用于测试兼容)
+func (a *MemoryAgent) GetTools() []any {
+	return []any{}
 }
 
-// SearchTools 搜索工具
-func (a *MemoryAgent) SearchTools(query string) []*tools.ToolHint {
-	return a.tools.SearchTools(query)
+// SearchTools 搜索工具 (用于测试兼容)
+func (a *MemoryAgent) SearchTools(query string) []any {
+	return []any{}
 }
 
 // ========== 内部方法 ==========
@@ -250,8 +255,8 @@ func (a *MemoryAgent) buildCrossTopicPrompts(node any) (string, string, error) {
 	systemPrompt := prompts.CrossTopicStaticPrompt
 
 	data := make(map[string]any)
-	if m, ok := node.(map[string]any); ok {
-		for k, v := range m {
+	if mapNode, ok := node.(map[string]any); ok {
+		for k, v := range mapNode {
 			data[k] = v
 		}
 	}

@@ -13,7 +13,7 @@ bin/
 
 # 数据目录
 data/
-
+data.backup.*/
 # 日志目录
 logs/
 
@@ -43,5 +43,4 @@ Thumbs.db
 # Node（MCP 代理）
 scripts/node_modules/
 scripts/package-lock.json
-
 

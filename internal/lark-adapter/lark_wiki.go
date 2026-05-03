@@ -6,7 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
+
+	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
 // --- Snapshot 数据结构 ---
@@ -35,15 +38,18 @@ type NodeSnapshot struct {
 
 // WikiExtractor 知识库提取器
 type WikiExtractor struct {
-	config *Config
-	cli    *LarkCLI
+	config       *Config
+	cli          *LarkCLI
+	contentCache map[string]string
+	cacheLock    sync.RWMutex
 }
 
 // NewWikiExtractor 创建知识库提取器
 func NewWikiExtractor(cfg *Config) *WikiExtractor {
 	return &WikiExtractor{
-		config: cfg,
-		cli:    NewLarkCLI(),
+		config:       cfg,
+		cli:          NewLarkCLI(),
+		contentCache: make(map[string]string),
 	}
 }
 
@@ -444,4 +450,96 @@ func parseNodeTime(timeStr string) int64 {
 		return t.Unix()
 	}
 	return 0
+}
+
+// FetchWikiNodeContent 获取知识库节点内容
+func (e *WikiExtractor) FetchWikiNodeContent(nodeToken string) (string, error) {
+	output, err := e.cli.RunCommand("wiki", "nodes", "get", "--node-token", nodeToken)
+	if err != nil {
+		return "", err
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(output, &result); err != nil {
+		return "", err
+	}
+
+	if data, ok := result["data"].(map[string]any); ok {
+		if markdown, ok := data["markdown"].(string); ok {
+			return markdown, nil
+		}
+	}
+
+	return "", fmt.Errorf("could not extract markdown content")
+}
+
+// CompareWikiNodeContent 比较知识库节点内容
+func (e *WikiExtractor) CompareWikiNodeContent(nodeToken, oldContent, newContent string) (string, []diffmatchpatch.Diff) {
+	dmp := diffmatchpatch.New()
+	diffs := dmp.DiffMain(oldContent, newContent, false)
+	prettyDiff := dmp.DiffPrettyText(diffs)
+	return prettyDiff, diffs
+}
+
+// GetWikiNodeContentDiff 获取知识库节点内容变化（自动缓存）
+func (e *WikiExtractor) GetWikiNodeContentDiff(nodeToken string) (string, []diffmatchpatch.Diff, error) {
+	newContent, err := e.FetchWikiNodeContent(nodeToken)
+	if err != nil {
+		return "", nil, err
+	}
+
+	e.cacheLock.RLock()
+	oldContent, hasOld := e.contentCache[nodeToken]
+	e.cacheLock.RUnlock()
+
+	if !hasOld {
+		e.cacheLock.Lock()
+		e.contentCache[nodeToken] = newContent
+		e.cacheLock.Unlock()
+		return "", nil, nil
+	}
+
+	e.cacheLock.Lock()
+	e.contentCache[nodeToken] = newContent
+	e.cacheLock.Unlock()
+
+	prettyDiff, diffs := e.CompareWikiNodeContent(nodeToken, oldContent, newContent)
+	return prettyDiff, diffs, nil
+}
+
+// HasWikiNodeContentChanged 检查知识库节点内容是否有变化
+func (e *WikiExtractor) HasWikiNodeContentChanged(nodeToken, oldContent, newContent string) bool {
+	dmp := diffmatchpatch.New()
+	diffs := dmp.DiffMain(oldContent, newContent, false)
+
+	for _, diff := range diffs {
+		if diff.Type != diffmatchpatch.DiffEqual {
+			return true
+		}
+	}
+	return false
+}
+
+// GetWikiNodeContentChangeSummary 获取内容变化摘要
+func (e *WikiExtractor) GetWikiNodeContentChangeSummary(diffs []diffmatchpatch.Diff) map[string]int {
+	changes := map[string]int{
+		"added":   0,
+		"deleted": 0,
+		"changed": 0,
+	}
+
+	for _, diff := range diffs {
+		switch diff.Type {
+		case diffmatchpatch.DiffInsert:
+			changes["added"] += len(diff.Text)
+		case diffmatchpatch.DiffDelete:
+			changes["deleted"] += len(diff.Text)
+		}
+	}
+
+	if changes["added"] > 0 && changes["deleted"] > 0 {
+		changes["changed"] = changes["added"] + changes["deleted"]
+	}
+
+	return changes
 }

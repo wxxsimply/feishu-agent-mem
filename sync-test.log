@@ -1,0 +1,435 @@
+2026/05/02 16:03:47 === Git ↔ Bitable 双向同步测试 ===
+2026/05/02 16:03:47 运行清空脚本...
+2026/05/02 16:03:47 === 重新初始化 Git Storage ===
+1. 备份当前目录...
+   备份到: ./data.backup.20260502_160347
+2. 创建新目录...
+3. 初始化 Git 仓库...
+Initialized empty Git repository in /Users/halllo/openclaw-workspace/feishu-agent-mem/data/.git/
+4. 配置 Git 用户...
+5. 创建基础目录结构...
+6. 创建 L0_RULES.md...
+7. 创建 .gitignore...
+8. 初始 commit...
+[main (root-commit) 7d78267] init: 初始化 OpenClaw 决策仓库
+ 2 files changed, 20 insertions(+)
+ create mode 100644 .gitignore
+ create mode 100644 L0_RULES.md
+
+=== Git Storage 初始化完成 ===
+7d78267 init: 初始化 OpenClaw 决策仓库
+
+2026/05/02 16:03:48 === 清空 Bitable ===
+Base Token: NnnMb5mWJaBJkXsHf69cIpfMn8b
+Table ID: tblEBXkSxaqxnY6l
+1. 正在获取所有 record IDs...
+2. 解析 record_id_list...
+没有找到 records，或者无法解析！
+原始响应：
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "data": [],
+    "field_id_list": [
+      "fld8wqCGLS",
+      "fld9wCsQCd",
+      "fldC0RR25K",
+      "fldf7yLDpJ",
+      "fldi6wJ1Ez",
+      "fldKXJGYDJ",
+      "fldoEYShMK",
+      "fldOMxF33K",
+      "fldtKRw87R",
+      "fldzy2pqM9"
+    ],
+    "fields": [
+      "sdr_id",
+      "proposer",
+      "title",
+      "topic",
+      "impact_level",
+      "executor",
+      "status",
+      "git_commit_hash",
+      "created_at",
+      "decision"
+    ],
+    "has_more": false,
+    "query_context": {
+      "field_scope": "all_fields",
+      "record_scope": "all_records"
+    },
+    "record_id_list": []
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+
+2026/05/02 16:03:49 [Sync] CreateInGit: dec_20260502_001
+2026/05/02 16:03:49 [Sync] git create: dec_20260502_001 - 用户认证模块设计
+2026/05/02 16:03:49 1. 创建决策: dec_20260502_001, hash=b70fa2cd4e6463a8c521098cd7a990c14ea648a5
+2026/05/02 16:03:50 [Sync] CreateInGit: dec_20260502_002
+2026/05/02 16:03:50 [Sync] git create: dec_20260502_002 - 数据库连接池配置
+2026/05/02 16:03:50 2. 创建决策: dec_20260502_002, hash=9a0a277a6afd45d4a2788a843ec09e074101a4cc
+2026/05/02 16:03:50 [Sync] UpdateInGit: dec_20260502_001
+2026/05/02 16:03:51 [Sync] git update: dec_20260502_001 - 用户认证模块设计（修订版）
+2026/05/02 16:03:51 3. 更新决策: dec_20260502_001, hash=f55517ba824f2bf1eedede4ac64a8b985b89c2d8
+2026/05/02 16:03:51 [Sync] CreateInGit: dec_20260502_003
+2026/05/02 16:03:51 [Sync] git create: dec_20260502_003 - API 响应格式规范
+2026/05/02 16:03:51 4. 创建决策: dec_20260502_003, hash=3b1b42f513b409e24a1b7cd2ce073bd0cc197ddf
+2026/05/02 16:03:52 [Sync] UpdateInGit: dec_20260502_002
+2026/05/02 16:03:52 [Sync] git update: dec_20260502_002 - 数据库连接池配置（优化）
+2026/05/02 16:03:52 5. 更新决策: dec_20260502_002, hash=26e361594558cd5839a2db450e22a2ca35bbafe6
+2026/05/02 16:03:52 [Sync] === 开始正向同步: Git → Bitable ===
+2026/05/02 16:03:52 [Sync] Git 中有 3 个决策
+2026/05/02 16:03:52 [Bitable] 开始获取所有决策...
+2026/05/02 16:03:53 [Bitable] 字段列表: [sdr_id proposer title topic impact_level executor status git_commit_hash created_at decision]
+2026/05/02 16:03:53 [Bitable] 记录数: 0
+2026/05/02 16:03:53 [Sync] Bitable 中有 0 个决策
+2026/05/02 16:03:53 [Sync] 处理 Git 决策: dec_20260502_001 (用户认证模块设计（修订版）)
+2026/05/02 16:03:53 [Sync]   Git 决策 hash: "b70fa2cd4e6463a8c521098cd7a990c14ea648a5"
+2026/05/02 16:03:53 [Sync]   Bitable 中不存在，插入新记录
+2026/05/02 16:03:53 [Bitable] 写入决策: dec_20260502_001
+2026/05/02 16:03:53 [Bitable] 查找 sdr_id: dec_20260502_001
+2026/05/02 16:03:54 [Bitable] 未找到记录: sdr_id=dec_20260502_001
+2026/05/02 16:03:54 [Bitable] Upsert payload: {"created_at":"2026-05-02 16:03:49","decision":"采用 OAuth 2.0 + JWT 双机制","executor":"","git_commit_hash":"b70fa2cd4e6463a8c521098cd7a990c14ea648a5","impact_level":"major","proposer":"张三","sdr_id":"dec_20260502_001","status":"decided","title":"用户认证模块设计（修订版）","topic":"general"}
+2026/05/02 16:03:54 [Bitable] 创建新记录
+2026/05/02 16:03:55 [Sync] git create: dec_20260502_001 - 用户认证模块设计（修订版）
+2026/05/02 16:03:55 [Sync] 处理 Git 决策: dec_20260502_002 (数据库连接池配置（优化）)
+2026/05/02 16:03:55 [Sync]   Git 决策 hash: "9a0a277a6afd45d4a2788a843ec09e074101a4cc"
+2026/05/02 16:03:55 [Sync]   Bitable 中不存在，插入新记录
+2026/05/02 16:03:55 [Bitable] 写入决策: dec_20260502_002
+2026/05/02 16:03:55 [Bitable] 查找 sdr_id: dec_20260502_002
+2026/05/02 16:03:56 [Bitable] 未找到记录: sdr_id=dec_20260502_002
+2026/05/02 16:03:56 [Bitable] Upsert payload: {"created_at":"2026-05-02 16:03:50","decision":"最大连接数 100","executor":"李四","git_commit_hash":"9a0a277a6afd45d4a2788a843ec09e074101a4cc","impact_level":"major","proposer":"张三","sdr_id":"dec_20260502_002","status":"executing","title":"数据库连接池配置（优化）","topic":"general"}
+2026/05/02 16:03:56 [Bitable] 创建新记录
+2026/05/02 16:03:58 [Sync] git create: dec_20260502_002 - 数据库连接池配置（优化）
+2026/05/02 16:03:58 [Sync] 处理 Git 决策: dec_20260502_003 (API 响应格式规范)
+2026/05/02 16:03:58 [Sync]   Git 决策 hash: "3b1b42f513b409e24a1b7cd2ce073bd0cc197ddf"
+2026/05/02 16:03:58 [Sync]   Bitable 中不存在，插入新记录
+2026/05/02 16:03:58 [Bitable] 写入决策: dec_20260502_003
+2026/05/02 16:03:58 [Bitable] 查找 sdr_id: dec_20260502_003
+2026/05/02 16:04:00 [Bitable] 未找到记录: sdr_id=dec_20260502_003
+2026/05/02 16:04:00 [Bitable] Upsert payload: {"created_at":"2026-05-02 16:03:51","decision":"统一使用 JSON 格式","executor":"","git_commit_hash":"3b1b42f513b409e24a1b7cd2ce073bd0cc197ddf","impact_level":"major","proposer":"张三","sdr_id":"dec_20260502_003","status":"pending","title":"API 响应格式规范","topic":"general"}
+2026/05/02 16:04:00 [Bitable] 创建新记录
+2026/05/02 16:04:01 [Sync] git create: dec_20260502_003 - API 响应格式规范
+2026/05/02 16:04:01 [Sync] === 正向同步完成 ===
+2026/05/02 16:04:02 Bitable 原始输出:
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "data": [
+      [
+        "dec_20260502_001",
+        "张三",
+        "用户认证模块设计（修订版）",
+        "general",
+        "major",
+        null,
+        "decided",
+        "b70fa2cd4e6463a8c521098cd7a990c14ea648a5",
+        "2026-05-02 16:03:49",
+        "采用 OAuth 2.0 + JWT 双机制"
+      ],
+      [
+        "dec_20260502_002",
+        "张三",
+        "数据库连接池配置（优化）",
+        "general",
+        "major",
+        "李四",
+        "executing",
+        "9a0a277a6afd45d4a2788a843ec09e074101a4cc",
+        "2026-05-02 16:03:50",
+        "最大连接数 100"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范",
+        "general",
+        "major",
+        null,
+        "pending",
+        "3b1b42f513b409e24a1b7cd2ce073bd0cc197ddf",
+        "2026-05-02 16:03:51",
+        "统一使用 JSON 格式"
+      ]
+    ],
+    "field_id_list": [
+      "fld8wqCGLS",
+      "fld9wCsQCd",
+      "fldC0RR25K",
+      "fldf7yLDpJ",
+      "fldi6wJ1Ez",
+      "fldKXJGYDJ",
+      "fldoEYShMK",
+      "fldOMxF33K",
+      "fldtKRw87R",
+      "fldzy2pqM9"
+    ],
+    "fields": [
+      "sdr_id",
+      "proposer",
+      "title",
+      "topic",
+      "impact_level",
+      "executor",
+      "status",
+      "git_commit_hash",
+      "created_at",
+      "decision"
+    ],
+    "has_more": false,
+    "query_context": {
+      "field_scope": "all_fields",
+      "record_scope": "all_records"
+    },
+    "record_id_list": [
+      "recvirPWHToQrW",
+      "recvirPXgBDNUD",
+      "recvirPY8p0ba4"
+    ]
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+2026/05/02 16:04:02 [Sync] CreateInBitable: dec_20260502_004
+2026/05/02 16:04:02 [Bitable] 写入决策: dec_20260502_004
+2026/05/02 16:04:02 [Bitable] 查找 sdr_id: dec_20260502_004
+2026/05/02 16:04:03 [Bitable] 未找到记录: sdr_id=dec_20260502_004
+2026/05/02 16:04:03 [Bitable] Upsert payload: {"created_at":"2026-05-02 16:04:02","decision":"使用 ELK Stack","executor":"","git_commit_hash":"","impact_level":"minor","proposer":"张三","sdr_id":"dec_20260502_004","status":"in_discussion","title":"日志系统架构","topic":"general"}
+2026/05/02 16:04:03 [Bitable] 创建新记录
+2026/05/02 16:04:04 [Sync] bitable create: dec_20260502_004 - 日志系统架构
+2026/05/02 16:04:04 6. 在 Bitable 创建决策: dec_20260502_004
+2026/05/02 16:04:04 [Sync] UpdateInBitable: dec_20260502_003
+2026/05/02 16:04:04 [Bitable] 写入决策: dec_20260502_003
+2026/05/02 16:04:04 [Bitable] 查找 sdr_id: dec_20260502_003
+2026/05/02 16:04:06 [Bitable] 找到记录: sdr_id=dec_20260502_003, record_id=recvirPY8p0ba4
+2026/05/02 16:04:06 [Bitable] Upsert payload: {"created_at":"2026-05-02 16:04:04","decision":"统一使用 JSON 格式，支持分页","executor":"王五","git_commit_hash":"","impact_level":"major","proposer":"张三","sdr_id":"dec_20260502_003","status":"decided","title":"API 响应格式规范（v2）","topic":"general"}
+2026/05/02 16:04:06 [Bitable] 更新已有记录: recvirPY8p0ba4
+2026/05/02 16:04:07 [Sync] bitable update: dec_20260502_003 - API 响应格式规范（v2）
+2026/05/02 16:04:07 7. 在 Bitable 更新决策: dec_20260502_003
+2026/05/02 16:04:08 [Sync] CreateInBitable: dec_20260502_005
+2026/05/02 16:04:08 [Bitable] 写入决策: dec_20260502_005
+2026/05/02 16:04:08 [Bitable] 查找 sdr_id: dec_20260502_005
+2026/05/02 16:04:09 [Bitable] 未找到记录: sdr_id=dec_20260502_005
+2026/05/02 16:04:09 [Bitable] Upsert payload: {"created_at":"2026-05-02 16:04:08","decision":"Redis + 本地缓存两级","executor":"","git_commit_hash":"","impact_level":"critical","proposer":"张三","sdr_id":"dec_20260502_005","status":"pending","title":"缓存策略设计","topic":"general"}
+2026/05/02 16:04:09 [Bitable] 创建新记录
+2026/05/02 16:04:10 [Sync] bitable create: dec_20260502_005 - 缓存策略设计
+2026/05/02 16:04:10 8. 在 Bitable 创建决策: dec_20260502_005
+2026/05/02 16:04:11 [Sync] UpdateInBitable: dec_20260502_004
+2026/05/02 16:04:11 [Bitable] 写入决策: dec_20260502_004
+2026/05/02 16:04:11 [Bitable] 查找 sdr_id: dec_20260502_004
+2026/05/02 16:04:12 [Bitable] 找到记录: sdr_id=dec_20260502_004, record_id=recvirPYWyomai
+2026/05/02 16:04:12 [Bitable] Upsert payload: {"created_at":"2026-05-02 16:04:02","decision":"使用 ELK Stack","executor":"","git_commit_hash":"","impact_level":"minor","proposer":"张三","sdr_id":"dec_20260502_004","status":"decided","title":"日志系统架构（完善）","topic":"general"}
+2026/05/02 16:04:12 [Bitable] 更新已有记录: recvirPYWyomai
+2026/05/02 16:04:13 [Sync] bitable update: dec_20260502_004 - 日志系统架构（完善）
+2026/05/02 16:04:13 9. 在 Bitable 更新决策: dec_20260502_004
+2026/05/02 16:04:13 [Sync] CreateInBitable: dec_20260502_006
+2026/05/02 16:04:13 [Bitable] 写入决策: dec_20260502_006
+2026/05/02 16:04:13 [Bitable] 查找 sdr_id: dec_20260502_006
+2026/05/02 16:04:14 [Bitable] 未找到记录: sdr_id=dec_20260502_006
+2026/05/02 16:04:14 [Bitable] Upsert payload: {"created_at":"2026-05-02 16:04:13","decision":"Prometheus + Grafana","executor":"","git_commit_hash":"","impact_level":"minor","proposer":"张三","sdr_id":"dec_20260502_006","status":"pending","title":"监控告警方案","topic":"general"}
+2026/05/02 16:04:14 [Bitable] 创建新记录
+2026/05/02 16:04:16 [Sync] bitable create: dec_20260502_006 - 监控告警方案
+2026/05/02 16:04:16 10. 在 Bitable 创建决策: dec_20260502_006
+2026/05/02 16:04:17 [Sync] === 开始反向同步: Bitable → Git ===
+2026/05/02 16:04:17 [Bitable] 开始获取所有决策...
+2026/05/02 16:04:18 [Bitable] 字段列表: [sdr_id proposer title topic impact_level executor status git_commit_hash created_at decision]
+2026/05/02 16:04:18 [Bitable] 记录数: 6
+2026/05/02 16:04:18 [Bitable] 解析到决策: dec_20260502_001 (hash: "b70fa2cd4e6463a8c521098cd7a990c14ea648a5")
+2026/05/02 16:04:18 [Bitable] 解析到决策: dec_20260502_002 (hash: "9a0a277a6afd45d4a2788a843ec09e074101a4cc")
+2026/05/02 16:04:18 [Bitable] 解析到决策: dec_20260502_003 (hash: "")
+2026/05/02 16:04:18 [Bitable] 解析到决策: dec_20260502_004 (hash: "")
+2026/05/02 16:04:18 [Bitable] 解析到决策: dec_20260502_005 (hash: "")
+2026/05/02 16:04:18 [Bitable] 解析到决策: dec_20260502_006 (hash: "")
+2026/05/02 16:04:18 [Sync] Bitable 中有 6 个决策
+2026/05/02 16:04:18 [Sync] Git 中有 3 个决策
+2026/05/02 16:04:18 [Sync] 处理 Bitable 决策: dec_20260502_001 (用户认证模块设计（修订版）)
+2026/05/02 16:04:18 [Sync]   Bitable 决策 hash: "b70fa2cd4e6463a8c521098cd7a990c14ea648a5"
+2026/05/02 16:04:18 [Sync]   Git 中已存在, Git hash: f55517ba824f2bf1eedede4ac64a8b985b89c2d8
+2026/05/02 16:04:18 [Sync]   内容有变化，更新 Git
+2026/05/02 16:04:18 [Sync]   更新失败: git [commit -m decision(general): dec_20260502_001 - 用户认证模块设计（修订版）
+
+Decision: 采用 OAuth 2.0 + JWT 双机制
+Rationale: 需要支持移动端和 Web 端两种场景
+Impact: 
+Proposer: 张三]: exit status 1: 
+2026/05/02 16:04:18 [Sync] 处理 Bitable 决策: dec_20260502_002 (数据库连接池配置（优化）)
+2026/05/02 16:04:18 [Sync]   Bitable 决策 hash: "9a0a277a6afd45d4a2788a843ec09e074101a4cc"
+2026/05/02 16:04:18 [Sync]   Git 中已存在, Git hash: 26e361594558cd5839a2db450e22a2ca35bbafe6
+2026/05/02 16:04:18 [Sync]   内容有变化，更新 Git
+2026/05/02 16:04:18 [Sync]   更新失败: git [commit -m decision(general): dec_20260502_002 - 数据库连接池配置（优化）
+
+Decision: 最大连接数 100
+Rationale: 根据项目需求讨论决定
+Impact: 
+Proposer: 张三]: exit status 1: 
+2026/05/02 16:04:18 [Sync] 处理 Bitable 决策: dec_20260502_003 (API 响应格式规范（v2）)
+2026/05/02 16:04:18 [Sync]   Bitable 决策 hash: ""
+2026/05/02 16:04:18 [Sync]   Git 中已存在, Git hash: 3b1b42f513b409e24a1b7cd2ce073bd0cc197ddf
+2026/05/02 16:04:18 [Sync]   内容有变化，更新 Git
+2026/05/02 16:04:18 [Sync] bitable update: dec_20260502_003 - API 响应格式规范（v2）
+2026/05/02 16:04:18 [Sync]   同步更新 Bitable 中的 hash
+2026/05/02 16:04:18 [Bitable] 写入决策: dec_20260502_003
+2026/05/02 16:04:18 [Bitable] 查找 sdr_id: dec_20260502_003
+2026/05/02 16:04:19 [Bitable] 找到记录: sdr_id=dec_20260502_003, record_id=recvirPY8p0ba4
+2026/05/02 16:04:19 [Bitable] Upsert payload: {"created_at":"2026-05-02 16:03:51","decision":"统一使用 JSON 格式，支持分页","executor":"王五","git_commit_hash":"fe36650d00f9625d5a59643107b517fa001ef7de","impact_level":"major","proposer":"张三","sdr_id":"dec_20260502_003","status":"decided","title":"API 响应格式规范（v2）","topic":"general"}
+2026/05/02 16:04:19 [Bitable] 更新已有记录: recvirPY8p0ba4
+2026/05/02 16:04:20 [Sync] 处理 Bitable 决策: dec_20260502_004 (日志系统架构（完善）)
+2026/05/02 16:04:20 [Sync]   Bitable 决策 hash: ""
+2026/05/02 16:04:20 [Sync]   Git 中不存在，写入新文件
+2026/05/02 16:04:20 [Sync] bitable create: dec_20260502_004 - 日志系统架构（完善）
+2026/05/02 16:04:20 [Sync]   同步更新 Bitable 中的 hash
+2026/05/02 16:04:20 [Bitable] 写入决策: dec_20260502_004
+2026/05/02 16:04:20 [Bitable] 查找 sdr_id: dec_20260502_004
+2026/05/02 16:04:21 [Bitable] 找到记录: sdr_id=dec_20260502_004, record_id=recvirPYWyomai
+2026/05/02 16:04:21 [Bitable] Upsert payload: {"created_at":"2026-05-02 16:04:02","decision":"使用 ELK Stack","executor":"","git_commit_hash":"445ea865be97ee609af27eda08e17af91645cd87","impact_level":"minor","proposer":"张三","sdr_id":"dec_20260502_004","status":"decided","title":"日志系统架构（完善）","topic":"general"}
+2026/05/02 16:04:21 [Bitable] 更新已有记录: recvirPYWyomai
+2026/05/02 16:04:23 [Sync] 处理 Bitable 决策: dec_20260502_005 (缓存策略设计)
+2026/05/02 16:04:23 [Sync]   Bitable 决策 hash: ""
+2026/05/02 16:04:23 [Sync]   Git 中不存在，写入新文件
+2026/05/02 16:04:23 [Sync] bitable create: dec_20260502_005 - 缓存策略设计
+2026/05/02 16:04:23 [Sync]   同步更新 Bitable 中的 hash
+2026/05/02 16:04:23 [Bitable] 写入决策: dec_20260502_005
+2026/05/02 16:04:23 [Bitable] 查找 sdr_id: dec_20260502_005
+2026/05/02 16:04:24 [Bitable] 找到记录: sdr_id=dec_20260502_005, record_id=recvirQ0vsqfo5
+2026/05/02 16:04:24 [Bitable] Upsert payload: {"created_at":"2026-05-02 16:04:08","decision":"Redis + 本地缓存两级","executor":"","git_commit_hash":"a2e4f519e4fd4ca9176d4a19185c66408df8e86c","impact_level":"critical","proposer":"张三","sdr_id":"dec_20260502_005","status":"pending","title":"缓存策略设计","topic":"general"}
+2026/05/02 16:04:24 [Bitable] 更新已有记录: recvirQ0vsqfo5
+2026/05/02 16:04:25 [Sync] 处理 Bitable 决策: dec_20260502_006 (监控告警方案)
+2026/05/02 16:04:25 [Sync]   Bitable 决策 hash: ""
+2026/05/02 16:04:25 [Sync]   Git 中不存在，写入新文件
+2026/05/02 16:04:25 [Sync] bitable create: dec_20260502_006 - 监控告警方案
+2026/05/02 16:04:25 [Sync]   同步更新 Bitable 中的 hash
+2026/05/02 16:04:25 [Bitable] 写入决策: dec_20260502_006
+2026/05/02 16:04:25 [Bitable] 查找 sdr_id: dec_20260502_006
+2026/05/02 16:04:26 [Bitable] 找到记录: sdr_id=dec_20260502_006, record_id=recvirQ26MRW0l
+2026/05/02 16:04:26 [Bitable] Upsert payload: {"created_at":"2026-05-02 16:04:13","decision":"Prometheus + Grafana","executor":"","git_commit_hash":"0d69ce856ce93d4e28459fbafd457973ec86883a","impact_level":"minor","proposer":"张三","sdr_id":"dec_20260502_006","status":"pending","title":"监控告警方案","topic":"general"}
+2026/05/02 16:04:26 [Bitable] 更新已有记录: recvirQ26MRW0l
+2026/05/02 16:04:27 [Sync] === 反向同步完成 ===
+2026/05/02 16:04:27 [Sync] === 开始正向同步: Git → Bitable ===
+2026/05/02 16:04:27 [Sync] Git 中有 6 个决策
+2026/05/02 16:04:27 [Bitable] 开始获取所有决策...
+2026/05/02 16:04:28 [Bitable] 字段列表: [sdr_id proposer title topic impact_level executor status git_commit_hash created_at decision]
+2026/05/02 16:04:28 [Bitable] 记录数: 6
+2026/05/02 16:04:28 [Bitable] 解析到决策: dec_20260502_001 (hash: "b70fa2cd4e6463a8c521098cd7a990c14ea648a5")
+2026/05/02 16:04:28 [Bitable] 解析到决策: dec_20260502_002 (hash: "9a0a277a6afd45d4a2788a843ec09e074101a4cc")
+2026/05/02 16:04:28 [Bitable] 解析到决策: dec_20260502_003 (hash: "fe36650d00f9625d5a59643107b517fa001ef7de")
+2026/05/02 16:04:28 [Bitable] 解析到决策: dec_20260502_004 (hash: "445ea865be97ee609af27eda08e17af91645cd87")
+2026/05/02 16:04:28 [Bitable] 解析到决策: dec_20260502_005 (hash: "a2e4f519e4fd4ca9176d4a19185c66408df8e86c")
+2026/05/02 16:04:28 [Bitable] 解析到决策: dec_20260502_006 (hash: "0d69ce856ce93d4e28459fbafd457973ec86883a")
+2026/05/02 16:04:28 [Sync] Bitable 中有 6 个决策
+2026/05/02 16:04:28 [Sync] Bitable 中已有: dec_20260502_001 (hash: "b70fa2cd4e6463a8c521098cd7a990c14ea648a5")
+2026/05/02 16:04:28 [Sync] Bitable 中已有: dec_20260502_002 (hash: "9a0a277a6afd45d4a2788a843ec09e074101a4cc")
+2026/05/02 16:04:28 [Sync] Bitable 中已有: dec_20260502_003 (hash: "fe36650d00f9625d5a59643107b517fa001ef7de")
+2026/05/02 16:04:28 [Sync] Bitable 中已有: dec_20260502_004 (hash: "445ea865be97ee609af27eda08e17af91645cd87")
+2026/05/02 16:04:28 [Sync] Bitable 中已有: dec_20260502_005 (hash: "a2e4f519e4fd4ca9176d4a19185c66408df8e86c")
+2026/05/02 16:04:28 [Sync] Bitable 中已有: dec_20260502_006 (hash: "0d69ce856ce93d4e28459fbafd457973ec86883a")
+2026/05/02 16:04:28 [Sync] 处理 Git 决策: dec_20260502_001 (用户认证模块设计（修订版）)
+2026/05/02 16:04:28 [Sync]   Git 决策 hash: "b70fa2cd4e6463a8c521098cd7a990c14ea648a5"
+2026/05/02 16:04:28 [Sync]   Bitable hash: "b70fa2cd4e6463a8c521098cd7a990c14ea648a5"
+2026/05/02 16:04:28 [Sync]   Hash 一致，跳过
+2026/05/02 16:04:28 [Sync] 处理 Git 决策: dec_20260502_002 (数据库连接池配置（优化）)
+2026/05/02 16:04:28 [Sync]   Git 决策 hash: "9a0a277a6afd45d4a2788a843ec09e074101a4cc"
+2026/05/02 16:04:28 [Sync]   Bitable hash: "9a0a277a6afd45d4a2788a843ec09e074101a4cc"
+2026/05/02 16:04:28 [Sync]   Hash 一致，跳过
+2026/05/02 16:04:28 [Sync] 处理 Git 决策: dec_20260502_003 (API 响应格式规范（v2）)
+2026/05/02 16:04:28 [Sync]   Git 决策 hash: "3b1b42f513b409e24a1b7cd2ce073bd0cc197ddf"
+2026/05/02 16:04:28 [Sync]   Bitable hash: "fe36650d00f9625d5a59643107b517fa001ef7de"
+2026/05/02 16:04:28 [Sync]   Hash 不一致，更新 Bitable
+2026/05/02 16:04:28 [Bitable] 写入决策: dec_20260502_003
+2026/05/02 16:04:28 [Bitable] 查找 sdr_id: dec_20260502_003
+2026/05/02 16:04:29 [Bitable] 找到记录: sdr_id=dec_20260502_003, record_id=recvirPY8p0ba4
+2026/05/02 16:04:29 [Bitable] Upsert payload: {"created_at":"2026-05-02 16:03:51","decision":"统一使用 JSON 格式，支持分页","executor":"王五","git_commit_hash":"3b1b42f513b409e24a1b7cd2ce073bd0cc197ddf","impact_level":"major","proposer":"张三","sdr_id":"dec_20260502_003","status":"decided","title":"API 响应格式规范（v2）","topic":"general"}
+2026/05/02 16:04:29 [Bitable] 更新已有记录: recvirPY8p0ba4
+2026/05/02 16:04:30 [Sync] git update: dec_20260502_003 - API 响应格式规范（v2）
+2026/05/02 16:04:30 [Sync] 处理 Git 决策: dec_20260502_004 (日志系统架构（完善）)
+2026/05/02 16:04:30 [Sync]   Git 决策 hash: "445ea865be97ee609af27eda08e17af91645cd87"
+2026/05/02 16:04:30 [Sync]   Bitable hash: "445ea865be97ee609af27eda08e17af91645cd87"
+2026/05/02 16:04:30 [Sync]   Hash 一致，跳过
+2026/05/02 16:04:30 [Sync] 处理 Git 决策: dec_20260502_005 (缓存策略设计)
+2026/05/02 16:04:30 [Sync]   Git 决策 hash: "a2e4f519e4fd4ca9176d4a19185c66408df8e86c"
+2026/05/02 16:04:30 [Sync]   Bitable hash: "a2e4f519e4fd4ca9176d4a19185c66408df8e86c"
+2026/05/02 16:04:30 [Sync]   Hash 一致，跳过
+2026/05/02 16:04:30 [Sync] 处理 Git 决策: dec_20260502_006 (监控告警方案)
+2026/05/02 16:04:30 [Sync]   Git 决策 hash: "0d69ce856ce93d4e28459fbafd457973ec86883a"
+2026/05/02 16:04:30 [Sync]   Bitable hash: "0d69ce856ce93d4e28459fbafd457973ec86883a"
+2026/05/02 16:04:30 [Sync]   Hash 一致，跳过
+2026/05/02 16:04:30 [Sync] === 正向同步完成 ===
+2026/05/02 16:04:30 [Sync] === 开始反向同步: Bitable → Git ===
+2026/05/02 16:04:30 [Bitable] 开始获取所有决策...
+2026/05/02 16:04:32 [Bitable] 字段列表: [sdr_id proposer title topic impact_level executor status git_commit_hash created_at decision]
+2026/05/02 16:04:32 [Bitable] 记录数: 6
+2026/05/02 16:04:32 [Bitable] 解析到决策: dec_20260502_001 (hash: "b70fa2cd4e6463a8c521098cd7a990c14ea648a5")
+2026/05/02 16:04:32 [Bitable] 解析到决策: dec_20260502_002 (hash: "9a0a277a6afd45d4a2788a843ec09e074101a4cc")
+2026/05/02 16:04:32 [Bitable] 解析到决策: dec_20260502_003 (hash: "3b1b42f513b409e24a1b7cd2ce073bd0cc197ddf")
+2026/05/02 16:04:32 [Bitable] 解析到决策: dec_20260502_004 (hash: "445ea865be97ee609af27eda08e17af91645cd87")
+2026/05/02 16:04:32 [Bitable] 解析到决策: dec_20260502_005 (hash: "a2e4f519e4fd4ca9176d4a19185c66408df8e86c")
+2026/05/02 16:04:32 [Bitable] 解析到决策: dec_20260502_006 (hash: "0d69ce856ce93d4e28459fbafd457973ec86883a")
+2026/05/02 16:04:32 [Sync] Bitable 中有 6 个决策
+2026/05/02 16:04:32 [Sync] Git 中有 6 个决策
+2026/05/02 16:04:32 [Sync] 处理 Bitable 决策: dec_20260502_001 (用户认证模块设计（修订版）)
+2026/05/02 16:04:32 [Sync]   Bitable 决策 hash: "b70fa2cd4e6463a8c521098cd7a990c14ea648a5"
+2026/05/02 16:04:32 [Sync]   Git 中已存在, Git hash: f55517ba824f2bf1eedede4ac64a8b985b89c2d8
+2026/05/02 16:04:32 [Sync]   内容有变化，更新 Git
+2026/05/02 16:04:32 [Sync]   更新失败: git [commit -m decision(general): dec_20260502_001 - 用户认证模块设计（修订版）
+
+Decision: 采用 OAuth 2.0 + JWT 双机制
+Rationale: 需要支持移动端和 Web 端两种场景
+Impact: 
+Proposer: 张三]: exit status 1: 
+2026/05/02 16:04:32 [Sync] 处理 Bitable 决策: dec_20260502_002 (数据库连接池配置（优化）)
+2026/05/02 16:04:32 [Sync]   Bitable 决策 hash: "9a0a277a6afd45d4a2788a843ec09e074101a4cc"
+2026/05/02 16:04:32 [Sync]   Git 中已存在, Git hash: 26e361594558cd5839a2db450e22a2ca35bbafe6
+2026/05/02 16:04:32 [Sync]   内容有变化，更新 Git
+2026/05/02 16:04:32 [Sync]   更新失败: git [commit -m decision(general): dec_20260502_002 - 数据库连接池配置（优化）
+
+Decision: 最大连接数 100
+Rationale: 根据项目需求讨论决定
+Impact: 
+Proposer: 张三]: exit status 1: 
+2026/05/02 16:04:32 [Sync] 处理 Bitable 决策: dec_20260502_003 (API 响应格式规范（v2）)
+2026/05/02 16:04:32 [Sync]   Bitable 决策 hash: "3b1b42f513b409e24a1b7cd2ce073bd0cc197ddf"
+2026/05/02 16:04:32 [Sync]   Git 中已存在, Git hash: fe36650d00f9625d5a59643107b517fa001ef7de
+2026/05/02 16:04:32 [Sync]   内容有变化，更新 Git
+2026/05/02 16:04:32 [Sync]   更新失败: git [commit -m decision(general): dec_20260502_003 - API 响应格式规范（v2）
+
+Decision: 统一使用 JSON 格式，支持分页
+Rationale: 根据项目需求讨论决定
+Impact: 
+Proposer: 张三]: exit status 1: 
+2026/05/02 16:04:32 [Sync] 处理 Bitable 决策: dec_20260502_004 (日志系统架构（完善）)
+2026/05/02 16:04:32 [Sync]   Bitable 决策 hash: "445ea865be97ee609af27eda08e17af91645cd87"
+2026/05/02 16:04:32 [Sync]   Git 中已存在, Git hash: 445ea865be97ee609af27eda08e17af91645cd87
+2026/05/02 16:04:32 [Sync]   内容无变化，跳过
+2026/05/02 16:04:32 [Sync] 处理 Bitable 决策: dec_20260502_005 (缓存策略设计)
+2026/05/02 16:04:32 [Sync]   Bitable 决策 hash: "a2e4f519e4fd4ca9176d4a19185c66408df8e86c"
+2026/05/02 16:04:32 [Sync]   Git 中已存在, Git hash: a2e4f519e4fd4ca9176d4a19185c66408df8e86c
+2026/05/02 16:04:32 [Sync]   内容无变化，跳过
+2026/05/02 16:04:32 [Sync] 处理 Bitable 决策: dec_20260502_006 (监控告警方案)
+2026/05/02 16:04:32 [Sync]   Bitable 决策 hash: "0d69ce856ce93d4e28459fbafd457973ec86883a"
+2026/05/02 16:04:32 [Sync]   Git 中已存在, Git hash: 0d69ce856ce93d4e28459fbafd457973ec86883a
+2026/05/02 16:04:32 [Sync]   内容无变化，跳过
+2026/05/02 16:04:32 [Sync] === 反向同步完成 ===
+2026/05/02 16:04:32 [Bitable] 开始获取所有决策...
+2026/05/02 16:04:33 [Bitable] 字段列表: [sdr_id proposer title topic impact_level executor status git_commit_hash created_at decision]
+2026/05/02 16:04:33 [Bitable] 记录数: 6
+2026/05/02 16:04:33 [Bitable] 解析到决策: dec_20260502_001 (hash: "b70fa2cd4e6463a8c521098cd7a990c14ea648a5")
+2026/05/02 16:04:33 [Bitable] 解析到决策: dec_20260502_002 (hash: "9a0a277a6afd45d4a2788a843ec09e074101a4cc")
+2026/05/02 16:04:33 [Bitable] 解析到决策: dec_20260502_003 (hash: "3b1b42f513b409e24a1b7cd2ce073bd0cc197ddf")
+2026/05/02 16:04:33 [Bitable] 解析到决策: dec_20260502_004 (hash: "445ea865be97ee609af27eda08e17af91645cd87")
+2026/05/02 16:04:33 [Bitable] 解析到决策: dec_20260502_005 (hash: "a2e4f519e4fd4ca9176d4a19185c66408df8e86c")
+2026/05/02 16:04:33 [Bitable] 解析到决策: dec_20260502_006 (hash: "0d69ce856ce93d4e28459fbafd457973ec86883a")

@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/volcengine/volcengine-go-sdk/service/arkruntime"
@@ -59,9 +61,20 @@ func (c *Client) IsAvailable() bool {
 
 // Call 调用 LLM
 func (c *Client) Call(ctx context.Context, systemPrompt, userPrompt string) (string, error) {
+	log.Println("========== LLM CALL START ==========")
+	log.Printf("[LLM] IsAvailable: %v", c.IsAvailable())
+	log.Printf("[LLM] Model: %s", c.config.Model)
+	log.Printf("[LLM] BaseURL: %s", c.config.BaseURL)
+	log.Printf("[LLM] System prompt length: %d chars", len(systemPrompt))
+	log.Printf("[LLM] User prompt length: %d chars", len(userPrompt))
+	log.Printf("[LLM] User prompt preview: %s", truncateForLog(userPrompt, 200))
+
 	if c.config.APIKey == "" {
+		log.Println("[LLM] ERROR: ARK_API_KEY is not set")
 		return "", fmt.Errorf("ARK_API_KEY is not set")
 	}
+
+	startTime := time.Now()
 
 	baseURL := c.config.BaseURL
 	if baseURL == "" {
@@ -93,16 +106,31 @@ func (c *Client) Call(ctx context.Context, systemPrompt, userPrompt string) (str
 		},
 	}
 
+	log.Printf("[LLM] Sending request to LLM API...")
+
 	resp, err := client.CreateChatCompletion(ctx, req)
 	if err != nil {
+		log.Printf("[LLM] ERROR: LLM call failed: %v", err)
+		log.Println("========== LLM CALL FAILED ==========")
 		return "", fmt.Errorf("llm call failed: %w", err)
 	}
 
+	elapsed := time.Since(startTime)
+
 	if len(resp.Choices) == 0 || resp.Choices[0].Message.Content == nil {
+		log.Println("[LLM] ERROR: No response from LLM")
+		log.Println("========== LLM CALL FAILED ==========")
 		return "", fmt.Errorf("no response from llm")
 	}
 
-	return *resp.Choices[0].Message.Content.StringValue, nil
+	result := *resp.Choices[0].Message.Content.StringValue
+
+	log.Printf("[LLM] LLM call succeeded in %v", elapsed)
+	log.Printf("[LLM] Response length: %d chars", len(result))
+	log.Printf("[LLM] Response preview: %s", truncateForLog(result, 300))
+	log.Println("========== LLM CALL END ==========")
+
+	return result, nil
 }
 
 // ExtractJSON 从 LLM 响应中提取 JSON
@@ -132,22 +160,28 @@ func ExtractJSON(content string) string {
 
 // ParseExtractionResult 解析决策提取结果
 func ParseExtractionResult(content string) (*ExtractionResult, error) {
+	log.Printf("[LLM] ParseExtractionResult called")
 	jsonStr := ExtractJSON(content)
+	log.Printf("[LLM] Extracted JSON: %s", truncateForLog(jsonStr, 200))
 
 	var result ExtractionResult
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		log.Printf("[LLM] ERROR: JSON parse failed: %v", err)
 		return nil, fmt.Errorf("json parse failed: %w", err)
 	}
 
+	log.Printf("[LLM] Parse result: HasDecision=%v, Confidence=%.2f", result.HasDecision, result.Confidence)
 	return &result, nil
 }
 
 // ParseClassificationResult 解析议题分类结果
 func ParseClassificationResult(content string) (*ClassificationResult, error) {
+	log.Printf("[LLM] ParseClassificationResult called")
 	jsonStr := ExtractJSON(content)
 
 	var result ClassificationResult
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		log.Printf("[LLM] ERROR: JSON parse failed: %v", err)
 		return nil, fmt.Errorf("json parse failed: %w", err)
 	}
 
@@ -156,10 +190,12 @@ func ParseClassificationResult(content string) (*ClassificationResult, error) {
 
 // ParseCrossTopicResult 解析跨议题检测结果
 func ParseCrossTopicResult(content string) (*CrossTopicResult, error) {
+	log.Printf("[LLM] ParseCrossTopicResult called")
 	jsonStr := ExtractJSON(content)
 
 	var result CrossTopicResult
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		log.Printf("[LLM] ERROR: JSON parse failed: %v", err)
 		return nil, fmt.Errorf("json parse failed: %w", err)
 	}
 
@@ -168,10 +204,12 @@ func ParseCrossTopicResult(content string) (*CrossTopicResult, error) {
 
 // ParseConflictResult 解析冲突评估结果
 func ParseConflictResult(content string) (*ConflictResult, error) {
+	log.Printf("[LLM] ParseConflictResult called")
 	jsonStr := ExtractJSON(content)
 
 	var result ConflictResult
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		log.Printf("[LLM] ERROR: JSON parse failed: %v", err)
 		return nil, fmt.Errorf("json parse failed: %w", err)
 	}
 

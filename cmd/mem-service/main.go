@@ -5,7 +5,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	gosignal "os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -21,12 +23,14 @@ import (
 )
 
 func main() {
-	// 0. 加载 .env
 	_ = godotenv.Load()
 
+	log.Println("========================================")
 	log.Println("Starting feishu-agent-mem service...")
+	log.Println("========================================")
+	log.Printf("[System] NumGoroutine: %d", runtime.NumGoroutine())
+	log.Printf("[System] NumCPU: %d", runtime.NumCPU())
 
-	// 1. 加载配置
 	settings := config.DefaultSettings()
 	if cfgPath := os.Getenv("CONFIG_PATH"); cfgPath != "" {
 		if s, err := config.LoadSettings(cfgPath); err == nil {
@@ -37,11 +41,10 @@ func main() {
 	}
 	larkCfg := larkadapter.LoadConfig()
 
-	log.Printf("  Project: %s", settings.Project.Name)
-	log.Printf("  ChatIDs: %v", larkCfg.ChatIDs)
-	log.Printf("  MCP Port: %d", settings.MCP.Port)
+	log.Printf("[Config] Project: %s", settings.Project.Name)
+	log.Printf("[Config] ChatIDs: %v", larkCfg.ChatIDs)
+	log.Printf("[Config] MCP Port: %d", settings.MCP.Port)
 
-	// 2. 初始化 Git 存储
 	gitStorage, err := git.NewGitStorage(git.Config{
 		WorkDir:  settings.Git.WorkDir,
 		Remote:   settings.Git.Remote,
@@ -49,21 +52,19 @@ func main() {
 		Branch:   settings.Git.Branch,
 	})
 	if err != nil {
-		log.Fatalf("Failed to initialize Git storage: %v", err)
+		log.Fatalf("[Git] Failed to initialize: %v", err)
 	}
 
-	// 3. 初始化内存图
 	memoryGraph := core.NewMemoryGraph()
 	if settings.Memory.PreloadOnStart {
-		log.Println("Loading decisions from Git...")
+		log.Println("[Memory] Loading decisions from Git...")
 		if err := memoryGraph.LoadFromGit(gitStorage, settings.Project.Name); err != nil {
-			log.Printf("Warning: failed to load from Git: %v", err)
+			log.Printf("[Memory] Warning: Failed to load from Git: %v", err)
 		} else {
-			log.Printf("Loaded %d decisions into memory", memoryGraph.Count())
+			log.Printf("[Memory] Loaded %d decisions into memory", memoryGraph.Count())
 		}
 	}
 
-	// 4. 初始化 Bitable 存储
 	larkCLI := larkadapter.NewLarkCLI()
 	bitableStore := bitable.NewBitableStore(bitable.Config{
 		BaseToken: settings.Bitable.BaseToken,
@@ -73,121 +74,198 @@ func main() {
 		},
 	}, larkCLI)
 
-	// 5. 初始化 Pipeline
 	pipeline := core.NewPipelineEngine(gitStorage, bitableStore, memoryGraph)
-
-	// 6. 初始化信号引擎
 	signalEngine := signal.NewSignalActivationEngine(pipeline, memoryGraph)
 
-	// 7. 创建所有 Detector
 	detectors := map[signal.AdapterType]larkadapter.Detector{
-		signal.AdapterIM: larkadapter.NewIMExtractor(larkCfg),
+		signal.AdapterIM:       larkadapter.NewIMExtractor(larkCfg),
+		signal.AdapterVC:       larkadapter.NewVCExtractor(larkCfg),
+		signal.AdapterDocs:     larkadapter.NewDocExtractor(larkCfg),
+		signal.AdapterCalendar: larkadapter.NewCalendarExtractor(larkCfg),
+		signal.AdapterTask:     larkadapter.NewTaskExtractor(larkCfg),
+		signal.AdapterWiki:     larkadapter.NewWikiExtractor(larkCfg),
 	}
 
-	// 8. 状态管理器（用于跟踪 lastCheck）
 	stateMgr := larkadapter.NewStateManager(
 		filepath.Join(larkadapter.StateDir(), "detect_state.json"),
 	)
 
-	// 9. 启动 MCP Server (stdio mode)
+	maxWorkers := max(runtime.NumCPU(), 2)
+	workerPool := signal.NewWorkerPool(signalEngine, maxWorkers)
+
 	mcpServer := mcp.NewMCPServer(memoryGraph, gitStorage, bitableStore)
 
-	// 检查是否以 stdio mode 启动（通过环境变量或参数）
-	// 如果是 MCP_SERVER_MODE=stdio，则直接运行 MCP 协议
 	if os.Getenv("MCP_SERVER_MODE") == "stdio" {
-		log.Println("Starting MCP server in stdio mode...")
+		log.Println("[MCP] Starting in stdio mode...")
 		if err := mcpServer.Start(); err != nil {
-			log.Fatalf("MCP server error: %v", err)
+			log.Fatalf("[MCP] Server error: %v", err)
 		}
 		return
 	}
 
-	// 否则作为正常服务运行，但同时也可以通过子进程方式调用
-	log.Println("Running in service mode (MCP stdio server available via subprocess)")
+	log.Println("[Service] Running in service mode")
+	log.Printf("[Service] Decisions loaded: %d", memoryGraph.Count())
+	log.Printf("[Service] Topics: %d", memoryGraph.TopicCount(settings.Project.Name))
+	log.Printf("[Service] MCP port: %d", settings.MCP.Port)
 
-	log.Println("feishu-agent-mem service is ready!")
-	log.Printf("  Decisions loaded: %d", memoryGraph.Count())
-	log.Printf("  Topics: %d", memoryGraph.TopicCount(settings.Project.Name))
-	log.Printf("  MCP port: %d", settings.MCP.Port)
+	workerPool.Start()
 
-	// 首次立即执行一次检测
-	log.Println("Running initial detection cycle...")
-	runDetectionCycle(detectors, signalEngine, stateMgr)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	// 10. 主循环
+	go resultProcessor(ctx, workerPool, pipeline, workerPool.Results())
+
+	log.Println("[Service] Initial detection cycle...")
+	runDetectionCycle(detectors, signalEngine, stateMgr, workerPool)
+
 	sigChan := make(chan os.Signal, 1)
 	gosignal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	ticker := time.NewTicker(settings.Polling.Interval)
 	defer ticker.Stop()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	statsTicker := time.NewTicker(30 * time.Second)
+	defer statsTicker.Stop()
 
-	// 检测循环 — 核心修复
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
-				runDetectionCycle(detectors, signalEngine, stateMgr)
+				log.Println("-----------------------------------")
+				log.Printf("[System] Running goroutines: %d", runtime.NumGoroutine())
+				runDetectionCycle(detectors, signalEngine, stateMgr, workerPool)
+			case <-statsTicker.C:
+				workerPool.LogStats()
 			case <-ctx.Done():
 				return
 			}
 		}
 	}()
 
-	// 等待退出信号
 	sig := <-sigChan
-	log.Printf("Received signal: %v, shutting down...", sig)
+	log.Printf("[System] Received signal: %v, shutting down...", sig)
+
+	workerPool.Stop()
 
 	if err := mcpServer.Stop(); err != nil {
-		log.Printf("Error stopping MCP server: %v", err)
+		log.Printf("[MCP] Error stopping server: %v", err)
 	}
 
-	log.Println("feishu-agent-mem service stopped successfully")
+	log.Println("[System] feishu-agent-mem service stopped successfully")
 }
 
-// runDetectionCycle 执行一轮检测 → 信号 → 处理
-func runDetectionCycle(
-	detectors map[signal.AdapterType]larkadapter.Detector,
-	engine *signal.SignalActivationEngine,
-	stateMgr *larkadapter.StateManager,
+func resultProcessor(
+	ctx context.Context,
+	_ *signal.WorkerPool,
+	pipeline *core.PipelineEngine,
+	results <-chan *signal.DecisionResult,
 ) {
-	log.Printf("runDetectionCycle: %d detectors", len(detectors))
+	log.Println("[ResultProcessor] Started")
 
-	for adapter, detector := range detectors {
-		lastCheck := stateMgr.GetLastCheck(detector.Name())
-		log.Printf("[%s] Starting Detect, lastCheck=%v", detector.Name(), lastCheck)
+	for {
+		select {
+		case result := <-results:
+			if result == nil {
+				continue
+			}
 
-		result, err := larkadapter.ExtractDetect(detector)
-		if err != nil {
-			log.Printf("[%s] Detection failed: %v", detector.Name(), err)
-			continue
-		}
+			log.Printf("[ResultProcessor] Received result for: %s", result.Job.Change.Summary)
 
-		_ = stateMgr.UpdateLastCheck(detector.Name(), time.Now())
+			if result.Err != nil {
+				log.Printf("[ResultProcessor] Error: %v", result.Err)
+				continue
+			}
 
-		if !result.HasChanges {
-			log.Printf("[%s] No changes detected", detector.Name())
-			continue
-		}
+			if result.Mutation != nil {
+				log.Printf("[ResultProcessor] Applying mutation: %s", result.Mutation.SDRID)
 
-		log.Printf("[%s] Detected %d changes since %v", detector.Name(), len(result.Changes), lastCheck)
+				if err := pipeline.ApplyMutation(result.Mutation); err != nil {
+					log.Printf("[ResultProcessor] Failed to apply mutation: %v", err)
+				} else {
+					log.Printf("[ResultProcessor] Mutation applied successfully")
+				}
+			}
 
-		for _, ch := range result.Changes {
-			log.Printf("  → %s [%s] %s", ch.Type, ch.EntityType, ch.Summary)
-		}
-
-		// 通过信号引擎处理
-		report, err := engine.OnDetectResult(adapter, result)
-		if err != nil {
-			log.Printf("[%s] Signal processing failed: %v", detector.Name(), err)
-			continue
-		}
-		if report != nil {
-			log.Printf("[%s] → %d mutations, %d conflicts", detector.Name(), len(report.Mutations), len(report.Conflicts))
+		case <-ctx.Done():
+			log.Println("[ResultProcessor] Stopped")
+			return
 		}
 	}
+}
 
-	log.Println("runDetectionCycle: done")
+func runDetectionCycle(
+	detectors map[signal.AdapterType]larkadapter.Detector,
+	_ *signal.SignalActivationEngine,
+	stateMgr *larkadapter.StateManager,
+	workerPool *signal.WorkerPool,
+) {
+	log.Printf("[Detector] Starting cycle with %d detectors", len(detectors))
+
+	var wg sync.WaitGroup
+	detectChan := make(chan *detectResult, len(detectors))
+
+	// 1. 并行执行所有检测器
+	for adapter, detector := range detectors {
+		wg.Add(1)
+		go func(a signal.AdapterType, d larkadapter.Detector) {
+			defer wg.Done()
+			lastCheck := stateMgr.GetLastCheck(d.Name())
+			log.Printf("[Detector] %s: last check = %v", d.Name(), lastCheck)
+
+			result, err := larkadapter.ExtractDetect(d)
+			detectChan <- &detectResult{
+				adapter: a,
+				detector: d,
+				result: result,
+				err: err,
+				detectTime: lastCheck,
+			}
+		}(adapter, detector)
+	}
+
+	// 2. 等待所有检测器完成
+	go func() {
+		wg.Wait()
+		close(detectChan)
+	}()
+
+	// 3. 处理检测结果
+	for dr := range detectChan {
+		if dr.err != nil {
+			log.Printf("[Detector] %s: Failed: %v", dr.detector.Name(), dr.err)
+			continue
+		}
+
+		// 先处理变化，再更新时间，避免丢失
+		if dr.result.HasChanges {
+			log.Printf("[Detector] %s: Detected %d changes", dr.detector.Name(), len(dr.result.Changes))
+
+			for i, change := range dr.result.Changes {
+				log.Printf("[Detector] Change %d: %s [%s]", i+1, change.Type, change.Summary)
+
+				job := &signal.DetectionJob{
+					AdapterType: dr.adapter,
+					Change:      change,
+					ReceivedAt:  time.Now(),
+				}
+
+				workerPool.SubmitJob(job)
+			}
+		} else {
+			log.Printf("[Detector] %s: No changes detected", dr.detector.Name())
+		}
+
+		_ = stateMgr.UpdateLastCheck(dr.detector.Name(), time.Now())
+	}
+
+	log.Println("[Detector] Cycle completed")
+}
+
+// detectResult 用于传递检测结果
+type detectResult struct {
+	adapter signal.AdapterType
+	detector larkadapter.Detector
+	result *larkadapter.DetectResult
+	err error
+	detectTime time.Time
 }

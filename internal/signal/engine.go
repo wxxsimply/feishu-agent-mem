@@ -6,36 +6,30 @@ import (
 
 	larkadapter "feishu-mem/internal/lark-adapter"
 	"feishu-mem/internal/decision"
+	"feishu-mem/internal/llm"
 )
 
-// MemoryGraphInterface 内存图接口
 type MemoryGraphInterface interface {
 	GetAllDecisions() []*decision.DecisionNode
 	UpsertDecision(node *decision.DecisionNode, project string)
 }
 
-// PipelineInterface 流水线接口
 type PipelineInterface interface {
 	ApplyMutation(mut *DecisionMutation) error
 }
 
-// SignalActivationEngine 信号激活引擎编排器
 type SignalActivationEngine struct {
 	Emitters     map[AdapterType]StateChangeEmitter
 	Router       *ActivationRouter
 	Assembler    *ContextAssembler
 	StateMachine *DecisionStateMachine
 	Patterns     *PatternMatcher
-
-	Pipeline PipelineInterface
-	Memory   MemoryGraphInterface
+	Pipeline     PipelineInterface
+	Memory       MemoryGraphInterface
+	llmAgent     *llm.MemoryAgent
 }
 
-// NewSignalActivationEngine 创建信号激活引擎
-func NewSignalActivationEngine(
-	pipeline PipelineInterface,
-	memory MemoryGraphInterface,
-) *SignalActivationEngine {
+func NewSignalActivationEngine(pipeline PipelineInterface, memory MemoryGraphInterface) *SignalActivationEngine {
 	return &SignalActivationEngine{
 		Emitters:     NewEmitters(),
 		Router:       NewActivationRouter(),
@@ -44,82 +38,113 @@ func NewSignalActivationEngine(
 		Patterns:     NewPatternMatcher(),
 		Pipeline:     pipeline,
 		Memory:       memory,
+		llmAgent:     llm.NewMemoryAgent(),
 	}
 }
 
-// OnDetectResult 处理检测器返回的结果 — 每条决策消息生成独立决策
-func (e *SignalActivationEngine) OnDetectResult(
-	adapter AdapterType,
-	result *larkadapter.DetectResult,
-) (*ProcessingReport, error) {
-	var allMutations []*DecisionMutation
-	totalTokenUsage := 0
+func (e *SignalActivationEngine) OnDetectResult(adapter AdapterType, result *larkadapter.DetectResult) (*ProcessingReport, error) {
+	log.Println("[SignalEngine] OnDetectResult called")
+	log.Printf("[SignalEngine] Detector: %s, %d changes", adapter, len(result.Changes))
+	return nil, nil
+}
 
-	for _, change := range result.Changes {
-		// 只处理文本类型的消息
-		if change.Type != "new_text" && change.Type != "new_post" {
-			continue
-		}
+func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, proposer, content string) (*DecisionMutation, error) {
+	log.Println("========== SIGNAL ENGINE PROCESS ==========")
+	log.Printf("[SignalEngine] ProcessSignalForJob called")
+	log.Printf("[SignalEngine] Proposer: %s", proposer)
+	log.Printf("[SignalEngine] Content: %s", truncateForLog(content, 200))
+	log.Printf("[SignalEngine] LLM available: %v", e.llmAgent.IsAvailable())
 
-		// 检查消息是否包含决策关键词
-		matchedKeywords := matchDecisionKeywords(change.Summary)
-		if len(matchedKeywords) == 0 {
-			continue
-		}
+	var newNode *decision.DecisionNode
 
-		// 为每条决策消息创建独立信号
-		sig := NewSignal(adapter, change.Summary)
-		sig.Strength = StrengthMedium
-		sig.Context.ContentSnippet = change.Summary
-		sig.Context.Keywords = matchedKeywords
-		sig.Context.DecisionSignals = matchedKeywords
+	if e.llmAgent.IsAvailable() {
+		log.Println("[SignalEngine] LLM is available, calling...")
 
-		// 创建独立决策节点
-		proposer := extractSenderFromSummary(change.Summary)
-		newNode := decision.NewDecisionNode(
-			GenerateSDRID(),
-			"Auto-extracted decision",
-			"feishu-mem",
-			"general",
-		)
-		newNode.Status = decision.StatusPending
-		newNode.Decision = change.Summary
-		newNode.Proposer = proposer
-		newNode.Executor = extractExecutorFromSummary(change.Summary)
-		newNode.ImpactLevel = extractImpactFromSummary(change.Summary)
+		topics := e.getAllTopics()
+		log.Printf("[SignalEngine] Available topics: %v", topics)
 
-		// 创建 mutation
-		mut := e.StateMachine.CreateMutationForNewDecision(newNode, sig)
-		allMutations = append(allMutations, mut)
+		log.Println("[SignalEngine] Calling ExtractDecision...")
+		result, err := e.llmAgent.ExtractDecision(content, topics)
+		if err != nil {
+			log.Printf("[SignalEngine] LLM extraction failed: %v, falling back to heuristic", err)
+			newNode = e.createDecisionFallback(proposer, content)
+		} else {
+			log.Printf("[SignalEngine] LLM extraction result: HasDecision=%v, Confidence=%.2f",
+				result.HasDecision, result.Confidence)
 
-		// 应用 mutation
-		if e.Pipeline != nil {
-			if err := e.Pipeline.ApplyMutation(mut); err != nil {
-				log.Printf("[SignalEngine] ApplyMutation failed for %s: %v", newNode.SDRID, err)
+			if result.Decision != nil {
+				log.Printf("[SignalEngine] Decision details: Title=%s, Topic=%s",
+					result.Decision.Title, result.Decision.SuggestedTopic)
+			}
+
+			if result.HasDecision && result.Confidence > 0.5 && result.Decision != nil {
+				newNode = decision.NewDecisionNode(
+					GenerateSDRID(),
+					result.Decision.Title,
+					"feishu-mem",
+					result.Decision.SuggestedTopic,
+				)
+				newNode.Decision = result.Decision.Decision
+				newNode.Rationale = result.Decision.Rationale
+				newNode.Proposer = proposer
+				newNode.Executor = result.Decision.Executor
+				newNode.ImpactLevel = decision.ImpactLevel(result.Decision.ImpactLevel)
+				newNode.Status = decision.StatusPending
+
+				log.Printf("[SignalEngine] Decision extracted from LLM: %s", result.Decision.Title)
+			} else {
+				log.Printf("[SignalEngine] LLM didn't find a confident decision, using fallback (HasDecision=%v, Confidence=%.2f)",
+					result.HasDecision, result.Confidence)
+				newNode = e.createDecisionFallback(proposer, content)
 			}
 		}
-
-		totalTokenUsage += 200 // 估算
+	} else {
+		log.Println("[SignalEngine] LLM not available, using heuristic fallback")
+		newNode = e.createDecisionFallback(proposer, content)
 	}
 
-	if len(allMutations) == 0 {
-		return nil, nil
-	}
+	mut := e.StateMachine.CreateMutationForNewDecision(newNode, sig)
 
-	return &ProcessingReport{
-		SignalID:      GenerateSDRID(),
-		Mutations:     allMutations,
-		Conflicts:     []Conflict{},
-		TokenUsage:    totalTokenUsage,
-		DecisionCount: len(allMutations),
-	}, nil
+	log.Printf("[SignalEngine] Created mutation: Type=%s, SDRID=%s", mut.Type, mut.SDRID)
+	log.Println("========== SIGNAL ENGINE END ==========")
+	return mut, nil
 }
 
-// matchDecisionKeywords 匹配消息中的决策关键词
+func (e *SignalActivationEngine) getAllTopics() []string {
+	var topics []string
+	seen := make(map[string]bool)
+	for _, d := range e.Memory.GetAllDecisions() {
+		if !seen[d.Topic] {
+			seen[d.Topic] = true
+			topics = append(topics, d.Topic)
+		}
+	}
+	if len(topics) == 0 {
+		topics = []string{"general"}
+	}
+	return topics
+}
+
+func (e *SignalActivationEngine) createDecisionFallback(proposer, content string) *decision.DecisionNode {
+	newNode := decision.NewDecisionNode(
+		GenerateSDRID(),
+		"Auto-extracted decision",
+		"feishu-mem",
+		"general",
+	)
+	newNode.Status = decision.StatusPending
+	newNode.Decision = content
+	newNode.Proposer = proposer
+	newNode.Executor = extractExecutorFromSummary(content)
+	newNode.ImpactLevel = extractImpactFromSummary(content)
+	return newNode
+}
+
 func matchDecisionKeywords(text string) []string {
 	decisionWords := []string{
 		"决定", "decided", "确认", "LGTM", "lgtm",
 		"approve", "通过", "定下来", "就这么办", "confirmed",
+		"倾向于", "建议", "选择", "推荐", "选", "用",
 	}
 	var matched []string
 	for _, w := range decisionWords {
@@ -130,8 +155,6 @@ func matchDecisionKeywords(text string) []string {
 	return matched
 }
 
-// extractSenderFromSummary 从消息摘要中提取发送者名称
-// 摘要格式: "[群聊] 莫文豪: 决定..."
 func extractSenderFromSummary(summary string) string {
 	if idx := strings.Index(summary, "] "); idx >= 0 {
 		rest := summary[idx+2:]
@@ -142,13 +165,11 @@ func extractSenderFromSummary(summary string) string {
 	return ""
 }
 
-// extractExecutorFromSummary 从消息中提取执行人
 func extractExecutorFromSummary(text string) string {
 	executorLabels := []string{"执行人"}
 	for _, label := range executorLabels {
 		if idx := strings.Index(text, label); idx >= 0 {
 			rest := text[idx+len(label):]
-			// 提取执行人后的名字（到逗号、句号或结尾）
 			endIdx := len(rest)
 			for i, c := range rest {
 				if c == ',' || c == '，' || c == '。' || c == ' ' {
@@ -162,7 +183,6 @@ func extractExecutorFromSummary(text string) string {
 	return ""
 }
 
-// extractImpactFromSummary 从消息中提取影响级别
 func extractImpactFromSummary(text string) decision.ImpactLevel {
 	if strings.Contains(text, "critical") || strings.Contains(text, "关键") {
 		return decision.ImpactCritical
@@ -176,7 +196,6 @@ func extractImpactFromSummary(text string) decision.ImpactLevel {
 	return decision.ImpactAdvisory
 }
 
-// PatternMatcher 模式匹配器
 type PatternMatcher struct{}
 
 func NewPatternMatcher() *PatternMatcher {

@@ -5,6 +5,18 @@ import (
 	"strings"
 )
 
+var decisionKeywords = []string{"决定", "确认", "结论", "通过", "定下来", "approve", "decided", "confirmed", "决策", "决议", "评审", "review"}
+
+func containsDecisionKeyword(text string) bool {
+	lowerText := strings.ToLower(text)
+	for _, kw := range decisionKeywords {
+		if strings.Contains(lowerText, strings.ToLower(kw)) {
+			return true
+		}
+	}
+	return false
+}
+
 // StateChangeEmitter 将 Detector 的检测结果转为标准信号
 type StateChangeEmitter interface {
 	AdapterType() AdapterType
@@ -107,7 +119,32 @@ func (e *VCEmitter) EmitSignal(result *larkadapter.DetectResult) (*StateChangeSi
 		return nil, nil
 	}
 	signal := NewSignal(AdapterVC, "VC changes detected")
-	signal.Strength = StrengthMedium
+	strength := StrengthWeak
+
+	for _, ch := range result.Changes {
+		switch ch.Type {
+		case "meeting_minutes_available":
+			strength = maxStrength(strength, StrengthStrong)
+			signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "ai_summary")
+		case "minutes_created", "minutes_updated", "minutes_ai_summary_ready":
+			strength = maxStrength(strength, StrengthStrong)
+			signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "ai_summary")
+		case "meeting_todos":
+			strength = maxStrength(strength, StrengthStrong)
+			signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "action_items")
+		case "meeting_ended":
+			strength = maxStrength(strength, StrengthMedium)
+		}
+	}
+
+	if strength == StrengthWeak {
+		return nil, nil
+	}
+
+	signal.Strength = strength
+	if len(result.Changes) > 0 {
+		signal.Context.ContentSnippet = result.Changes[0].Summary
+	}
 	return signal, nil
 }
 
@@ -121,7 +158,35 @@ func (e *DocsEmitter) EmitSignal(result *larkadapter.DetectResult) (*StateChange
 		return nil, nil
 	}
 	signal := NewSignal(AdapterDocs, "Doc changes detected")
-	signal.Strength = StrengthMedium
+	strength := StrengthWeak
+
+	for _, ch := range result.Changes {
+		switch ch.Type {
+		case "doc_decision":
+			strength = maxStrength(strength, StrengthStrong)
+			signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "decision_doc")
+		case "doc_comment_approval":
+			strength = maxStrength(strength, StrengthStrong)
+			signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "approval_comment")
+		case "doc_created", "doc_content_updated":
+			// 检查标题是否含决策关键词
+			if containsDecisionKeyword(ch.Summary) {
+				strength = maxStrength(strength, StrengthStrong)
+				signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "decision_doc")
+			} else {
+				strength = maxStrength(strength, StrengthWeak)
+			}
+		}
+	}
+
+	if strength == StrengthWeak {
+		return nil, nil
+	}
+
+	signal.Strength = strength
+	if len(result.Changes) > 0 {
+		signal.Context.ContentSnippet = result.Changes[0].Summary
+	}
 	return signal, nil
 }
 
@@ -135,7 +200,23 @@ func (e *CalendarEmitter) EmitSignal(result *larkadapter.DetectResult) (*StateCh
 		return nil, nil
 	}
 	signal := NewSignal(AdapterCalendar, "Calendar changes detected")
-	signal.Strength = StrengthMedium
+	strength := StrengthWeak
+
+	for _, ch := range result.Changes {
+		if ch.Type == "decision_meeting" || containsDecisionKeyword(ch.Summary) {
+			strength = maxStrength(strength, StrengthMedium)
+			signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "review_meeting")
+		}
+	}
+
+	if strength == StrengthWeak {
+		return nil, nil
+	}
+
+	signal.Strength = strength
+	if len(result.Changes) > 0 {
+		signal.Context.ContentSnippet = result.Changes[0].Summary
+	}
 	return signal, nil
 }
 
@@ -149,7 +230,56 @@ func (e *TaskEmitter) EmitSignal(result *larkadapter.DetectResult) (*StateChange
 		return nil, nil
 	}
 	signal := NewSignal(AdapterTask, "Task changes detected")
-	signal.Strength = StrengthMedium
+	strength := StrengthWeak
+
+	for _, ch := range result.Changes {
+		switch ch.Type {
+		case "task_completed":
+			strength = maxStrength(strength, StrengthMedium)
+			signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "task_done")
+		case "task_created", "task_updated":
+			strength = maxStrength(strength, StrengthWeak)
+		}
+	}
+
+	if strength == StrengthWeak {
+		return nil, nil
+	}
+
+	signal.Strength = strength
+	if len(result.Changes) > 0 {
+		signal.Context.ContentSnippet = result.Changes[0].Summary
+	}
+	return signal, nil
+}
+
+// WikiEmitter Wiki 发射器
+type WikiEmitter struct{}
+
+func (e *WikiEmitter) AdapterType() AdapterType { return AdapterWiki }
+
+func (e *WikiEmitter) EmitSignal(result *larkadapter.DetectResult) (*StateChangeSignal, error) {
+	if !result.HasChanges {
+		return nil, nil
+	}
+	signal := NewSignal(AdapterWiki, "Wiki changes detected")
+	strength := StrengthWeak
+
+	for _, ch := range result.Changes {
+		if containsDecisionKeyword(ch.Summary) {
+			strength = maxStrength(strength, StrengthMedium)
+			signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "decision_node")
+		}
+	}
+
+	if strength == StrengthWeak {
+		return nil, nil
+	}
+
+	signal.Strength = strength
+	if len(result.Changes) > 0 {
+		signal.Context.ContentSnippet = result.Changes[0].Summary
+	}
 	return signal, nil
 }
 
@@ -178,20 +308,6 @@ func (e *ContactEmitter) EmitSignal(result *larkadapter.DetectResult) (*StateCha
 	}
 	signal := NewSignal(AdapterContact, "Contact changes detected")
 	signal.Strength = StrengthWeak
-	return signal, nil
-}
-
-// WikiEmitter Wiki 发射器
-type WikiEmitter struct{}
-
-func (e *WikiEmitter) AdapterType() AdapterType { return AdapterWiki }
-
-func (e *WikiEmitter) EmitSignal(result *larkadapter.DetectResult) (*StateChangeSignal, error) {
-	if !result.HasChanges {
-		return nil, nil
-	}
-	signal := NewSignal(AdapterWiki, "Wiki changes detected")
-	signal.Strength = StrengthMedium
 	return signal, nil
 }
 

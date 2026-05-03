@@ -1,0 +1,2077 @@
+2026/05/02 15:56:29 === Git ↔ Bitable 双向同步测试 ===
+
+--- 步骤 1: 清空 Git 和 Bitable ---
+2026/05/02 15:56:29 运行清空脚本...
+2026/05/02 15:56:29 === 重新初始化 Git Storage ===
+1. 备份当前目录...
+   备份到: ./data.backup.20260502_155629
+2. 创建新目录...
+3. 初始化 Git 仓库...
+Initialized empty Git repository in /Users/halllo/openclaw-workspace/feishu-agent-mem/data/.git/
+4. 配置 Git 用户...
+5. 创建基础目录结构...
+6. 创建 L0_RULES.md...
+7. 创建 .gitignore...
+8. 初始 commit...
+[main (root-commit) 364df4a] init: 初始化 OpenClaw 决策仓库
+ 2 files changed, 20 insertions(+)
+ create mode 100644 .gitignore
+ create mode 100644 L0_RULES.md
+
+=== Git Storage 初始化完成 ===
+364df4a init: 初始化 OpenClaw 决策仓库
+
+2026/05/02 15:57:17 === 清空 Bitable ===
+Base Token: NnnMb5mWJaBJkXsHf69cIpfMn8b
+Table ID: tblEBXkSxaqxnY6l
+1. 正在获取所有 record IDs...
+2. 解析 record_id_list...
+3. 找到了 24 条 records，准备删除...
+[1/] 删除 record_id: recvirNGrIJS4N...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNGrIJS4N"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[2/] 删除 record_id: recvirNGIIJeaN...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNGIIJeaN"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[3/] 删除 record_id: recvirNH0kPo0N...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNH0kPo0N"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[4/] 删除 record_id: recvirNHtOzw8D...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNHtOzw8D"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[5/] 删除 record_id: recvirNHSrUeCM...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNHSrUeCM"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[6/] 删除 record_id: recvirNIhqKLHe...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNIhqKLHe"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[7/] 删除 record_id: recvirNIHP7Y76...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNIHP7Y76"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[8/] 删除 record_id: recvirNJ9m8nOf...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNJ9m8nOf"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[9/] 删除 record_id: recvirNJReD3wk...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNJReD3wk"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[10/] 删除 record_id: recvirNK9MMMGH...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNK9MMMGH"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[11/] 删除 record_id: recvirNKwRJQvx...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNKwRJQvx"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[12/] 删除 record_id: recvirNKPFiNj4...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNKPFiNj4"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[13/] 删除 record_id: recvirNL75v79N...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNL75v79N"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[14/] 删除 record_id: recvirNLoe6Izx...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNLoe6Izx"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[15/] 删除 record_id: recvirNLXxX0my...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNLXxX0my"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[16/] 删除 record_id: recvirNMyAG2LE...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNMyAG2LE"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[17/] 删除 record_id: recvirNMPXYMYZ...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNMPXYMYZ"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[18/] 删除 record_id: recvirNN7Fn6vy...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNN7Fn6vy"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[19/] 删除 record_id: recvirNNp6EKOm...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNNp6EKOm"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[20/] 删除 record_id: recvirNNH7dm3X...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNNH7dm3X"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[21/] 删除 record_id: recvirNO1gPH9S...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNO1gPH9S"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[22/] 删除 record_id: recvirNOiXcS3n...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNOiXcS3n"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[23/] 删除 record_id: recvirNODgQXGi...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNODgQXGi"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+[24/] 删除 record_id: recvirNOUFtVs4...
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "deleted": true,
+    "record_id": "recvirNOUFtVs4"
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+
+=== 完成！共删除了 24 条 records ===
+
+
+--- 步骤 2: Git 端操作（5次）---
+2026/05/02 15:57:18 [Sync] CreateInGit: dec_20260502_001
+2026/05/02 15:57:18 [Sync] git create: dec_20260502_001 - 用户认证模块设计
+2026/05/02 15:57:18 1. 创建决策: dec_20260502_001, hash=9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b
+2026/05/02 15:57:19 [Sync] CreateInGit: dec_20260502_002
+2026/05/02 15:57:19 [Sync] git create: dec_20260502_002 - 数据库连接池配置
+2026/05/02 15:57:19 2. 创建决策: dec_20260502_002, hash=5c452213459cb2df0cfb4aa890d7b90c3a26674f
+2026/05/02 15:57:19 [Sync] UpdateInGit: dec_20260502_001
+2026/05/02 15:57:19 [Sync] git update: dec_20260502_001 - 用户认证模块设计（修订版）
+2026/05/02 15:57:19 3. 更新决策: dec_20260502_001, hash=c6ae91a16a8fa4bfdb3093641ebcb9d40382a505
+2026/05/02 15:57:20 [Sync] CreateInGit: dec_20260502_003
+2026/05/02 15:57:20 [Sync] git create: dec_20260502_003 - API 响应格式规范
+2026/05/02 15:57:20 4. 创建决策: dec_20260502_003, hash=ea098e6c113a2315d39eb80e51b034e4af6d5d7a
+2026/05/02 15:57:20 [Sync] UpdateInGit: dec_20260502_002
+2026/05/02 15:57:21 [Sync] git update: dec_20260502_002 - 数据库连接池配置（优化）
+2026/05/02 15:57:21 5. 更新决策: dec_20260502_002, hash=c4ce1903fad7e8719e64758c1c10b7fdd8761c63
+
+--- 步骤 3: 正向同步 Git → Bitable ---
+2026/05/02 15:57:21 [Sync] === 开始正向同步: Git → Bitable ===
+2026/05/02 15:57:21 [Sync] Git 中有 3 个决策
+2026/05/02 15:57:21 [Bitable] 开始获取所有决策...
+2026/05/02 15:57:22 [Bitable] 原始响应: {
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "data": [],
+    "field_id_list": [
+      "fld8wqCGLS",
+      "fld9wCsQCd",
+      "fldC0RR25K",
+      "fldf7yLDpJ",
+      "fldi6wJ1Ez",
+      "fldKXJGYDJ",
+      "fldoEYShMK",
+      "fldOMxF33K",
+      "fldtKRw87R",
+      "fldzy2pqM9"
+    ],
+    "fields": [
+      "sdr_id",
+      "proposer",
+      "title",
+      "topic",
+      "impact_level",
+      "executor",
+      "status",
+      "git_commit_hash",
+      "created_at",
+      "decision"
+    ],
+    "has_more": false,
+    "query_context": {
+      "field_scope": "all_fields",
+      "record_scope": "all_records"
+    },
+    "record_id_list": []
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+2026/05/02 15:57:22 [Bitable] 字段列表: [sdr_id proposer title topic impact_level executor status git_commit_hash created_at decision]
+2026/05/02 15:57:22 [Bitable] 记录数: 0
+2026/05/02 15:57:22 [Sync] Bitable 中有 0 个决策
+2026/05/02 15:57:22 [Sync] 处理 Git 决策: dec_20260502_001 (用户认证模块设计（修订版）)
+2026/05/02 15:57:22 [Sync]   Git 决策 hash: "9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b"
+2026/05/02 15:57:22 [Sync]   Bitable 中不存在，插入新记录
+2026/05/02 15:57:22 [Bitable] 写入决策: dec_20260502_001
+2026/05/02 15:57:22 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:18","decision":"采用 OAuth 2.0 + JWT 双机制","executor":"","git_commit_hash":"9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b","impact_level":"major","proposer":"张三","sdr_id":"dec_20260502_001","status":"decided","title":"用户认证模块设计（修订版）","topic":"general"}
+2026/05/02 15:57:23 [Sync] git create: dec_20260502_001 - 用户认证模块设计（修订版）
+2026/05/02 15:57:23 [Sync] 处理 Git 决策: dec_20260502_002 (数据库连接池配置（优化）)
+2026/05/02 15:57:23 [Sync]   Git 决策 hash: "5c452213459cb2df0cfb4aa890d7b90c3a26674f"
+2026/05/02 15:57:23 [Sync]   Bitable 中不存在，插入新记录
+2026/05/02 15:57:23 [Bitable] 写入决策: dec_20260502_002
+2026/05/02 15:57:23 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:19","decision":"最大连接数 100","executor":"李四","git_commit_hash":"5c452213459cb2df0cfb4aa890d7b90c3a26674f","impact_level":"major","proposer":"张三","sdr_id":"dec_20260502_002","status":"executing","title":"数据库连接池配置（优化）","topic":"general"}
+2026/05/02 15:57:24 [Sync] git create: dec_20260502_002 - 数据库连接池配置（优化）
+2026/05/02 15:57:24 [Sync] 处理 Git 决策: dec_20260502_003 (API 响应格式规范)
+2026/05/02 15:57:24 [Sync]   Git 决策 hash: "ea098e6c113a2315d39eb80e51b034e4af6d5d7a"
+2026/05/02 15:57:24 [Sync]   Bitable 中不存在，插入新记录
+2026/05/02 15:57:24 [Bitable] 写入决策: dec_20260502_003
+2026/05/02 15:57:24 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:20","decision":"统一使用 JSON 格式","executor":"","git_commit_hash":"ea098e6c113a2315d39eb80e51b034e4af6d5d7a","impact_level":"major","proposer":"张三","sdr_id":"dec_20260502_003","status":"pending","title":"API 响应格式规范","topic":"general"}
+2026/05/02 15:57:25 [Sync] git create: dec_20260502_003 - API 响应格式规范
+2026/05/02 15:57:25 [Sync] === 正向同步完成 ===
+
+--- 调试: 检查 Bitable 原始数据 ---
+2026/05/02 15:57:26 Bitable 原始输出:
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "data": [
+      [
+        "dec_20260502_001",
+        "张三",
+        "用户认证模块设计（修订版）",
+        "general",
+        "major",
+        null,
+        "decided",
+        "9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b",
+        "2026-05-02 15:57:18",
+        "采用 OAuth 2.0 + JWT 双机制"
+      ],
+      [
+        "dec_20260502_002",
+        "张三",
+        "数据库连接池配置（优化）",
+        "general",
+        "major",
+        "李四",
+        "executing",
+        "5c452213459cb2df0cfb4aa890d7b90c3a26674f",
+        "2026-05-02 15:57:19",
+        "最大连接数 100"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范",
+        "general",
+        "major",
+        null,
+        "pending",
+        "ea098e6c113a2315d39eb80e51b034e4af6d5d7a",
+        "2026-05-02 15:57:20",
+        "统一使用 JSON 格式"
+      ]
+    ],
+    "field_id_list": [
+      "fld8wqCGLS",
+      "fld9wCsQCd",
+      "fldC0RR25K",
+      "fldf7yLDpJ",
+      "fldi6wJ1Ez",
+      "fldKXJGYDJ",
+      "fldoEYShMK",
+      "fldOMxF33K",
+      "fldtKRw87R",
+      "fldzy2pqM9"
+    ],
+    "fields": [
+      "sdr_id",
+      "proposer",
+      "title",
+      "topic",
+      "impact_level",
+      "executor",
+      "status",
+      "git_commit_hash",
+      "created_at",
+      "decision"
+    ],
+    "has_more": false,
+    "query_context": {
+      "field_scope": "all_fields",
+      "record_scope": "all_records"
+    },
+    "record_id_list": [
+      "recvirOiF0nJE9",
+      "recvirOiWShc7x",
+      "recvirOjeZjt6L"
+    ]
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+
+--- 步骤 4: Bitable 端操作（5次）---
+2026/05/02 15:57:26 [Sync] CreateInBitable: dec_20260502_004
+2026/05/02 15:57:26 [Bitable] 写入决策: dec_20260502_004
+2026/05/02 15:57:26 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:26","decision":"使用 ELK Stack","executor":"","git_commit_hash":"","impact_level":"minor","proposer":"张三","sdr_id":"dec_20260502_004","status":"in_discussion","title":"日志系统架构","topic":"general"}
+2026/05/02 15:57:27 [Sync] bitable create: dec_20260502_004 - 日志系统架构
+2026/05/02 15:57:27 6. 在 Bitable 创建决策: dec_20260502_004
+2026/05/02 15:57:28 [Sync] UpdateInBitable: dec_20260502_003
+2026/05/02 15:57:28 [Bitable] 写入决策: dec_20260502_003
+2026/05/02 15:57:28 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:28","decision":"统一使用 JSON 格式，支持分页","executor":"王五","git_commit_hash":"","impact_level":"major","proposer":"张三","sdr_id":"dec_20260502_003","status":"decided","title":"API 响应格式规范（v2）","topic":"general"}
+2026/05/02 15:57:29 [Sync] bitable update: dec_20260502_003 - API 响应格式规范（v2）
+2026/05/02 15:57:29 7. 在 Bitable 更新决策: dec_20260502_003
+2026/05/02 15:57:30 [Sync] CreateInBitable: dec_20260502_005
+2026/05/02 15:57:30 [Bitable] 写入决策: dec_20260502_005
+2026/05/02 15:57:30 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:30","decision":"Redis + 本地缓存两级","executor":"","git_commit_hash":"","impact_level":"critical","proposer":"张三","sdr_id":"dec_20260502_005","status":"pending","title":"缓存策略设计","topic":"general"}
+2026/05/02 15:57:31 [Sync] bitable create: dec_20260502_005 - 缓存策略设计
+2026/05/02 15:57:31 8. 在 Bitable 创建决策: dec_20260502_005
+2026/05/02 15:57:31 [Sync] UpdateInBitable: dec_20260502_004
+2026/05/02 15:57:31 [Bitable] 写入决策: dec_20260502_004
+2026/05/02 15:57:31 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:26","decision":"使用 ELK Stack","executor":"","git_commit_hash":"","impact_level":"minor","proposer":"张三","sdr_id":"dec_20260502_004","status":"decided","title":"日志系统架构（完善）","topic":"general"}
+2026/05/02 15:57:32 [Sync] bitable update: dec_20260502_004 - 日志系统架构（完善）
+2026/05/02 15:57:32 9. 在 Bitable 更新决策: dec_20260502_004
+2026/05/02 15:57:33 [Sync] CreateInBitable: dec_20260502_006
+2026/05/02 15:57:33 [Bitable] 写入决策: dec_20260502_006
+2026/05/02 15:57:33 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:33","decision":"Prometheus + Grafana","executor":"","git_commit_hash":"","impact_level":"minor","proposer":"张三","sdr_id":"dec_20260502_006","status":"pending","title":"监控告警方案","topic":"general"}
+2026/05/02 15:57:34 [Sync] bitable create: dec_20260502_006 - 监控告警方案
+2026/05/02 15:57:34 10. 在 Bitable 创建决策: dec_20260502_006
+
+--- 步骤 5: 反向同步 Bitable → Git ---
+2026/05/02 15:57:34 [Sync] === 开始反向同步: Bitable → Git ===
+2026/05/02 15:57:34 [Bitable] 开始获取所有决策...
+2026/05/02 15:57:36 [Bitable] 原始响应: {
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "data": [
+      [
+        "dec_20260502_001",
+        "张三",
+        "用户认证模块设计（修订版）",
+        "general",
+        "major",
+        null,
+        "decided",
+        "9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b",
+        "2026-05-02 15:57:18",
+        "采用 OAuth 2.0 + JWT 双机制"
+      ],
+      [
+        "dec_20260502_002",
+        "张三",
+        "数据库连接池配置（优化）",
+        "general",
+        "major",
+        "李四",
+        "executing",
+        "5c452213459cb2df0cfb4aa890d7b90c3a26674f",
+        "2026-05-02 15:57:19",
+        "最大连接数 100"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范",
+        "general",
+        "major",
+        null,
+        "pending",
+        "ea098e6c113a2315d39eb80e51b034e4af6d5d7a",
+        "2026-05-02 15:57:20",
+        "统一使用 JSON 格式"
+      ],
+      [
+        "dec_20260502_004",
+        "张三",
+        "日志系统架构",
+        "general",
+        "minor",
+        null,
+        "in_discussion",
+        null,
+        "2026-05-02 15:57:26",
+        "使用 ELK Stack"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范（v2）",
+        "general",
+        "major",
+        "王五",
+        "decided",
+        null,
+        "2026-05-02 15:57:28",
+        "统一使用 JSON 格式，支持分页"
+      ],
+      [
+        "dec_20260502_005",
+        "张三",
+        "缓存策略设计",
+        "general",
+        "critical",
+        null,
+        "pending",
+        null,
+        "2026-05-02 15:57:30",
+        "Redis + 本地缓存两级"
+      ],
+      [
+        "dec_20260502_004",
+        "张三",
+        "日志系统架构（完善）",
+        "general",
+        "minor",
+        null,
+        "decided",
+        null,
+        "2026-05-02 15:57:26",
+        "使用 ELK Stack"
+      ],
+      [
+        "dec_20260502_006",
+        "张三",
+        "监控告警方案",
+        "general",
+        "minor",
+        null,
+        "pending",
+        null,
+        "2026-05-02 15:57:33",
+        "Prometheus + Grafana"
+      ]
+    ],
+    "field_id_list": [
+      "fld8wqCGLS",
+      "fld9wCsQCd",
+      "fldC0RR25K",
+      "fldf7yLDpJ",
+      "fldi6wJ1Ez",
+      "fldKXJGYDJ",
+      "fldoEYShMK",
+      "fldOMxF33K",
+      "fldtKRw87R",
+      "fldzy2pqM9"
+    ],
+    "fields": [
+      "sdr_id",
+      "proposer",
+      "title",
+      "topic",
+      "impact_level",
+      "executor",
+      "status",
+      "git_commit_hash",
+      "created_at",
+      "decision"
+    ],
+    "has_more": false,
+    "query_context": {
+      "field_scope": "all_fields",
+      "record_scope": "all_records"
+    },
+    "record_id_list": [
+      "recvirOiF0nJE9",
+      "recvirOiWShc7x",
+      "recvirOjeZjt6L",
+      "recvirOjMUjhrh",
+      "recvirOkdhpjfW",
+      "recvirOkDJhTQZ",
+      "recvirOl3wtdL3",
+      "recvirOltFmtXm"
+    ]
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+2026/05/02 15:57:36 [Bitable] 字段列表: [sdr_id proposer title topic impact_level executor status git_commit_hash created_at decision]
+2026/05/02 15:57:36 [Bitable] 记录数: 8
+2026/05/02 15:57:36 [Bitable] 解析到决策: dec_20260502_001 (hash: "9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b")
+2026/05/02 15:57:36 [Bitable] 解析到决策: dec_20260502_002 (hash: "5c452213459cb2df0cfb4aa890d7b90c3a26674f")
+2026/05/02 15:57:36 [Bitable] 解析到决策: dec_20260502_003 (hash: "ea098e6c113a2315d39eb80e51b034e4af6d5d7a")
+2026/05/02 15:57:36 [Bitable] 解析到决策: dec_20260502_004 (hash: "")
+2026/05/02 15:57:36 [Bitable] 解析到决策: dec_20260502_003 (hash: "")
+2026/05/02 15:57:36 [Bitable] 解析到决策: dec_20260502_005 (hash: "")
+2026/05/02 15:57:36 [Bitable] 解析到决策: dec_20260502_004 (hash: "")
+2026/05/02 15:57:36 [Bitable] 解析到决策: dec_20260502_006 (hash: "")
+2026/05/02 15:57:36 [Sync] Bitable 中有 8 个决策
+2026/05/02 15:57:36 [Sync] Git 中有 3 个决策
+2026/05/02 15:57:36 [Sync] 处理 Bitable 决策: dec_20260502_001 (用户认证模块设计（修订版）)
+2026/05/02 15:57:36 [Sync]   Bitable 决策 hash: "9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b"
+2026/05/02 15:57:36 [Sync]   Git 中已存在, Git hash: c6ae91a16a8fa4bfdb3093641ebcb9d40382a505
+2026/05/02 15:57:36 [Sync]   内容有变化，更新 Git
+2026/05/02 15:57:36 [Sync]   更新失败: git [commit -m decision(general): dec_20260502_001 - 用户认证模块设计（修订版）
+
+Decision: 采用 OAuth 2.0 + JWT 双机制
+Rationale: 需要支持移动端和 Web 端两种场景
+Impact: 
+Proposer: 张三]: exit status 1: 
+2026/05/02 15:57:36 [Sync] 处理 Bitable 决策: dec_20260502_002 (数据库连接池配置（优化）)
+2026/05/02 15:57:36 [Sync]   Bitable 决策 hash: "5c452213459cb2df0cfb4aa890d7b90c3a26674f"
+2026/05/02 15:57:36 [Sync]   Git 中已存在, Git hash: c4ce1903fad7e8719e64758c1c10b7fdd8761c63
+2026/05/02 15:57:36 [Sync]   内容有变化，更新 Git
+2026/05/02 15:57:36 [Sync]   更新失败: git [commit -m decision(general): dec_20260502_002 - 数据库连接池配置（优化）
+
+Decision: 最大连接数 100
+Rationale: 根据项目需求讨论决定
+Impact: 
+Proposer: 张三]: exit status 1: 
+2026/05/02 15:57:36 [Sync] 处理 Bitable 决策: dec_20260502_003 (API 响应格式规范)
+2026/05/02 15:57:36 [Sync]   Bitable 决策 hash: "ea098e6c113a2315d39eb80e51b034e4af6d5d7a"
+2026/05/02 15:57:36 [Sync]   Git 中已存在, Git hash: ea098e6c113a2315d39eb80e51b034e4af6d5d7a
+2026/05/02 15:57:36 [Sync]   内容有变化，更新 Git
+2026/05/02 15:57:36 [Sync] bitable update: dec_20260502_003 - API 响应格式规范
+2026/05/02 15:57:36 [Sync]   同步更新 Bitable 中的 hash
+2026/05/02 15:57:36 [Bitable] 写入决策: dec_20260502_003
+2026/05/02 15:57:36 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:20","decision":"统一使用 JSON 格式","executor":"","git_commit_hash":"d953c24021c6ce6afa7d8d6bfd728e4b0f088647","impact_level":"major","proposer":"张三","sdr_id":"dec_20260502_003","status":"pending","title":"API 响应格式规范","topic":"general"}
+2026/05/02 15:57:37 [Sync] 处理 Bitable 决策: dec_20260502_004 (日志系统架构)
+2026/05/02 15:57:37 [Sync]   Bitable 决策 hash: ""
+2026/05/02 15:57:37 [Sync]   Git 中不存在，写入新文件
+2026/05/02 15:57:37 [Sync] bitable create: dec_20260502_004 - 日志系统架构
+2026/05/02 15:57:37 [Sync]   同步更新 Bitable 中的 hash
+2026/05/02 15:57:37 [Bitable] 写入决策: dec_20260502_004
+2026/05/02 15:57:37 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:26","decision":"使用 ELK Stack","executor":"","git_commit_hash":"56cc2a239e2cda823debc6e30c9a57a93f933918","impact_level":"minor","proposer":"张三","sdr_id":"dec_20260502_004","status":"in_discussion","title":"日志系统架构","topic":"general"}
+2026/05/02 15:57:38 [Sync] 处理 Bitable 决策: dec_20260502_003 (API 响应格式规范（v2）)
+2026/05/02 15:57:38 [Sync]   Bitable 决策 hash: ""
+2026/05/02 15:57:38 [Sync]   Git 中已存在, Git hash: d953c24021c6ce6afa7d8d6bfd728e4b0f088647
+2026/05/02 15:57:38 [Sync]   内容有变化，更新 Git
+2026/05/02 15:57:38 [Sync] bitable update: dec_20260502_003 - API 响应格式规范（v2）
+2026/05/02 15:57:38 [Sync]   同步更新 Bitable 中的 hash
+2026/05/02 15:57:38 [Bitable] 写入决策: dec_20260502_003
+2026/05/02 15:57:38 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:20","decision":"统一使用 JSON 格式，支持分页","executor":"王五","git_commit_hash":"db3b9d250d7f60a6abe08977ceff5fc52ab59323","impact_level":"major","proposer":"张三","sdr_id":"dec_20260502_003","status":"decided","title":"API 响应格式规范（v2）","topic":"general"}
+2026/05/02 15:57:39 [Sync] 处理 Bitable 决策: dec_20260502_005 (缓存策略设计)
+2026/05/02 15:57:39 [Sync]   Bitable 决策 hash: ""
+2026/05/02 15:57:39 [Sync]   Git 中不存在，写入新文件
+2026/05/02 15:57:39 [Sync] bitable create: dec_20260502_005 - 缓存策略设计
+2026/05/02 15:57:39 [Sync]   同步更新 Bitable 中的 hash
+2026/05/02 15:57:39 [Bitable] 写入决策: dec_20260502_005
+2026/05/02 15:57:39 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:30","decision":"Redis + 本地缓存两级","executor":"","git_commit_hash":"a49a59621391de6970f48d45fc26de7857d23559","impact_level":"critical","proposer":"张三","sdr_id":"dec_20260502_005","status":"pending","title":"缓存策略设计","topic":"general"}
+2026/05/02 15:57:41 [Sync] 处理 Bitable 决策: dec_20260502_004 (日志系统架构（完善）)
+2026/05/02 15:57:41 [Sync]   Bitable 决策 hash: ""
+2026/05/02 15:57:41 [Sync]   Git 中不存在，写入新文件
+2026/05/02 15:57:41 [Sync] bitable create: dec_20260502_004 - 日志系统架构（完善）
+2026/05/02 15:57:41 [Sync]   同步更新 Bitable 中的 hash
+2026/05/02 15:57:41 [Bitable] 写入决策: dec_20260502_004
+2026/05/02 15:57:41 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:26","decision":"使用 ELK Stack","executor":"","git_commit_hash":"734f0b0e607ff1e6546731e0171183757d6cb502","impact_level":"minor","proposer":"张三","sdr_id":"dec_20260502_004","status":"decided","title":"日志系统架构（完善）","topic":"general"}
+2026/05/02 15:57:42 [Sync] 处理 Bitable 决策: dec_20260502_006 (监控告警方案)
+2026/05/02 15:57:42 [Sync]   Bitable 决策 hash: ""
+2026/05/02 15:57:42 [Sync]   Git 中不存在，写入新文件
+2026/05/02 15:57:42 [Sync] bitable create: dec_20260502_006 - 监控告警方案
+2026/05/02 15:57:42 [Sync]   同步更新 Bitable 中的 hash
+2026/05/02 15:57:42 [Bitable] 写入决策: dec_20260502_006
+2026/05/02 15:57:42 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:33","decision":"Prometheus + Grafana","executor":"","git_commit_hash":"b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff","impact_level":"minor","proposer":"张三","sdr_id":"dec_20260502_006","status":"pending","title":"监控告警方案","topic":"general"}
+2026/05/02 15:57:43 [Sync] === 反向同步完成 ===
+
+--- 步骤 6: 最终双向同步 ---
+2026/05/02 15:57:43 [Sync] === 开始正向同步: Git → Bitable ===
+2026/05/02 15:57:43 [Sync] Git 中有 6 个决策
+2026/05/02 15:57:43 [Bitable] 开始获取所有决策...
+2026/05/02 15:57:44 [Bitable] 原始响应: {
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "data": [
+      [
+        "dec_20260502_001",
+        "张三",
+        "用户认证模块设计（修订版）",
+        "general",
+        "major",
+        null,
+        "decided",
+        "9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b",
+        "2026-05-02 15:57:18",
+        "采用 OAuth 2.0 + JWT 双机制"
+      ],
+      [
+        "dec_20260502_002",
+        "张三",
+        "数据库连接池配置（优化）",
+        "general",
+        "major",
+        "李四",
+        "executing",
+        "5c452213459cb2df0cfb4aa890d7b90c3a26674f",
+        "2026-05-02 15:57:19",
+        "最大连接数 100"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范",
+        "general",
+        "major",
+        null,
+        "pending",
+        "ea098e6c113a2315d39eb80e51b034e4af6d5d7a",
+        "2026-05-02 15:57:20",
+        "统一使用 JSON 格式"
+      ],
+      [
+        "dec_20260502_004",
+        "张三",
+        "日志系统架构",
+        "general",
+        "minor",
+        null,
+        "in_discussion",
+        null,
+        "2026-05-02 15:57:26",
+        "使用 ELK Stack"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范（v2）",
+        "general",
+        "major",
+        "王五",
+        "decided",
+        null,
+        "2026-05-02 15:57:28",
+        "统一使用 JSON 格式，支持分页"
+      ],
+      [
+        "dec_20260502_005",
+        "张三",
+        "缓存策略设计",
+        "general",
+        "critical",
+        null,
+        "pending",
+        null,
+        "2026-05-02 15:57:30",
+        "Redis + 本地缓存两级"
+      ],
+      [
+        "dec_20260502_004",
+        "张三",
+        "日志系统架构（完善）",
+        "general",
+        "minor",
+        null,
+        "decided",
+        null,
+        "2026-05-02 15:57:26",
+        "使用 ELK Stack"
+      ],
+      [
+        "dec_20260502_006",
+        "张三",
+        "监控告警方案",
+        "general",
+        "minor",
+        null,
+        "pending",
+        null,
+        "2026-05-02 15:57:33",
+        "Prometheus + Grafana"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范",
+        "general",
+        "major",
+        null,
+        "pending",
+        "d953c24021c6ce6afa7d8d6bfd728e4b0f088647",
+        "2026-05-02 15:57:20",
+        "统一使用 JSON 格式"
+      ],
+      [
+        "dec_20260502_004",
+        "张三",
+        "日志系统架构",
+        "general",
+        "minor",
+        null,
+        "in_discussion",
+        "56cc2a239e2cda823debc6e30c9a57a93f933918",
+        "2026-05-02 15:57:26",
+        "使用 ELK Stack"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范（v2）",
+        "general",
+        "major",
+        "王五",
+        "decided",
+        "db3b9d250d7f60a6abe08977ceff5fc52ab59323",
+        "2026-05-02 15:57:20",
+        "统一使用 JSON 格式，支持分页"
+      ],
+      [
+        "dec_20260502_005",
+        "张三",
+        "缓存策略设计",
+        "general",
+        "critical",
+        null,
+        "pending",
+        "a49a59621391de6970f48d45fc26de7857d23559",
+        "2026-05-02 15:57:30",
+        "Redis + 本地缓存两级"
+      ],
+      [
+        "dec_20260502_004",
+        "张三",
+        "日志系统架构（完善）",
+        "general",
+        "minor",
+        null,
+        "decided",
+        "734f0b0e607ff1e6546731e0171183757d6cb502",
+        "2026-05-02 15:57:26",
+        "使用 ELK Stack"
+      ],
+      [
+        "dec_20260502_006",
+        "张三",
+        "监控告警方案",
+        "general",
+        "minor",
+        null,
+        "pending",
+        "b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff",
+        "2026-05-02 15:57:33",
+        "Prometheus + Grafana"
+      ]
+    ],
+    "field_id_list": [
+      "fld8wqCGLS",
+      "fld9wCsQCd",
+      "fldC0RR25K",
+      "fldf7yLDpJ",
+      "fldi6wJ1Ez",
+      "fldKXJGYDJ",
+      "fldoEYShMK",
+      "fldOMxF33K",
+      "fldtKRw87R",
+      "fldzy2pqM9"
+    ],
+    "fields": [
+      "sdr_id",
+      "proposer",
+      "title",
+      "topic",
+      "impact_level",
+      "executor",
+      "status",
+      "git_commit_hash",
+      "created_at",
+      "decision"
+    ],
+    "has_more": false,
+    "query_context": {
+      "field_scope": "all_fields",
+      "record_scope": "all_records"
+    },
+    "record_id_list": [
+      "recvirOiF0nJE9",
+      "recvirOiWShc7x",
+      "recvirOjeZjt6L",
+      "recvirOjMUjhrh",
+      "recvirOkdhpjfW",
+      "recvirOkDJhTQZ",
+      "recvirOl3wtdL3",
+      "recvirOltFmtXm",
+      "recvirOmdx1SiE",
+      "recvirOmyLvc8O",
+      "recvirOmQBNtJW",
+      "recvirOndGYeh0",
+      "recvirOnvqXPQL",
+      "recvirOnVu5ltW"
+    ]
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+2026/05/02 15:57:44 [Bitable] 字段列表: [sdr_id proposer title topic impact_level executor status git_commit_hash created_at decision]
+2026/05/02 15:57:44 [Bitable] 记录数: 14
+2026/05/02 15:57:44 [Bitable] 解析到决策: dec_20260502_001 (hash: "9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b")
+2026/05/02 15:57:44 [Bitable] 解析到决策: dec_20260502_002 (hash: "5c452213459cb2df0cfb4aa890d7b90c3a26674f")
+2026/05/02 15:57:44 [Bitable] 解析到决策: dec_20260502_003 (hash: "ea098e6c113a2315d39eb80e51b034e4af6d5d7a")
+2026/05/02 15:57:44 [Bitable] 解析到决策: dec_20260502_004 (hash: "")
+2026/05/02 15:57:44 [Bitable] 解析到决策: dec_20260502_003 (hash: "")
+2026/05/02 15:57:44 [Bitable] 解析到决策: dec_20260502_005 (hash: "")
+2026/05/02 15:57:44 [Bitable] 解析到决策: dec_20260502_004 (hash: "")
+2026/05/02 15:57:44 [Bitable] 解析到决策: dec_20260502_006 (hash: "")
+2026/05/02 15:57:44 [Bitable] 解析到决策: dec_20260502_003 (hash: "d953c24021c6ce6afa7d8d6bfd728e4b0f088647")
+2026/05/02 15:57:44 [Bitable] 解析到决策: dec_20260502_004 (hash: "56cc2a239e2cda823debc6e30c9a57a93f933918")
+2026/05/02 15:57:44 [Bitable] 解析到决策: dec_20260502_003 (hash: "db3b9d250d7f60a6abe08977ceff5fc52ab59323")
+2026/05/02 15:57:44 [Bitable] 解析到决策: dec_20260502_005 (hash: "a49a59621391de6970f48d45fc26de7857d23559")
+2026/05/02 15:57:44 [Bitable] 解析到决策: dec_20260502_004 (hash: "734f0b0e607ff1e6546731e0171183757d6cb502")
+2026/05/02 15:57:44 [Bitable] 解析到决策: dec_20260502_006 (hash: "b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff")
+2026/05/02 15:57:44 [Sync] Bitable 中有 14 个决策
+2026/05/02 15:57:44 [Sync] Bitable 中已有: dec_20260502_001 (hash: "9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b")
+2026/05/02 15:57:44 [Sync] Bitable 中已有: dec_20260502_002 (hash: "5c452213459cb2df0cfb4aa890d7b90c3a26674f")
+2026/05/02 15:57:44 [Sync] Bitable 中已有: dec_20260502_003 (hash: "ea098e6c113a2315d39eb80e51b034e4af6d5d7a")
+2026/05/02 15:57:44 [Sync] Bitable 中已有: dec_20260502_004 (hash: "")
+2026/05/02 15:57:44 [Sync] Bitable 中已有: dec_20260502_003 (hash: "")
+2026/05/02 15:57:44 [Sync] Bitable 中已有: dec_20260502_005 (hash: "")
+2026/05/02 15:57:44 [Sync] Bitable 中已有: dec_20260502_004 (hash: "")
+2026/05/02 15:57:44 [Sync] Bitable 中已有: dec_20260502_006 (hash: "")
+2026/05/02 15:57:44 [Sync] Bitable 中已有: dec_20260502_003 (hash: "d953c24021c6ce6afa7d8d6bfd728e4b0f088647")
+2026/05/02 15:57:44 [Sync] Bitable 中已有: dec_20260502_004 (hash: "56cc2a239e2cda823debc6e30c9a57a93f933918")
+2026/05/02 15:57:44 [Sync] Bitable 中已有: dec_20260502_003 (hash: "db3b9d250d7f60a6abe08977ceff5fc52ab59323")
+2026/05/02 15:57:44 [Sync] Bitable 中已有: dec_20260502_005 (hash: "a49a59621391de6970f48d45fc26de7857d23559")
+2026/05/02 15:57:44 [Sync] Bitable 中已有: dec_20260502_004 (hash: "734f0b0e607ff1e6546731e0171183757d6cb502")
+2026/05/02 15:57:44 [Sync] Bitable 中已有: dec_20260502_006 (hash: "b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff")
+2026/05/02 15:57:44 [Sync] 处理 Git 决策: dec_20260502_001 (用户认证模块设计（修订版）)
+2026/05/02 15:57:44 [Sync]   Git 决策 hash: "9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b"
+2026/05/02 15:57:44 [Sync]   Bitable hash: "9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b"
+2026/05/02 15:57:44 [Sync]   Hash 一致，跳过
+2026/05/02 15:57:44 [Sync] 处理 Git 决策: dec_20260502_002 (数据库连接池配置（优化）)
+2026/05/02 15:57:44 [Sync]   Git 决策 hash: "5c452213459cb2df0cfb4aa890d7b90c3a26674f"
+2026/05/02 15:57:44 [Sync]   Bitable hash: "5c452213459cb2df0cfb4aa890d7b90c3a26674f"
+2026/05/02 15:57:44 [Sync]   Hash 一致，跳过
+2026/05/02 15:57:44 [Sync] 处理 Git 决策: dec_20260502_003 (API 响应格式规范（v2）)
+2026/05/02 15:57:44 [Sync]   Git 决策 hash: "ea098e6c113a2315d39eb80e51b034e4af6d5d7a"
+2026/05/02 15:57:44 [Sync]   Bitable hash: "db3b9d250d7f60a6abe08977ceff5fc52ab59323"
+2026/05/02 15:57:44 [Sync]   Hash 不一致，更新 Bitable
+2026/05/02 15:57:44 [Bitable] 写入决策: dec_20260502_003
+2026/05/02 15:57:44 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:20","decision":"统一使用 JSON 格式，支持分页","executor":"王五","git_commit_hash":"ea098e6c113a2315d39eb80e51b034e4af6d5d7a","impact_level":"major","proposer":"张三","sdr_id":"dec_20260502_003","status":"decided","title":"API 响应格式规范（v2）","topic":"general"}
+2026/05/02 15:57:46 [Sync] git update: dec_20260502_003 - API 响应格式规范（v2）
+2026/05/02 15:57:46 [Sync] 处理 Git 决策: dec_20260502_004 (日志系统架构（完善）)
+2026/05/02 15:57:46 [Sync]   Git 决策 hash: "734f0b0e607ff1e6546731e0171183757d6cb502"
+2026/05/02 15:57:46 [Sync]   Bitable hash: "734f0b0e607ff1e6546731e0171183757d6cb502"
+2026/05/02 15:57:46 [Sync]   Hash 一致，跳过
+2026/05/02 15:57:46 [Sync] 处理 Git 决策: dec_20260502_005 (缓存策略设计)
+2026/05/02 15:57:46 [Sync]   Git 决策 hash: "a49a59621391de6970f48d45fc26de7857d23559"
+2026/05/02 15:57:46 [Sync]   Bitable hash: "a49a59621391de6970f48d45fc26de7857d23559"
+2026/05/02 15:57:46 [Sync]   Hash 一致，跳过
+2026/05/02 15:57:46 [Sync] 处理 Git 决策: dec_20260502_006 (监控告警方案)
+2026/05/02 15:57:46 [Sync]   Git 决策 hash: "b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff"
+2026/05/02 15:57:46 [Sync]   Bitable hash: "b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff"
+2026/05/02 15:57:46 [Sync]   Hash 一致，跳过
+2026/05/02 15:57:46 [Sync] === 正向同步完成 ===
+2026/05/02 15:57:46 [Sync] === 开始反向同步: Bitable → Git ===
+2026/05/02 15:57:46 [Bitable] 开始获取所有决策...
+2026/05/02 15:57:47 [Bitable] 原始响应: {
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "data": [
+      [
+        "dec_20260502_001",
+        "张三",
+        "用户认证模块设计（修订版）",
+        "general",
+        "major",
+        null,
+        "decided",
+        "9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b",
+        "2026-05-02 15:57:18",
+        "采用 OAuth 2.0 + JWT 双机制"
+      ],
+      [
+        "dec_20260502_002",
+        "张三",
+        "数据库连接池配置（优化）",
+        "general",
+        "major",
+        "李四",
+        "executing",
+        "5c452213459cb2df0cfb4aa890d7b90c3a26674f",
+        "2026-05-02 15:57:19",
+        "最大连接数 100"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范",
+        "general",
+        "major",
+        null,
+        "pending",
+        "ea098e6c113a2315d39eb80e51b034e4af6d5d7a",
+        "2026-05-02 15:57:20",
+        "统一使用 JSON 格式"
+      ],
+      [
+        "dec_20260502_004",
+        "张三",
+        "日志系统架构",
+        "general",
+        "minor",
+        null,
+        "in_discussion",
+        null,
+        "2026-05-02 15:57:26",
+        "使用 ELK Stack"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范（v2）",
+        "general",
+        "major",
+        "王五",
+        "decided",
+        null,
+        "2026-05-02 15:57:28",
+        "统一使用 JSON 格式，支持分页"
+      ],
+      [
+        "dec_20260502_005",
+        "张三",
+        "缓存策略设计",
+        "general",
+        "critical",
+        null,
+        "pending",
+        null,
+        "2026-05-02 15:57:30",
+        "Redis + 本地缓存两级"
+      ],
+      [
+        "dec_20260502_004",
+        "张三",
+        "日志系统架构（完善）",
+        "general",
+        "minor",
+        null,
+        "decided",
+        null,
+        "2026-05-02 15:57:26",
+        "使用 ELK Stack"
+      ],
+      [
+        "dec_20260502_006",
+        "张三",
+        "监控告警方案",
+        "general",
+        "minor",
+        null,
+        "pending",
+        null,
+        "2026-05-02 15:57:33",
+        "Prometheus + Grafana"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范",
+        "general",
+        "major",
+        null,
+        "pending",
+        "d953c24021c6ce6afa7d8d6bfd728e4b0f088647",
+        "2026-05-02 15:57:20",
+        "统一使用 JSON 格式"
+      ],
+      [
+        "dec_20260502_004",
+        "张三",
+        "日志系统架构",
+        "general",
+        "minor",
+        null,
+        "in_discussion",
+        "56cc2a239e2cda823debc6e30c9a57a93f933918",
+        "2026-05-02 15:57:26",
+        "使用 ELK Stack"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范（v2）",
+        "general",
+        "major",
+        "王五",
+        "decided",
+        "db3b9d250d7f60a6abe08977ceff5fc52ab59323",
+        "2026-05-02 15:57:20",
+        "统一使用 JSON 格式，支持分页"
+      ],
+      [
+        "dec_20260502_005",
+        "张三",
+        "缓存策略设计",
+        "general",
+        "critical",
+        null,
+        "pending",
+        "a49a59621391de6970f48d45fc26de7857d23559",
+        "2026-05-02 15:57:30",
+        "Redis + 本地缓存两级"
+      ],
+      [
+        "dec_20260502_004",
+        "张三",
+        "日志系统架构（完善）",
+        "general",
+        "minor",
+        null,
+        "decided",
+        "734f0b0e607ff1e6546731e0171183757d6cb502",
+        "2026-05-02 15:57:26",
+        "使用 ELK Stack"
+      ],
+      [
+        "dec_20260502_006",
+        "张三",
+        "监控告警方案",
+        "general",
+        "minor",
+        null,
+        "pending",
+        "b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff",
+        "2026-05-02 15:57:33",
+        "Prometheus + Grafana"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范（v2）",
+        "general",
+        "major",
+        "王五",
+        "decided",
+        "ea098e6c113a2315d39eb80e51b034e4af6d5d7a",
+        "2026-05-02 15:57:20",
+        "统一使用 JSON 格式，支持分页"
+      ]
+    ],
+    "field_id_list": [
+      "fld8wqCGLS",
+      "fld9wCsQCd",
+      "fldC0RR25K",
+      "fldf7yLDpJ",
+      "fldi6wJ1Ez",
+      "fldKXJGYDJ",
+      "fldoEYShMK",
+      "fldOMxF33K",
+      "fldtKRw87R",
+      "fldzy2pqM9"
+    ],
+    "fields": [
+      "sdr_id",
+      "proposer",
+      "title",
+      "topic",
+      "impact_level",
+      "executor",
+      "status",
+      "git_commit_hash",
+      "created_at",
+      "decision"
+    ],
+    "has_more": false,
+    "query_context": {
+      "field_scope": "all_fields",
+      "record_scope": "all_records"
+    },
+    "record_id_list": [
+      "recvirOiF0nJE9",
+      "recvirOiWShc7x",
+      "recvirOjeZjt6L",
+      "recvirOjMUjhrh",
+      "recvirOkdhpjfW",
+      "recvirOkDJhTQZ",
+      "recvirOl3wtdL3",
+      "recvirOltFmtXm",
+      "recvirOmdx1SiE",
+      "recvirOmyLvc8O",
+      "recvirOmQBNtJW",
+      "recvirOndGYeh0",
+      "recvirOnvqXPQL",
+      "recvirOnVu5ltW",
+      "recvirOovjnclf"
+    ]
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+2026/05/02 15:57:47 [Bitable] 字段列表: [sdr_id proposer title topic impact_level executor status git_commit_hash created_at decision]
+2026/05/02 15:57:47 [Bitable] 记录数: 15
+2026/05/02 15:57:47 [Bitable] 解析到决策: dec_20260502_001 (hash: "9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b")
+2026/05/02 15:57:47 [Bitable] 解析到决策: dec_20260502_002 (hash: "5c452213459cb2df0cfb4aa890d7b90c3a26674f")
+2026/05/02 15:57:47 [Bitable] 解析到决策: dec_20260502_003 (hash: "ea098e6c113a2315d39eb80e51b034e4af6d5d7a")
+2026/05/02 15:57:47 [Bitable] 解析到决策: dec_20260502_004 (hash: "")
+2026/05/02 15:57:47 [Bitable] 解析到决策: dec_20260502_003 (hash: "")
+2026/05/02 15:57:47 [Bitable] 解析到决策: dec_20260502_005 (hash: "")
+2026/05/02 15:57:47 [Bitable] 解析到决策: dec_20260502_004 (hash: "")
+2026/05/02 15:57:47 [Bitable] 解析到决策: dec_20260502_006 (hash: "")
+2026/05/02 15:57:47 [Bitable] 解析到决策: dec_20260502_003 (hash: "d953c24021c6ce6afa7d8d6bfd728e4b0f088647")
+2026/05/02 15:57:47 [Bitable] 解析到决策: dec_20260502_004 (hash: "56cc2a239e2cda823debc6e30c9a57a93f933918")
+2026/05/02 15:57:47 [Bitable] 解析到决策: dec_20260502_003 (hash: "db3b9d250d7f60a6abe08977ceff5fc52ab59323")
+2026/05/02 15:57:47 [Bitable] 解析到决策: dec_20260502_005 (hash: "a49a59621391de6970f48d45fc26de7857d23559")
+2026/05/02 15:57:47 [Bitable] 解析到决策: dec_20260502_004 (hash: "734f0b0e607ff1e6546731e0171183757d6cb502")
+2026/05/02 15:57:47 [Bitable] 解析到决策: dec_20260502_006 (hash: "b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff")
+2026/05/02 15:57:47 [Bitable] 解析到决策: dec_20260502_003 (hash: "ea098e6c113a2315d39eb80e51b034e4af6d5d7a")
+2026/05/02 15:57:47 [Sync] Bitable 中有 15 个决策
+2026/05/02 15:57:47 [Sync] Git 中有 6 个决策
+2026/05/02 15:57:47 [Sync] 处理 Bitable 决策: dec_20260502_001 (用户认证模块设计（修订版）)
+2026/05/02 15:57:47 [Sync]   Bitable 决策 hash: "9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b"
+2026/05/02 15:57:47 [Sync]   Git 中已存在, Git hash: c6ae91a16a8fa4bfdb3093641ebcb9d40382a505
+2026/05/02 15:57:47 [Sync]   内容有变化，更新 Git
+2026/05/02 15:57:47 [Sync]   更新失败: git [commit -m decision(general): dec_20260502_001 - 用户认证模块设计（修订版）
+
+Decision: 采用 OAuth 2.0 + JWT 双机制
+Rationale: 需要支持移动端和 Web 端两种场景
+Impact: 
+Proposer: 张三]: exit status 1: 
+2026/05/02 15:57:47 [Sync] 处理 Bitable 决策: dec_20260502_002 (数据库连接池配置（优化）)
+2026/05/02 15:57:47 [Sync]   Bitable 决策 hash: "5c452213459cb2df0cfb4aa890d7b90c3a26674f"
+2026/05/02 15:57:47 [Sync]   Git 中已存在, Git hash: c4ce1903fad7e8719e64758c1c10b7fdd8761c63
+2026/05/02 15:57:47 [Sync]   内容有变化，更新 Git
+2026/05/02 15:57:47 [Sync]   更新失败: git [commit -m decision(general): dec_20260502_002 - 数据库连接池配置（优化）
+
+Decision: 最大连接数 100
+Rationale: 根据项目需求讨论决定
+Impact: 
+Proposer: 张三]: exit status 1: 
+2026/05/02 15:57:47 [Sync] 处理 Bitable 决策: dec_20260502_003 (API 响应格式规范)
+2026/05/02 15:57:47 [Sync]   Bitable 决策 hash: "ea098e6c113a2315d39eb80e51b034e4af6d5d7a"
+2026/05/02 15:57:47 [Sync]   Git 中已存在, Git hash: db3b9d250d7f60a6abe08977ceff5fc52ab59323
+2026/05/02 15:57:47 [Sync]   内容有变化，更新 Git
+2026/05/02 15:57:47 [Sync] bitable update: dec_20260502_003 - API 响应格式规范
+2026/05/02 15:57:47 [Sync]   同步更新 Bitable 中的 hash
+2026/05/02 15:57:47 [Bitable] 写入决策: dec_20260502_003
+2026/05/02 15:57:47 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:20","decision":"统一使用 JSON 格式","executor":"王五","git_commit_hash":"bbb0611eba216d0fe1b56849ca15be7fb2acf15c","impact_level":"major","proposer":"张三","sdr_id":"dec_20260502_003","status":"pending","title":"API 响应格式规范","topic":"general"}
+2026/05/02 15:57:48 [Sync] 处理 Bitable 决策: dec_20260502_004 (日志系统架构)
+2026/05/02 15:57:48 [Sync]   Bitable 决策 hash: ""
+2026/05/02 15:57:48 [Sync]   Git 中已存在, Git hash: 734f0b0e607ff1e6546731e0171183757d6cb502
+2026/05/02 15:57:48 [Sync]   内容有变化，更新 Git
+2026/05/02 15:57:48 [Sync] bitable update: dec_20260502_004 - 日志系统架构
+2026/05/02 15:57:48 [Sync]   同步更新 Bitable 中的 hash
+2026/05/02 15:57:48 [Bitable] 写入决策: dec_20260502_004
+2026/05/02 15:57:48 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:26","decision":"使用 ELK Stack","executor":"","git_commit_hash":"3517d10aafafcee17ac2bd111c35eaba5596eab5","impact_level":"minor","proposer":"张三","sdr_id":"dec_20260502_004","status":"in_discussion","title":"日志系统架构","topic":"general"}
+2026/05/02 15:57:49 [Sync] 处理 Bitable 决策: dec_20260502_003 (API 响应格式规范（v2）)
+2026/05/02 15:57:49 [Sync]   Bitable 决策 hash: ""
+2026/05/02 15:57:50 [Sync]   Git 中已存在, Git hash: bbb0611eba216d0fe1b56849ca15be7fb2acf15c
+2026/05/02 15:57:50 [Sync]   内容有变化，更新 Git
+2026/05/02 15:57:50 [Sync] bitable update: dec_20260502_003 - API 响应格式规范（v2）
+2026/05/02 15:57:50 [Sync]   同步更新 Bitable 中的 hash
+2026/05/02 15:57:50 [Bitable] 写入决策: dec_20260502_003
+2026/05/02 15:57:50 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:20","decision":"统一使用 JSON 格式，支持分页","executor":"王五","git_commit_hash":"99d3ffd3ed8e7134302aa9caf898bf580390dc39","impact_level":"major","proposer":"张三","sdr_id":"dec_20260502_003","status":"decided","title":"API 响应格式规范（v2）","topic":"general"}
+2026/05/02 15:57:51 [Sync] 处理 Bitable 决策: dec_20260502_005 (缓存策略设计)
+2026/05/02 15:57:51 [Sync]   Bitable 决策 hash: ""
+2026/05/02 15:57:51 [Sync]   Git 中已存在, Git hash: a49a59621391de6970f48d45fc26de7857d23559
+2026/05/02 15:57:51 [Sync]   内容无变化，跳过
+2026/05/02 15:57:51 [Sync]   补全 Bitable 中的 git_commit_hash
+2026/05/02 15:57:51 [Bitable] 写入决策: dec_20260502_005
+2026/05/02 15:57:51 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:30","decision":"Redis + 本地缓存两级","executor":"","git_commit_hash":"a49a59621391de6970f48d45fc26de7857d23559","impact_level":"critical","proposer":"张三","sdr_id":"dec_20260502_005","status":"pending","title":"缓存策略设计","topic":"general"}
+2026/05/02 15:57:52 [Sync] 处理 Bitable 决策: dec_20260502_004 (日志系统架构（完善）)
+2026/05/02 15:57:52 [Sync]   Bitable 决策 hash: ""
+2026/05/02 15:57:52 [Sync]   Git 中已存在, Git hash: 3517d10aafafcee17ac2bd111c35eaba5596eab5
+2026/05/02 15:57:52 [Sync]   内容无变化，跳过
+2026/05/02 15:57:52 [Sync]   补全 Bitable 中的 git_commit_hash
+2026/05/02 15:57:52 [Bitable] 写入决策: dec_20260502_004
+2026/05/02 15:57:52 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:26","decision":"使用 ELK Stack","executor":"","git_commit_hash":"3517d10aafafcee17ac2bd111c35eaba5596eab5","impact_level":"minor","proposer":"张三","sdr_id":"dec_20260502_004","status":"decided","title":"日志系统架构（完善）","topic":"general"}
+2026/05/02 15:57:53 [Sync] 处理 Bitable 决策: dec_20260502_006 (监控告警方案)
+2026/05/02 15:57:53 [Sync]   Bitable 决策 hash: ""
+2026/05/02 15:57:53 [Sync]   Git 中已存在, Git hash: b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff
+2026/05/02 15:57:53 [Sync]   内容无变化，跳过
+2026/05/02 15:57:53 [Sync]   补全 Bitable 中的 git_commit_hash
+2026/05/02 15:57:53 [Bitable] 写入决策: dec_20260502_006
+2026/05/02 15:57:53 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:33","decision":"Prometheus + Grafana","executor":"","git_commit_hash":"b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff","impact_level":"minor","proposer":"张三","sdr_id":"dec_20260502_006","status":"pending","title":"监控告警方案","topic":"general"}
+2026/05/02 15:57:54 [Sync] 处理 Bitable 决策: dec_20260502_003 (API 响应格式规范)
+2026/05/02 15:57:54 [Sync]   Bitable 决策 hash: "d953c24021c6ce6afa7d8d6bfd728e4b0f088647"
+2026/05/02 15:57:54 [Sync]   Git 中已存在, Git hash: 99d3ffd3ed8e7134302aa9caf898bf580390dc39
+2026/05/02 15:57:54 [Sync]   内容有变化，更新 Git
+2026/05/02 15:57:54 [Sync] bitable update: dec_20260502_003 - API 响应格式规范
+2026/05/02 15:57:54 [Sync]   同步更新 Bitable 中的 hash
+2026/05/02 15:57:54 [Bitable] 写入决策: dec_20260502_003
+2026/05/02 15:57:54 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:20","decision":"统一使用 JSON 格式","executor":"王五","git_commit_hash":"3ff5cc8f8841994250d39f73515f4e82eec205de","impact_level":"major","proposer":"张三","sdr_id":"dec_20260502_003","status":"pending","title":"API 响应格式规范","topic":"general"}
+2026/05/02 15:57:56 [Sync] 处理 Bitable 决策: dec_20260502_004 (日志系统架构)
+2026/05/02 15:57:56 [Sync]   Bitable 决策 hash: "56cc2a239e2cda823debc6e30c9a57a93f933918"
+2026/05/02 15:57:56 [Sync]   Git 中已存在, Git hash: 3517d10aafafcee17ac2bd111c35eaba5596eab5
+2026/05/02 15:57:56 [Sync]   内容有变化，更新 Git
+2026/05/02 15:57:56 [Sync] bitable update: dec_20260502_004 - 日志系统架构
+2026/05/02 15:57:56 [Sync]   同步更新 Bitable 中的 hash
+2026/05/02 15:57:56 [Bitable] 写入决策: dec_20260502_004
+2026/05/02 15:57:56 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:26","decision":"使用 ELK Stack","executor":"","git_commit_hash":"1f27142014a53c6d8bf8d0a7640b5890c2090fa4","impact_level":"minor","proposer":"张三","sdr_id":"dec_20260502_004","status":"in_discussion","title":"日志系统架构","topic":"general"}
+2026/05/02 15:57:57 [Sync] 处理 Bitable 决策: dec_20260502_003 (API 响应格式规范（v2）)
+2026/05/02 15:57:57 [Sync]   Bitable 决策 hash: "db3b9d250d7f60a6abe08977ceff5fc52ab59323"
+2026/05/02 15:57:57 [Sync]   Git 中已存在, Git hash: 3ff5cc8f8841994250d39f73515f4e82eec205de
+2026/05/02 15:57:57 [Sync]   内容有变化，更新 Git
+2026/05/02 15:57:57 [Sync] bitable update: dec_20260502_003 - API 响应格式规范（v2）
+2026/05/02 15:57:57 [Sync]   同步更新 Bitable 中的 hash
+2026/05/02 15:57:57 [Bitable] 写入决策: dec_20260502_003
+2026/05/02 15:57:57 [Bitable] Upsert payload: {"created_at":"2026-05-02 15:57:20","decision":"统一使用 JSON 格式，支持分页","executor":"王五","git_commit_hash":"ff38bf873229b192e2b52a35793fafb707521bdc","impact_level":"major","proposer":"张三","sdr_id":"dec_20260502_003","status":"decided","title":"API 响应格式规范（v2）","topic":"general"}
+2026/05/02 15:57:58 [Sync] 处理 Bitable 决策: dec_20260502_005 (缓存策略设计)
+2026/05/02 15:57:58 [Sync]   Bitable 决策 hash: "a49a59621391de6970f48d45fc26de7857d23559"
+2026/05/02 15:57:58 [Sync]   Git 中已存在, Git hash: a49a59621391de6970f48d45fc26de7857d23559
+2026/05/02 15:57:58 [Sync]   内容无变化，跳过
+2026/05/02 15:57:58 [Sync] 处理 Bitable 决策: dec_20260502_004 (日志系统架构（完善）)
+2026/05/02 15:57:58 [Sync]   Bitable 决策 hash: "734f0b0e607ff1e6546731e0171183757d6cb502"
+2026/05/02 15:57:58 [Sync]   Git 中已存在, Git hash: 1f27142014a53c6d8bf8d0a7640b5890c2090fa4
+2026/05/02 15:57:58 [Sync]   内容无变化，跳过
+2026/05/02 15:57:58 [Sync] 处理 Bitable 决策: dec_20260502_006 (监控告警方案)
+2026/05/02 15:57:58 [Sync]   Bitable 决策 hash: "b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff"
+2026/05/02 15:57:58 [Sync]   Git 中已存在, Git hash: b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff
+2026/05/02 15:57:58 [Sync]   内容无变化，跳过
+2026/05/02 15:57:58 [Sync] 处理 Bitable 决策: dec_20260502_003 (API 响应格式规范（v2）)
+2026/05/02 15:57:58 [Sync]   Bitable 决策 hash: "ea098e6c113a2315d39eb80e51b034e4af6d5d7a"
+2026/05/02 15:57:58 [Sync]   Git 中已存在, Git hash: ff38bf873229b192e2b52a35793fafb707521bdc
+2026/05/02 15:57:58 [Sync]   内容有变化，更新 Git
+2026/05/02 15:57:58 [Sync]   更新失败: git [commit -m decision(general): dec_20260502_003 - API 响应格式规范（v2）
+
+Decision: 统一使用 JSON 格式，支持分页
+Rationale: 根据项目需求讨论决定
+Impact: 
+Proposer: 张三]: exit status 1: 
+2026/05/02 15:57:58 [Sync] === 反向同步完成 ===
+
+================================================================================
+=== 测试完成 - 变更总结 ===
+================================================================================
+
+共 26 次变更:
+
+1. [git] CREATE - dec_20260502_001
+   标题: 用户认证模块设计
+   详情: Commit: 9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b
+   时间: 2026-05-02 15:57:18
+
+2. [git] CREATE - dec_20260502_002
+   标题: 数据库连接池配置
+   详情: Commit: 5c452213459cb2df0cfb4aa890d7b90c3a26674f
+   时间: 2026-05-02 15:57:19
+
+3. [git] UPDATE - dec_20260502_001
+   标题: 用户认证模块设计（修订版）
+   详情: Commit: c6ae91a16a8fa4bfdb3093641ebcb9d40382a505
+   时间: 2026-05-02 15:57:19
+
+4. [git] CREATE - dec_20260502_003
+   标题: API 响应格式规范
+   详情: Commit: ea098e6c113a2315d39eb80e51b034e4af6d5d7a
+   时间: 2026-05-02 15:57:20
+
+5. [git] UPDATE - dec_20260502_002
+   标题: 数据库连接池配置（优化）
+   详情: Commit: c4ce1903fad7e8719e64758c1c10b7fdd8761c63
+   时间: 2026-05-02 15:57:21
+
+6. [git] CREATE - dec_20260502_001
+   标题: 用户认证模块设计（修订版）
+   详情: Git hash: 9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b
+   时间: 2026-05-02 15:57:23
+
+7. [git] CREATE - dec_20260502_002
+   标题: 数据库连接池配置（优化）
+   详情: Git hash: 5c452213459cb2df0cfb4aa890d7b90c3a26674f
+   时间: 2026-05-02 15:57:24
+
+8. [git] CREATE - dec_20260502_003
+   标题: API 响应格式规范
+   详情: Git hash: ea098e6c113a2315d39eb80e51b034e4af6d5d7a
+   时间: 2026-05-02 15:57:25
+
+9. [bitable] CREATE - dec_20260502_004
+   标题: 日志系统架构
+   详情: Added to Bitable
+   时间: 2026-05-02 15:57:27
+
+10. [bitable] UPDATE - dec_20260502_003
+   标题: API 响应格式规范（v2）
+   详情: Updated in Bitable
+   时间: 2026-05-02 15:57:29
+
+11. [bitable] CREATE - dec_20260502_005
+   标题: 缓存策略设计
+   详情: Added to Bitable
+   时间: 2026-05-02 15:57:31
+
+12. [bitable] UPDATE - dec_20260502_004
+   标题: 日志系统架构（完善）
+   详情: Updated in Bitable
+   时间: 2026-05-02 15:57:32
+
+13. [bitable] CREATE - dec_20260502_006
+   标题: 监控告警方案
+   详情: Added to Bitable
+   时间: 2026-05-02 15:57:34
+
+14. [bitable] UPDATE - dec_20260502_003
+   标题: API 响应格式规范
+   详情: Commit: d953c24021c6ce6afa7d8d6bfd728e4b0f088647
+   时间: 2026-05-02 15:57:36
+
+15. [bitable] CREATE - dec_20260502_004
+   标题: 日志系统架构
+   详情: Commit: 56cc2a239e2cda823debc6e30c9a57a93f933918
+   时间: 2026-05-02 15:57:37
+
+16. [bitable] UPDATE - dec_20260502_003
+   标题: API 响应格式规范（v2）
+   详情: Commit: db3b9d250d7f60a6abe08977ceff5fc52ab59323
+   时间: 2026-05-02 15:57:38
+
+17. [bitable] CREATE - dec_20260502_005
+   标题: 缓存策略设计
+   详情: Commit: a49a59621391de6970f48d45fc26de7857d23559
+   时间: 2026-05-02 15:57:39
+
+18. [bitable] CREATE - dec_20260502_004
+   标题: 日志系统架构（完善）
+   详情: Commit: 734f0b0e607ff1e6546731e0171183757d6cb502
+   时间: 2026-05-02 15:57:41
+
+19. [bitable] CREATE - dec_20260502_006
+   标题: 监控告警方案
+   详情: Commit: b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff
+   时间: 2026-05-02 15:57:42
+
+20. [git] UPDATE - dec_20260502_003
+   标题: API 响应格式规范（v2）
+   详情: Git hash: ea098e6c113a2315d39eb80e51b034e4af6d5d7a
+   时间: 2026-05-02 15:57:46
+
+21. [bitable] UPDATE - dec_20260502_003
+   标题: API 响应格式规范
+   详情: Commit: bbb0611eba216d0fe1b56849ca15be7fb2acf15c
+   时间: 2026-05-02 15:57:47
+
+22. [bitable] UPDATE - dec_20260502_004
+   标题: 日志系统架构
+   详情: Commit: 3517d10aafafcee17ac2bd111c35eaba5596eab5
+   时间: 2026-05-02 15:57:48
+
+23. [bitable] UPDATE - dec_20260502_003
+   标题: API 响应格式规范（v2）
+   详情: Commit: 99d3ffd3ed8e7134302aa9caf898bf580390dc39
+   时间: 2026-05-02 15:57:50
+
+24. [bitable] UPDATE - dec_20260502_003
+   标题: API 响应格式规范
+   详情: Commit: 3ff5cc8f8841994250d39f73515f4e82eec205de
+   时间: 2026-05-02 15:57:54
+
+25. [bitable] UPDATE - dec_20260502_004
+   标题: 日志系统架构
+   详情: Commit: 1f27142014a53c6d8bf8d0a7640b5890c2090fa4
+   时间: 2026-05-02 15:57:56
+
+26. [bitable] UPDATE - dec_20260502_003
+   标题: API 响应格式规范（v2）
+   详情: Commit: ff38bf873229b192e2b52a35793fafb707521bdc
+   时间: 2026-05-02 15:57:57
+
+统计: Git端:9次, Bitable端:17次, 创建:13次, 更新:13次
+
+================================================================================
+=== 当前状态 ===
+================================================================================
+
+--- Git 中的决策 ---
+  - dec_20260502_001: 用户认证模块设计（修订版） [decided] (hash: "9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b")
+  - dec_20260502_002: 数据库连接池配置（优化） [executing] (hash: "5c452213459cb2df0cfb4aa890d7b90c3a26674f")
+  - dec_20260502_003: API 响应格式规范（v2） [decided] (hash: "ea098e6c113a2315d39eb80e51b034e4af6d5d7a")
+  - dec_20260502_004: 日志系统架构 [in_discussion] (hash: "3517d10aafafcee17ac2bd111c35eaba5596eab5")
+  - dec_20260502_005: 缓存策略设计 [pending] (hash: "a49a59621391de6970f48d45fc26de7857d23559")
+  - dec_20260502_006: 监控告警方案 [pending] (hash: "b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff")
+
+--- Bitable 中的决策 ---
+2026/05/02 15:57:58 [Bitable] 开始获取所有决策...
+2026/05/02 15:57:59 [Bitable] 原始响应: {
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "data": [
+      [
+        "dec_20260502_001",
+        "张三",
+        "用户认证模块设计（修订版）",
+        "general",
+        "major",
+        null,
+        "decided",
+        "9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b",
+        "2026-05-02 15:57:18",
+        "采用 OAuth 2.0 + JWT 双机制"
+      ],
+      [
+        "dec_20260502_002",
+        "张三",
+        "数据库连接池配置（优化）",
+        "general",
+        "major",
+        "李四",
+        "executing",
+        "5c452213459cb2df0cfb4aa890d7b90c3a26674f",
+        "2026-05-02 15:57:19",
+        "最大连接数 100"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范",
+        "general",
+        "major",
+        null,
+        "pending",
+        "ea098e6c113a2315d39eb80e51b034e4af6d5d7a",
+        "2026-05-02 15:57:20",
+        "统一使用 JSON 格式"
+      ],
+      [
+        "dec_20260502_004",
+        "张三",
+        "日志系统架构",
+        "general",
+        "minor",
+        null,
+        "in_discussion",
+        null,
+        "2026-05-02 15:57:26",
+        "使用 ELK Stack"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范（v2）",
+        "general",
+        "major",
+        "王五",
+        "decided",
+        null,
+        "2026-05-02 15:57:28",
+        "统一使用 JSON 格式，支持分页"
+      ],
+      [
+        "dec_20260502_005",
+        "张三",
+        "缓存策略设计",
+        "general",
+        "critical",
+        null,
+        "pending",
+        null,
+        "2026-05-02 15:57:30",
+        "Redis + 本地缓存两级"
+      ],
+      [
+        "dec_20260502_004",
+        "张三",
+        "日志系统架构（完善）",
+        "general",
+        "minor",
+        null,
+        "decided",
+        null,
+        "2026-05-02 15:57:26",
+        "使用 ELK Stack"
+      ],
+      [
+        "dec_20260502_006",
+        "张三",
+        "监控告警方案",
+        "general",
+        "minor",
+        null,
+        "pending",
+        null,
+        "2026-05-02 15:57:33",
+        "Prometheus + Grafana"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范",
+        "general",
+        "major",
+        null,
+        "pending",
+        "d953c24021c6ce6afa7d8d6bfd728e4b0f088647",
+        "2026-05-02 15:57:20",
+        "统一使用 JSON 格式"
+      ],
+      [
+        "dec_20260502_004",
+        "张三",
+        "日志系统架构",
+        "general",
+        "minor",
+        null,
+        "in_discussion",
+        "56cc2a239e2cda823debc6e30c9a57a93f933918",
+        "2026-05-02 15:57:26",
+        "使用 ELK Stack"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范（v2）",
+        "general",
+        "major",
+        "王五",
+        "decided",
+        "db3b9d250d7f60a6abe08977ceff5fc52ab59323",
+        "2026-05-02 15:57:20",
+        "统一使用 JSON 格式，支持分页"
+      ],
+      [
+        "dec_20260502_005",
+        "张三",
+        "缓存策略设计",
+        "general",
+        "critical",
+        null,
+        "pending",
+        "a49a59621391de6970f48d45fc26de7857d23559",
+        "2026-05-02 15:57:30",
+        "Redis + 本地缓存两级"
+      ],
+      [
+        "dec_20260502_004",
+        "张三",
+        "日志系统架构（完善）",
+        "general",
+        "minor",
+        null,
+        "decided",
+        "734f0b0e607ff1e6546731e0171183757d6cb502",
+        "2026-05-02 15:57:26",
+        "使用 ELK Stack"
+      ],
+      [
+        "dec_20260502_006",
+        "张三",
+        "监控告警方案",
+        "general",
+        "minor",
+        null,
+        "pending",
+        "b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff",
+        "2026-05-02 15:57:33",
+        "Prometheus + Grafana"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范（v2）",
+        "general",
+        "major",
+        "王五",
+        "decided",
+        "ea098e6c113a2315d39eb80e51b034e4af6d5d7a",
+        "2026-05-02 15:57:20",
+        "统一使用 JSON 格式，支持分页"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范",
+        "general",
+        "major",
+        "王五",
+        "pending",
+        "bbb0611eba216d0fe1b56849ca15be7fb2acf15c",
+        "2026-05-02 15:57:20",
+        "统一使用 JSON 格式"
+      ],
+      [
+        "dec_20260502_004",
+        "张三",
+        "日志系统架构",
+        "general",
+        "minor",
+        null,
+        "in_discussion",
+        "3517d10aafafcee17ac2bd111c35eaba5596eab5",
+        "2026-05-02 15:57:26",
+        "使用 ELK Stack"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范（v2）",
+        "general",
+        "major",
+        "王五",
+        "decided",
+        "99d3ffd3ed8e7134302aa9caf898bf580390dc39",
+        "2026-05-02 15:57:20",
+        "统一使用 JSON 格式，支持分页"
+      ],
+      [
+        "dec_20260502_005",
+        "张三",
+        "缓存策略设计",
+        "general",
+        "critical",
+        null,
+        "pending",
+        "a49a59621391de6970f48d45fc26de7857d23559",
+        "2026-05-02 15:57:30",
+        "Redis + 本地缓存两级"
+      ],
+      [
+        "dec_20260502_004",
+        "张三",
+        "日志系统架构（完善）",
+        "general",
+        "minor",
+        null,
+        "decided",
+        "3517d10aafafcee17ac2bd111c35eaba5596eab5",
+        "2026-05-02 15:57:26",
+        "使用 ELK Stack"
+      ],
+      [
+        "dec_20260502_006",
+        "张三",
+        "监控告警方案",
+        "general",
+        "minor",
+        null,
+        "pending",
+        "b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff",
+        "2026-05-02 15:57:33",
+        "Prometheus + Grafana"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范",
+        "general",
+        "major",
+        "王五",
+        "pending",
+        "3ff5cc8f8841994250d39f73515f4e82eec205de",
+        "2026-05-02 15:57:20",
+        "统一使用 JSON 格式"
+      ],
+      [
+        "dec_20260502_004",
+        "张三",
+        "日志系统架构",
+        "general",
+        "minor",
+        null,
+        "in_discussion",
+        "1f27142014a53c6d8bf8d0a7640b5890c2090fa4",
+        "2026-05-02 15:57:26",
+        "使用 ELK Stack"
+      ],
+      [
+        "dec_20260502_003",
+        "张三",
+        "API 响应格式规范（v2）",
+        "general",
+        "major",
+        "王五",
+        "decided",
+        "ff38bf873229b192e2b52a35793fafb707521bdc",
+        "2026-05-02 15:57:20",
+        "统一使用 JSON 格式，支持分页"
+      ]
+    ],
+    "field_id_list": [
+      "fld8wqCGLS",
+      "fld9wCsQCd",
+      "fldC0RR25K",
+      "fldf7yLDpJ",
+      "fldi6wJ1Ez",
+      "fldKXJGYDJ",
+      "fldoEYShMK",
+      "fldOMxF33K",
+      "fldtKRw87R",
+      "fldzy2pqM9"
+    ],
+    "fields": [
+      "sdr_id",
+      "proposer",
+      "title",
+      "topic",
+      "impact_level",
+      "executor",
+      "status",
+      "git_commit_hash",
+      "created_at",
+      "decision"
+    ],
+    "has_more": false,
+    "query_context": {
+      "field_scope": "all_fields",
+      "record_scope": "all_records"
+    },
+    "record_id_list": [
+      "recvirOiF0nJE9",
+      "recvirOiWShc7x",
+      "recvirOjeZjt6L",
+      "recvirOjMUjhrh",
+      "recvirOkdhpjfW",
+      "recvirOkDJhTQZ",
+      "recvirOl3wtdL3",
+      "recvirOltFmtXm",
+      "recvirOmdx1SiE",
+      "recvirOmyLvc8O",
+      "recvirOmQBNtJW",
+      "recvirOndGYeh0",
+      "recvirOnvqXPQL",
+      "recvirOnVu5ltW",
+      "recvirOovjnclf",
+      "recvirOp6rWRu9",
+      "recvirOpoL35rx",
+      "recvirOpQv7m25",
+      "recvirOqc29DyZ",
+      "recvirOqtZVYt0",
+      "recvirOqMyAtKn",
+      "recvirOr5wTdmS",
+      "recvirOro0B209",
+      "recvirOrH6yxrN"
+    ]
+  },
+  "_notice": {
+    "update": {
+      "current": "1.0.18",
+      "latest": "1.0.23",
+      "message": "lark-cli 1.0.23 available, current 1.0.18"
+    }
+  }
+}
+2026/05/02 15:57:59 [Bitable] 字段列表: [sdr_id proposer title topic impact_level executor status git_commit_hash created_at decision]
+2026/05/02 15:57:59 [Bitable] 记录数: 24
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_001 (hash: "9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_002 (hash: "5c452213459cb2df0cfb4aa890d7b90c3a26674f")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_003 (hash: "ea098e6c113a2315d39eb80e51b034e4af6d5d7a")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_004 (hash: "")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_003 (hash: "")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_005 (hash: "")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_004 (hash: "")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_006 (hash: "")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_003 (hash: "d953c24021c6ce6afa7d8d6bfd728e4b0f088647")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_004 (hash: "56cc2a239e2cda823debc6e30c9a57a93f933918")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_003 (hash: "db3b9d250d7f60a6abe08977ceff5fc52ab59323")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_005 (hash: "a49a59621391de6970f48d45fc26de7857d23559")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_004 (hash: "734f0b0e607ff1e6546731e0171183757d6cb502")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_006 (hash: "b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_003 (hash: "ea098e6c113a2315d39eb80e51b034e4af6d5d7a")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_003 (hash: "bbb0611eba216d0fe1b56849ca15be7fb2acf15c")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_004 (hash: "3517d10aafafcee17ac2bd111c35eaba5596eab5")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_003 (hash: "99d3ffd3ed8e7134302aa9caf898bf580390dc39")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_005 (hash: "a49a59621391de6970f48d45fc26de7857d23559")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_004 (hash: "3517d10aafafcee17ac2bd111c35eaba5596eab5")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_006 (hash: "b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_003 (hash: "3ff5cc8f8841994250d39f73515f4e82eec205de")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_004 (hash: "1f27142014a53c6d8bf8d0a7640b5890c2090fa4")
+2026/05/02 15:57:59 [Bitable] 解析到决策: dec_20260502_003 (hash: "ff38bf873229b192e2b52a35793fafb707521bdc")
+  - dec_20260502_001: 用户认证模块设计（修订版） [decided] (hash: "9b4c8a6deef978ab7744fe753c43d4dedd8c5f5b")
+  - dec_20260502_002: 数据库连接池配置（优化） [executing] (hash: "5c452213459cb2df0cfb4aa890d7b90c3a26674f")
+  - dec_20260502_003: API 响应格式规范 [pending] (hash: "ea098e6c113a2315d39eb80e51b034e4af6d5d7a")
+  - dec_20260502_004: 日志系统架构 [in_discussion] (hash: "")
+  - dec_20260502_003: API 响应格式规范（v2） [decided] (hash: "")
+  - dec_20260502_005: 缓存策略设计 [pending] (hash: "")
+  - dec_20260502_004: 日志系统架构（完善） [decided] (hash: "")
+  - dec_20260502_006: 监控告警方案 [pending] (hash: "")
+  - dec_20260502_003: API 响应格式规范 [pending] (hash: "d953c24021c6ce6afa7d8d6bfd728e4b0f088647")
+  - dec_20260502_004: 日志系统架构 [in_discussion] (hash: "56cc2a239e2cda823debc6e30c9a57a93f933918")
+  - dec_20260502_003: API 响应格式规范（v2） [decided] (hash: "db3b9d250d7f60a6abe08977ceff5fc52ab59323")
+  - dec_20260502_005: 缓存策略设计 [pending] (hash: "a49a59621391de6970f48d45fc26de7857d23559")
+  - dec_20260502_004: 日志系统架构（完善） [decided] (hash: "734f0b0e607ff1e6546731e0171183757d6cb502")
+  - dec_20260502_006: 监控告警方案 [pending] (hash: "b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff")
+  - dec_20260502_003: API 响应格式规范（v2） [decided] (hash: "ea098e6c113a2315d39eb80e51b034e4af6d5d7a")
+  - dec_20260502_003: API 响应格式规范 [pending] (hash: "bbb0611eba216d0fe1b56849ca15be7fb2acf15c")
+  - dec_20260502_004: 日志系统架构 [in_discussion] (hash: "3517d10aafafcee17ac2bd111c35eaba5596eab5")
+  - dec_20260502_003: API 响应格式规范（v2） [decided] (hash: "99d3ffd3ed8e7134302aa9caf898bf580390dc39")
+  - dec_20260502_005: 缓存策略设计 [pending] (hash: "a49a59621391de6970f48d45fc26de7857d23559")
+  - dec_20260502_004: 日志系统架构（完善） [decided] (hash: "3517d10aafafcee17ac2bd111c35eaba5596eab5")
+  - dec_20260502_006: 监控告警方案 [pending] (hash: "b6d48c392c34a8ddb12805c67e17abfa9eb8f8ff")
+  - dec_20260502_003: API 响应格式规范 [pending] (hash: "3ff5cc8f8841994250d39f73515f4e82eec205de")
+  - dec_20260502_004: 日志系统架构 [in_discussion] (hash: "1f27142014a53c6d8bf8d0a7640b5890c2090fa4")
+  - dec_20260502_003: API 响应格式规范（v2） [decided] (hash: "ff38bf873229b192e2b52a35793fafb707521bdc")

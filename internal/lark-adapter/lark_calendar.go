@@ -3,8 +3,25 @@ package larkadapter
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 )
+
+// --- Snapshot 数据结构 ---
+
+// CalendarSnapshot 日程状态快照
+type CalendarSnapshot struct {
+	Events map[string]EventSnapshot `json:"events"` // keyed by event_id
+}
+
+// EventSnapshot 单个日程的快照
+type EventSnapshot struct {
+	EventID   string `json:"event_id"`
+	Title     string `json:"title"`
+	StartTime int64  `json:"start_time"`
+	UpdatedAt int64  `json:"updated_at"`
+}
 
 // CalendarExtractor 日程提取器
 type CalendarExtractor struct {
@@ -25,78 +42,141 @@ func (e *CalendarExtractor) Name() string {
 	return "lark_calendar"
 }
 
+// snapshotFilePath 返回快照文件路径
+func (e *CalendarExtractor) snapshotFilePath() string {
+	return filepath.Join(StateDir(), "lark_calendar_snapshot.json")
+}
+
+// loadSnapshot 从磁盘加载上次快照
+func (e *CalendarExtractor) loadSnapshot() (*CalendarSnapshot, error) {
+	data, err := os.ReadFile(e.snapshotFilePath())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var snap CalendarSnapshot
+	if err := json.Unmarshal(data, &snap); err != nil {
+		return nil, err
+	}
+	return &snap, nil
+}
+
+// saveSnapshot 保存当前快照到磁盘
+func (e *CalendarExtractor) saveSnapshot(snap *CalendarSnapshot) error {
+	data, err := json.MarshalIndent(snap, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(e.snapshotFilePath(), data, 0644)
+}
+
+// buildCurrentState 获取当前日程状态
+func (e *CalendarExtractor) buildCurrentState() (*CalendarSnapshot, error) {
+	snap := &CalendarSnapshot{
+		Events: make(map[string]EventSnapshot),
+	}
+
+	// 先尝试直接调用 +agenda（不带日期参数），获取默认日程
+	agenda, err := e.getTodayAgenda()
+	if err != nil {
+		return snap, nil
+	}
+
+	events := e.parseAgendaEvents(agenda)
+	for _, ev := range events {
+		eventID, _ := ev["event_id"].(string)
+		if eventID == "" {
+			continue
+		}
+
+		title, _ := ev["title"].(string)
+		startTime, _ := ev["start_time"].(int64)
+
+		snap.Events[eventID] = EventSnapshot{
+			EventID:   eventID,
+			Title:     title,
+			StartTime: startTime,
+			UpdatedAt: time.Now().Unix(),
+		}
+	}
+
+	return snap, nil
+}
+
+// BuildCurrentStateForDebug 调试用：获取当前状态
+func (e *CalendarExtractor) BuildCurrentStateForDebug() (*CalendarSnapshot, error) {
+	return e.buildCurrentState()
+}
+
 // Detect 检测日程变化（新增/更新/删除日程、参会人变化、RSVP 变化等）
 func (e *CalendarExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 	changes := []Change{}
-	cutoff := lastCheck.Unix()
 
-	// 检测日程：从今天起往后3天的日程
-	today := time.Now()
-	endDate := today.AddDate(0, 0, 3)
+	// 1. 获取当前状态
+	current, err := e.buildCurrentState()
+	if err != nil {
+		result := &DetectResult{
+			Source:     e.Name(),
+			HasChanges: false,
+			DetectedAt: time.Now(),
+			LastCheck:  lastCheck,
+		}
+		_ = SaveDetectResult(result)
+		return result, nil
+	}
 
-	agenda, err := e.getAgendaRange(today, endDate)
-	if err == nil {
-		events := e.parseAgendaEvents(agenda)
+	// 2. 加载上次快照
+	previous, err := e.loadSnapshot()
+	if err != nil || previous == nil {
+		// 首次检测：保存基线快照，不报告变化
+		_ = e.saveSnapshot(current)
+		result := &DetectResult{
+			Source:     e.Name(),
+			HasChanges: false,
+			DetectedAt: time.Now(),
+			LastCheck:  lastCheck,
+		}
+		_ = SaveDetectResult(result)
+		return result, nil
+	}
 
-		for _, ev := range events {
-			ts, _ := ev["start_time"].(int64)
-			eventID, _ := ev["event_id"].(string)
-			title, _ := ev["title"].(string)
+	// 3. 对比找出变化
 
-			// 分析日程的详细变化类型
-			changeTypes := e.analyzeEventChanges(ev)
+	// 新增日程
+	for eventID, ev := range current.Events {
+		if _, exists := previous.Events[eventID]; !exists {
+			changes = append(changes, Change{
+				Type:       "new_event",
+				EntityType: "event",
+				EntityID:   eventID,
+				Summary:    fmt.Sprintf("新日程: %s", ev.Title),
+				Timestamp:  ev.StartTime,
+			})
+		}
+	}
 
-			if len(changeTypes) > 0 {
-				for _, ct := range changeTypes {
-					var changeType, summary string
-					switch ct {
-					case "new":
-						if lastCheck.IsZero() || ts > cutoff {
-							changeType = "new_event"
-							summary = fmt.Sprintf("新日程: %s", title)
-						}
-					case "updated":
-						changeType = "updated_event"
-						summary = fmt.Sprintf("日程更新: %s", title)
-					case "attendee_added":
-						changeType = "attendee_added"
-						summary = fmt.Sprintf("日程添加参会人: %s", title)
-					case "attendee_removed":
-						changeType = "attendee_removed"
-						summary = fmt.Sprintf("日程移除参会人: %s", title)
-					case "rsvp_changed":
-						changeType = "rsvp_changed"
-						summary = fmt.Sprintf("日程 RSVP 状态变化: %s", title)
-					case "time_changed":
-						changeType = "time_changed"
-						summary = fmt.Sprintf("日程时间变更: %s", title)
-					case "room_added":
-						changeType = "room_added"
-						summary = fmt.Sprintf("日程添加会议室: %s", title)
-					}
-
-					if changeType != "" {
-						changes = append(changes, Change{
-							Type:       changeType,
-							EntityType: "event",
-							EntityID:   eventID,
-							Summary:    summary,
-							Timestamp:  ts,
-						})
-					}
-				}
-			} else if !lastCheck.IsZero() && ts > cutoff {
-				// 默认按新日程处理
+	// 更新日程
+	for eventID, currEv := range current.Events {
+		prevEv, exists := previous.Events[eventID]
+		if exists {
+			if currEv.Title != prevEv.Title || currEv.StartTime != prevEv.StartTime {
 				changes = append(changes, Change{
-					Type:       "new_event",
+					Type:       "updated_event",
 					EntityType: "event",
 					EntityID:   eventID,
-					Summary:    fmt.Sprintf("新日程: %s", title),
-					Timestamp:  ts,
+					Summary:    fmt.Sprintf("日程更新: %s", currEv.Title),
+					Timestamp:  time.Now().Unix(),
 				})
 			}
 		}
 	}
+
+	// 已删除的日程（可选，暂不报告）
+
+	// 4. 保存当前快照
+	_ = e.saveSnapshot(current)
 
 	result := &DetectResult{
 		Source:     e.Name(),
@@ -186,23 +266,27 @@ func (e *CalendarExtractor) Extract() error {
 
 func (e *CalendarExtractor) getTodayAgenda() ([]any, error) {
 	today := time.Now().Format("2006-01-02")
-	output, err := e.cli.RunCommand("calendar", "+agenda", "--date", today)
+	output, err := e.cli.RunCommand("calendar", "+agenda", "--date", today, "--as", "user")
 	if err != nil {
-		output, err = e.cli.RunCommand("calendar", "+agenda")
+		output, err = e.cli.RunCommand("calendar", "+agenda", "--as", "user")
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	var result []any
-	if err := json.Unmarshal(output, &result); err != nil {
-		var single any
-		if err := json.Unmarshal(output, &single); err != nil {
-			return nil, err
-		}
-		result = []any{single}
+	// 解析 { ok: true, data: [...] } 结构
+	var response map[string]any
+	if err := json.Unmarshal(output, &response); err != nil {
+		return nil, err
 	}
-	return result, nil
+
+	// 提取 data 字段
+	if data, ok := response["data"]; ok {
+		if dataArray, ok := data.([]any); ok {
+			return dataArray, nil
+		}
+	}
+	return []any{}, nil
 }
 
 func (e *CalendarExtractor) getAgendaRange(start, end time.Time) ([]any, error) {
@@ -210,20 +294,23 @@ func (e *CalendarExtractor) getAgendaRange(start, end time.Time) ([]any, error) 
 	var allResults []any
 	for d := start; d.Before(end) || d.Equal(end); d = d.AddDate(0, 0, 1) {
 		date := d.Format("2006-01-02")
-		output, err := e.cli.RunCommand("calendar", "+agenda", "--date", date)
+		output, err := e.cli.RunCommand("calendar", "+agenda", "--date", date, "--as", "user")
 		if err != nil {
 			continue
 		}
 
-		var result []any
-		if err := json.Unmarshal(output, &result); err != nil {
-			var single any
-			if err := json.Unmarshal(output, &single); err != nil {
-				continue
-			}
-			result = []any{single}
+		// 解析 { ok: true, data: [...] } 结构
+		var response map[string]any
+		if err := json.Unmarshal(output, &response); err != nil {
+			continue
 		}
-		allResults = append(allResults, result...)
+
+		// 提取 data 字段
+		if data, ok := response["data"]; ok {
+			if dataArray, ok := data.([]any); ok {
+				allResults = append(allResults, dataArray...)
+			}
+		}
 	}
 	return allResults, nil
 }
@@ -251,11 +338,16 @@ func (e *CalendarExtractor) searchEvents() ([]any, error) {
 func (e *CalendarExtractor) parseAgendaEvents(agenda []any) []map[string]any {
 	var events []map[string]any
 
-	// 为每个条目按天分配一个默认 ID
-	for i, item := range agenda {
+	for _, item := range agenda {
 		itemMap, ok := item.(map[string]any)
 		if !ok {
 			continue
+		}
+
+		// 尝试获取真实的 event_id
+		eventID, _ := itemMap["event_id"].(string)
+		if eventID == "" {
+			eventID, _ = itemMap["id"].(string)
 		}
 
 		// 从 +agenda 输出中提取日程信息
@@ -267,13 +359,18 @@ func (e *CalendarExtractor) parseAgendaEvents(agenda []any) []map[string]any {
 			continue
 		}
 
-		startTime := timeNowUnix(itemMap, "start")
+		startTime := parseStartTimeFromAgenda(itemMap)
 		if startTime == 0 {
 			startTime = time.Now().Unix()
 		}
 
+		// 如果没有真实 event_id，用 title+startTime 生成一个
+		if eventID == "" {
+			eventID = fmt.Sprintf("cal_%s_%d", title, startTime)
+		}
+
 		events = append(events, map[string]any{
-			"event_id":   fmt.Sprintf("cal_event_%d", i),
+			"event_id":   eventID,
 			"title":      title,
 			"start_time": startTime,
 		})
@@ -282,18 +379,23 @@ func (e *CalendarExtractor) parseAgendaEvents(agenda []any) []map[string]any {
 	return events
 }
 
-func timeNowUnix(m map[string]any, key string) int64 {
-	if v, ok := m[key]; ok {
-		switch val := v.(type) {
-		case float64:
-			return int64(val)
-		case int64:
-			return val
-		case string:
-			t, err := time.Parse(time.RFC3339, val)
-			if err == nil {
-				return t.Unix()
+func parseStartTimeFromAgenda(m map[string]any) int64 {
+	// 尝试直接的方式：start_time.datetime (来自 +agenda 格式
+	if startObj, ok := m["start_time"]; ok {
+		if startMap, ok := startObj.(map[string]any); ok {
+			if datetime, ok := startMap["datetime"].(string); ok {
+				t, err := time.Parse(time.RFC3339, datetime)
+				if err == nil {
+					return t.Unix()
+				}
 			}
+		}
+	}
+	// 备用方式：start (来自 +create 返回格式
+	if startStr, ok := m["start"].(string); ok {
+		t, err := time.Parse(time.RFC3339, startStr)
+		if err == nil {
+			return t.Unix()
 		}
 	}
 	return 0

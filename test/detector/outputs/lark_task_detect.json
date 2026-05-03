@@ -1,7 +1,22 @@
 {
-  "has_changes": false,
+  "has_changes": true,
   "source": "lark_task",
-  "detected_at": "2026-04-30T11:04:15.618746+08:00",
-  "last_check": "2026-04-30T10:04:13.483482+08:00",
-  "changes": []
+  "detected_at": "2026-05-03T02:14:38.361749+08:00",
+  "last_check": "2026-05-03T02:14:33.503376+08:00",
+  "changes": [
+    {
+      "type": "task_created",
+      "entity_type": "task",
+      "entity_id": "61506103-bc3e-4335-ac1c-1f8cae0dfbf4",
+      "summary": "新任务: Task1",
+      "timestamp": 1777774460
+    },
+    {
+      "type": "task_created",
+      "entity_type": "task",
+      "entity_id": "a01d7d96-ab56-4b99-bff8-be89cb265248",
+      "summary": "新任务: Task2",
+      "timestamp": 1777774473
+    }
+  ]
 }

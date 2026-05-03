@@ -1,7 +1,15 @@
 {
-  "has_changes": false,
+  "has_changes": true,
   "source": "lark_wiki",
-  "detected_at": "2026-04-30T23:27:18.192248+08:00",
-  "last_check": "2026-04-30T22:27:16.552367+08:00",
-  "changes": null
+  "detected_at": "2026-05-03T01:35:52.832497+08:00",
+  "last_check": "2026-05-03T01:35:47.786716+08:00",
+  "changes": [
+    {
+      "type": "updated",
+      "entity_type": "wiki_node",
+      "entity_id": "IzsGwFnoli2d6hkAAaecnMurnYd",
+      "summary": "知识库[Feishu agentic memory engine 开发]文档内容更新: 首页",
+      "timestamp": 1777743350
+    }
+  ]
 }
