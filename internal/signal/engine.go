@@ -4,8 +4,8 @@ import (
 	"log"
 	"strings"
 
-	larkadapter "feishu-mem/internal/lark-adapter"
 	"feishu-mem/internal/decision"
+	larkadapter "feishu-mem/internal/lark-adapter"
 	"feishu-mem/internal/llm"
 )
 
@@ -24,6 +24,7 @@ type SignalActivationEngine struct {
 	Assembler    *ContextAssembler
 	StateMachine *DecisionStateMachine
 	Patterns     *PatternMatcher
+	detector     *EnhancedDetector // 增强型多因子检测器
 	Pipeline     PipelineInterface
 	Memory       MemoryGraphInterface
 	llmAgent     *llm.MemoryAgent
@@ -140,19 +141,19 @@ func (e *SignalActivationEngine) createDecisionFallback(proposer, content string
 	return newNode
 }
 
+// matchDecisionKeywords 使用增强型检测器进行关键词检测
+// Deprecated: 新代码应直接使用 EnhancedDetector.Analyze()
 func matchDecisionKeywords(text string) []string {
-	decisionWords := []string{
-		"决定", "decided", "确认", "LGTM", "lgtm",
-		"approve", "通过", "定下来", "就这么办", "confirmed",
-		"倾向于", "建议", "选择", "推荐", "选", "用",
+	detector := NewEnhancedDetector()
+	result := detector.Analyze(text, nil)
+	if !result.IsDecision {
+		return nil
 	}
-	var matched []string
-	for _, w := range decisionWords {
-		if strings.Contains(text, w) {
-			matched = append(matched, w)
-		}
+	var keywords []string
+	for _, s := range result.SignalDetails {
+		keywords = append(keywords, s.Name)
 	}
-	return matched
+	return keywords
 }
 
 func extractSenderFromSummary(summary string) string {

@@ -125,7 +125,7 @@ func (wp *WorkerPool) processJob(job *DetectionJob) *DecisionResult {
 	}
 }
 
-// processIMJob 处理 IM 类型任务
+// processIMJob 处理 IM 类型任务 — 使用增强型多因子检测
 func (wp *WorkerPool) processIMJob(job *DetectionJob, result *DecisionResult) *DecisionResult {
 	// 只处理文本类型的消息
 	if job.Change.Type != "new_text" && job.Change.Type != "new_post" {
@@ -134,23 +134,70 @@ func (wp *WorkerPool) processIMJob(job *DetectionJob, result *DecisionResult) *D
 		return result
 	}
 
-	// 检查消息是否包含决策关键词
-	matchedKeywords := matchDecisionKeywords(job.Change.Summary)
-	log.Printf("[Worker] Matched keywords: %v", matchedKeywords)
+	// 初始化增强型检测器（懒加载）
+	if wp.engine.detector == nil {
+		wp.engine.detector = NewEnhancedDetector()
+	}
 
-	if len(matchedKeywords) == 0 {
-		log.Println("[Worker] No decision keywords found, skipping")
+	// 构建检测上下文
+	ctx := &DetectContext{
+		IsReply:      false, // 可由上游进一步填充
+		HasMention:   false,
+		MessageIndex: 1,
+		SenderName:   extractSenderFromSummary(job.Change.Summary),
+	}
+
+	log.Printf("[Worker] Running enhanced decision detection on: %s", truncateForLog(job.Change.Summary, 100))
+
+	// 多因子检测
+	detectResult := wp.engine.detector.Analyze(job.Change.Summary, ctx)
+	log.Printf("[Worker] Detection score=%.2f, level=%s, signals=%d, anti=%d",
+		detectResult.Score, detectResult.Level,
+		len(detectResult.SignalDetails), len(detectResult.AntiSignals))
+
+	// 输出各维度分数
+	if detectResult.Factors != nil {
+		log.Printf("[Worker]  Breakdown: lexical=%.2f structural=%.2f dynamic=%.2f pattern=%.2f anti=%.2f",
+			detectResult.Factors.Lexical, detectResult.Factors.Structural,
+			detectResult.Factors.Dynamic, detectResult.Factors.Pattern,
+			detectResult.Factors.AntiScore)
+	}
+
+	// 根据检测等级决定是否处理
+	switch detectResult.Level {
+	case LevelHigh:
+		log.Printf("[Worker] High-confidence decision signal (score=%.2f)", detectResult.Score)
+	case LevelMedium:
+		log.Printf("[Worker] Medium-confidence decision signal (score=%.2f), will process", detectResult.Score)
+	case LevelLow:
+		log.Printf("[Worker] Low-confidence signal (score=%.2f), skipping", detectResult.Score)
+		log.Println("========== WORKER PROCESS END ==========")
+		return result
+	case LevelNone:
+		log.Println("[Worker] No decision signal detected, skipping")
 		log.Println("========== WORKER PROCESS END ==========")
 		return result
 	}
-	log.Printf("[Worker] Found decision keywords in message: %v", matchedKeywords)
+
+	// 提取信号名作为决策关键词
+	var signalNames []string
+	for _, s := range detectResult.SignalDetails {
+		signalNames = append(signalNames, s.Name)
+	}
+
+	// 根据检测分数决定信号强度
+	signalStrength := StrengthMedium
+	if detectResult.Level == LevelHigh {
+		signalStrength = StrengthStrong
+	}
 
 	// 创建信号
 	sig := NewSignal(job.AdapterType, job.Change.Summary)
-	sig.Strength = StrengthMedium
+	sig.Strength = signalStrength
 	sig.Context.ContentSnippet = job.Change.Summary
-	sig.Context.Keywords = matchedKeywords
-	sig.Context.DecisionSignals = matchedKeywords
+	sig.Context.Keywords = signalNames
+	sig.Context.DecisionSignals = signalNames
+	sig.Context.Score = detectResult.Score
 
 	// 通过信号引擎处理
 	proposer := extractSenderFromSummary(job.Change.Summary)
