@@ -47,9 +47,9 @@ type BitableResponse struct {
 
 // BitableData Bitable 数据
 type BitableData struct {
-	Data       [][]interface{} `json:"data"`
-	Fields     []string        `json:"fields"`
-	RecordIDList []string      `json:"record_id_list"`
+	Data           [][]interface{} `json:"data"`
+	Fields         []string        `json:"fields"`
+	RecordIDList   []string        `json:"record_id_list"`
 }
 
 // RecordWithID 带 record_id 的记录
@@ -83,6 +83,17 @@ func (bs *BitableStore) UpsertDecision(node *decision.DecisionNode) error {
 		"executor":        node.Executor,
 		"git_commit_hash": node.GitCommitHash,
 		"created_at":      node.CreatedAt.Format("2006-01-02 15:04:05"),
+	}
+
+	// AccessStats 字段
+	fields["hot_score"] = node.AccessStats.HotScore
+	fields["access_count"] = node.AccessStats.AccessCount
+	fields["reference_count"] = node.AccessStats.ReferenceCount
+	if node.AccessStats.LastAccessedAt != nil {
+		fields["last_accessed_at"] = node.AccessStats.LastAccessedAt.Format("2006-01-02 15:04:05")
+	}
+	if node.AccessStats.LastCalculated != nil {
+		fields["last_calculated"] = node.AccessStats.LastCalculated.Format("2006-01-02 15:04:05")
 	}
 
 	payload, err := json.Marshal(fields)
@@ -240,6 +251,37 @@ func (bs *BitableStore) parseDecisionsFromResponse(data *BitableData) []*decisio
 			if s, ok := row[idx].(string); ok {
 				if t, err := time.Parse("2006-01-02 15:04:05", s); err == nil {
 					d.CreatedAt = t
+				}
+			}
+		}
+
+		// AccessStats 字段解析
+		if idx, ok := fieldIndex["hot_score"]; ok && idx < len(row) {
+			if val, ok := row[idx].(float64); ok {
+				d.AccessStats.HotScore = val
+			}
+		}
+		if idx, ok := fieldIndex["access_count"]; ok && idx < len(row) {
+			if val, ok := row[idx].(float64); ok {
+				d.AccessStats.AccessCount = int(val)
+			}
+		}
+		if idx, ok := fieldIndex["reference_count"]; ok && idx < len(row) {
+			if val, ok := row[idx].(float64); ok {
+				d.AccessStats.ReferenceCount = int(val)
+			}
+		}
+		if idx, ok := fieldIndex["last_accessed_at"]; ok && idx < len(row) {
+			if s, ok := row[idx].(string); ok {
+				if t, err := time.Parse("2006-01-02 15:04:05", s); err == nil {
+					d.AccessStats.LastAccessedAt = &t
+				}
+			}
+		}
+		if idx, ok := fieldIndex["last_calculated"]; ok && idx < len(row) {
+			if s, ok := row[idx].(string); ok {
+				if t, err := time.Parse("2006-01-02 15:04:05", s); err == nil {
+					d.AccessStats.LastCalculated = &t
 				}
 			}
 		}

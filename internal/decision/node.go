@@ -45,6 +45,9 @@ type DecisionNode struct {
 	Status    DecisionStatus `json:"status" yaml:"status"`
 	CreatedAt time.Time      `json:"created_at" yaml:"created_at"`
 	DecidedAt *time.Time     `json:"decided_at" yaml:"decided_at"`
+
+	// === 访问统计（用于热点值计算） ===
+	AccessStats AccessStats `json:"access_stats" yaml:"access_stats"`
 }
 
 // PhaseScope 阶段范围
@@ -98,8 +101,30 @@ type FeishuLinks struct {
 	RelatedMinuteTokens []string `json:"related_minute_tokens" yaml:"related_minute_tokens"`
 }
 
+// AccessStats 访问统计（用于热点值计算）
+type AccessStats struct {
+	LastAccessedAt *time.Time `json:"last_accessed_at" yaml:"last_accessed_at"`
+	AccessCount    int        `json:"access_count" yaml:"access_count"`
+	ReferenceCount int        `json:"reference_count" yaml:"reference_count"`
+	HotScore       float64    `json:"hot_score" yaml:"hot_score"`
+	LastCalculated *time.Time `json:"last_calculated" yaml:"last_calculated"`
+}
+
+// RecordAccess 记录一次访问
+func (a *AccessStats) RecordAccess() {
+	now := time.Now()
+	a.LastAccessedAt = &now
+	a.AccessCount++
+}
+
+// RecordReference 记录一次被引用
+func (a *AccessStats) RecordReference() {
+	a.ReferenceCount++
+}
+
 // NewDecisionNode 创建新的决策节点
 func NewDecisionNode(sdrID, title, project, topic string) *DecisionNode {
+	now := time.Now()
 	return &DecisionNode{
 		SDRID:         sdrID,
 		Title:         title,
@@ -108,10 +133,16 @@ func NewDecisionNode(sdrID, title, project, topic string) *DecisionNode {
 		PhaseScope:    PhaseScopePoint,
 		ImpactLevel:   ImpactMinor,
 		Status:        StatusPending,
-		CreatedAt:     time.Now(),
+		CreatedAt:     now,
 		Relations:     make([]Relation, 0),
 		CrossTopicRefs: make([]string, 0),
 		Stakeholders:  make([]string, 0),
+		AccessStats: AccessStats{
+			AccessCount:    0,
+			ReferenceCount: 0,
+			HotScore:       0,
+			LastCalculated: &now,
+		},
 	}
 }
 

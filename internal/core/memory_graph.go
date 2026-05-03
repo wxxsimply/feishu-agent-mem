@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"feishu-mem/internal/decision"
 )
@@ -225,10 +226,10 @@ func (mg *MemoryGraph) DetectConflicts(newNode *decision.DecisionNode) []Conflic
 
 // Conflict 冲突
 type Conflict struct {
-	ConflictID       string
-	DecisionA        string
-	DecisionB        string
-	Description      string
+	ConflictID         string
+	DecisionA          string
+	DecisionB          string
+	Description        string
 	ContradictionScore float64
 }
 
@@ -285,6 +286,68 @@ func (mg *MemoryGraph) GetRelatedDecisions(sdrID string) []*decision.DecisionNod
 			result = append(result, d)
 		}
 	}
+	return result
+}
+
+// UpdateAccessStats 更新访问统计
+func (mg *MemoryGraph) UpdateAccessStats(sdrID string) error {
+	mg.mu.Lock()
+	defer mg.mu.Unlock()
+
+	if d, ok := mg.decisions[sdrID]; ok {
+		now := time.Now()
+		d.AccessStats.LastAccessedAt = &now
+		d.AccessStats.AccessCount++
+		return nil
+	}
+	return fmt.Errorf("decision not found: %s", sdrID)
+}
+
+// GetDecisionsByHotScore 按热点值获取决策（从高到低）
+func (mg *MemoryGraph) GetDecisionsByHotScore(minScore float64) []*decision.DecisionNode {
+	mg.mu.RLock()
+	defer mg.mu.RUnlock()
+
+	var result []*decision.DecisionNode
+	for _, d := range mg.decisions {
+		if d.AccessStats.HotScore >= minScore {
+			result = append(result, d)
+		}
+	}
+
+	// 按热点值排序
+	for i := range result {
+		for j := i + 1; j < len(result); j++ {
+			if result[i].AccessStats.HotScore < result[j].AccessStats.HotScore {
+				result[i], result[j] = result[j], result[i]
+			}
+		}
+	}
+
+	return result
+}
+
+// GetRecentDecisions 获取最近的决策
+func (mg *MemoryGraph) GetRecentDecisions(since time.Time) []*decision.DecisionNode {
+	mg.mu.RLock()
+	defer mg.mu.RUnlock()
+
+	var result []*decision.DecisionNode
+	for _, d := range mg.decisions {
+		if d.CreatedAt.After(since) {
+			result = append(result, d)
+		}
+	}
+
+	// 按创建时间倒序排序
+	for i := range result {
+		for j := i + 1; j < len(result); j++ {
+			if result[i].CreatedAt.Before(result[j].CreatedAt) {
+				result[i], result[j] = result[j], result[i]
+			}
+		}
+	}
+
 	return result
 }
 
