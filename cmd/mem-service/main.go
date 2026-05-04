@@ -247,7 +247,9 @@ func runDetectionCycle(
 					ReceivedAt:  time.Now(),
 				}
 
-				workerPool.SubmitJob(job)
+				if err := workerPool.SubmitJob(job); err != nil {
+					log.Printf("[Detector] Failed to submit job: %v", err)
+				}
 			}
 		} else {
 			log.Printf("[Detector] %s: No changes detected", dr.detector.Name())
