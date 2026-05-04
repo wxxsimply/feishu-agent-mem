@@ -1,6 +1,7 @@
 package signal
 
 import (
+	"fmt"
 	"log"
 	"strings"
 
@@ -61,11 +62,31 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 	if e.llmAgent.IsAvailable() {
 		log.Println("[SignalEngine] LLM is available, calling...")
 
+		// Step 1: 获取现有相关决策（用于上下文）
+		allDecisions := e.Memory.GetAllDecisions()
+		var relatedDecisionSummaries []string
+		for _, d := range allDecisions {
+			if len(relatedDecisionSummaries) < 5 { // 最多取 5 个相关决策
+				summary := fmt.Sprintf("[%s] %s: %s", d.Status, d.Title, d.Decision)
+				relatedDecisionSummaries = append(relatedDecisionSummaries, summary)
+			}
+		}
+		log.Printf("[SignalEngine] Found %d related decisions for context", len(relatedDecisionSummaries))
+
+		// Step 2: 使用 ContextAssembler 组装上下文（为未来扩展）
+		if e.Assembler != nil {
+			ctx := e.Assembler.Assemble(sig, nil, allDecisions, 10000)
+			log.Printf("[SignalEngine] Context assembled: %d decisions, %d tokens",
+				len(ctx.Decisions), ctx.TotalTokens)
+		}
+
 		topics := e.getAllTopics()
 		log.Printf("[SignalEngine] Available topics: %v", topics)
 
-		log.Println("[SignalEngine] Calling ExtractDecision...")
-		result, err := e.llmAgent.ExtractDecision(content, topics)
+		// Step 3: 调用带上下文的 LLM 提取
+		log.Println("[SignalEngine] Calling ExtractDecisionWithContext...")
+		result, err := e.llmAgent.ExtractDecisionWithContext(
+			content, topics, relatedDecisionSummaries)
 		if err != nil {
 			log.Printf("[SignalEngine] LLM extraction failed: %v, falling back to heuristic", err)
 			newNode = e.createDecisionFallback(proposer, content)

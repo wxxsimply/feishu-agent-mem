@@ -371,6 +371,12 @@ func extractionDynamicBuilder(ctx map[string]any) string {
 	if topics, ok := ctx["topics"].([]string); ok {
 		sb.WriteString(fmt.Sprintf("\n## 候选议题\n%v\n", topics))
 	}
+	if relatedDecisions, ok := ctx["related_decisions"].([]string); ok && len(relatedDecisions) > 0 {
+		sb.WriteString("\n## 相关历史决策（供参考）\n")
+		for i, d := range relatedDecisions {
+			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, d))
+		}
+	}
 	return sb.String()
 }
 
