@@ -46,9 +46,15 @@ type MCPServer struct {
 	wg           sync.WaitGroup
 	sema         chan struct{} // 并发限制 semaphore
 	initialized  bool          // 是否已完成 initialize 握手
+	initDone     chan struct{} // initialize 完成后关闭，用于同步
 }
 
-const maxConcurrency = 20
+const (
+	maxConcurrency  = 20
+	maxSearchLimit  = 200
+	maxLLMInputSize = 50000 // LLM 输入最大字符数
+	defaultLimit    = 20
+)
 
 // NewMCPServer 创建 MCP Server
 func NewMCPServer(
@@ -67,6 +73,7 @@ func NewMCPServer(
 		ctx:          ctx,
 		cancel:       cancel,
 		sema:         make(chan struct{}, maxConcurrency),
+		initDone:     make(chan struct{}),
 	}
 }
 
@@ -98,6 +105,15 @@ func (s *MCPServer) Start() error {
 		if err := json.Unmarshal([]byte(line), &req); err != nil {
 			s.sendError(nil, ErrCodeParseError, "parse error: "+err.Error())
 			continue
+		}
+
+		// 阻塞等待 initialize 完成后再处理非初始化请求
+		if req.Method != "initialize" && req.Method != "notifications/initialized" {
+			select {
+			case <-s.initDone:
+			case <-s.ctx.Done():
+				break
+			}
 		}
 
 		// 控制并发：获取 semaphore 槽位
@@ -167,6 +183,7 @@ func (s *MCPServer) handleRequest(req Request) {
 
 func (s *MCPServer) handleInitialize(req Request) {
 	s.initialized = true
+	close(s.initDone)
 	s.sendResponse(req.ID, map[string]any{
 		"protocolVersion": "2024-11-05",
 		"capabilities": map[string]any{
@@ -486,7 +503,14 @@ func (s *MCPServer) handleGetPrompt(req Request) {
 func (s *MCPServer) handleSearch(args map[string]any) []Content {
 	query := getStringArg(args, "query", "")
 	topic := getStringArg(args, "topic", "")
-	limit := int(getNumberArg(args, "limit", 20))
+	limit := int(getNumberArg(args, "limit", defaultLimit))
+	if limit <= 0 || limit > maxSearchLimit {
+		limit = maxSearchLimit
+	}
+
+	if query == "" && topic == "" {
+		return []Content{{Type: "text", Text: "请提供搜索关键词或议题"}}
+	}
 
 	var results []SearchResult
 	if s.memoryGraph != nil {
@@ -499,7 +523,7 @@ func (s *MCPServer) handleSearch(args map[string]any) []Content {
 				ImpactLevel: string(d.ImpactLevel),
 				Status:      string(d.Status),
 			})
-			if limit > 0 && len(results) >= limit {
+			if len(results) >= limit {
 				break
 			}
 		}
@@ -540,7 +564,7 @@ func (s *MCPServer) handleExtract(args map[string]any) []Content {
 
 	result, err := s.llmAgent.ExtractDecision(content, topics)
 	if err != nil {
-		return []Content{{Type: "text", Text: fmt.Sprintf("提取失败: %v", err)}}
+		return []Content{{Type: "text", Text: "提取失败：服务暂时不可用"}}
 	}
 
 	text := formatExtractResult(result)
@@ -553,7 +577,7 @@ func (s *MCPServer) handleClassify(args map[string]any) []Content {
 
 	result, err := s.llmAgent.ClassifyTopic(decisionStr, topics)
 	if err != nil {
-		return []Content{{Type: "text", Text: fmt.Sprintf("分类失败: %v", err)}}
+		return []Content{{Type: "text", Text: "分类失败：服务暂时不可用"}}
 	}
 
 	text := formatClassifyResult(result)
@@ -563,7 +587,7 @@ func (s *MCPServer) handleClassify(args map[string]any) []Content {
 func (s *MCPServer) handleCrossTopic(args map[string]any) []Content {
 	result, err := s.llmAgent.DetectCrossTopic(args)
 	if err != nil {
-		return []Content{{Type: "text", Text: fmt.Sprintf("检测失败: %v", err)}}
+		return []Content{{Type: "text", Text: "检测失败：服务暂时不可用"}}
 	}
 
 	text := formatCrossTopicResult(result)
@@ -576,7 +600,7 @@ func (s *MCPServer) handleConflict(args map[string]any) []Content {
 
 	result, err := s.llmAgent.ResolveConflict(decisionA, decisionB)
 	if err != nil {
-		return []Content{{Type: "text", Text: fmt.Sprintf("冲突评估失败: %v", err)}}
+		return []Content{{Type: "text", Text: "评估失败：服务暂时不可用"}}
 	}
 
 	text := formatConflictResult(result)
@@ -603,9 +627,6 @@ func (s *MCPServer) handleTimeline(args map[string]any) []Content {
 }
 
 func (s *MCPServer) sendResponse(id any, result any) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	resp := Response{
 		JSONRPC: "2.0",
 		ID:      id,
@@ -614,17 +635,14 @@ func (s *MCPServer) sendResponse(id any, result any) {
 	data, err := json.Marshal(resp)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[MCP] sendResponse marshal error: %v\n", err)
-		fmt.Fprintf(s.out, `{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"internal error"}}`+"\n")
+		s.writeString(`{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"internal error"}}` + "\n")
 		return
 	}
-	fmt.Fprintf(s.out, "%s\n", data)
+	s.writeString(string(data) + "\n")
 	fmt.Fprintf(os.Stderr, "[MCP] <-- response id=%v size=%d\n", id, len(data))
 }
 
 func (s *MCPServer) sendError(id any, code int, errMsg string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	resp := Response{
 		JSONRPC: "2.0",
 		ID:      id,
@@ -633,11 +651,17 @@ func (s *MCPServer) sendError(id any, code int, errMsg string) {
 	data, err := json.Marshal(resp)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[MCP] sendError marshal error: %v\n", err)
-		fmt.Fprintf(s.out, `{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"internal error"}}`+"\n")
+		s.writeString(`{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"internal error"}}` + "\n")
 		return
 	}
-	fmt.Fprintf(s.out, "%s\n", data)
+	s.writeString(string(data) + "\n")
 	fmt.Fprintf(os.Stderr, "[MCP] <-- error id=%v code=%d message=%q\n", id, code, errMsg)
+}
+
+func (s *MCPServer) writeString(data string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	fmt.Fprint(s.out, data)
 }
 
 func getStringArg(args map[string]any, key, defaultValue string) string {
@@ -669,6 +693,8 @@ func getStringArrayArg(args map[string]any, key string) []string {
 			}
 			return result
 		}
+		// 如果传入了非数组类型（如单个字符串），记录日志但静默返回空
+		fmt.Fprintf(os.Stderr, "[MCP] warning: argument %q is %T, expected array\n", key, val)
 	}
 	return []string{}
 }
@@ -764,20 +790,38 @@ func formatTimelineResults(items []TimelineItem) string {
 func (s *MCPServer) validateToolArgs(name string, args map[string]any) string {
 	switch name {
 	case "topic":
-		if _, ok := args["topic"]; !ok {
+		v, ok := args["topic"]
+		if !ok {
 			return "missing required parameter: topic"
 		}
+		if str, ok := v.(string); !ok || str == "" {
+			return "topic must be a non-empty string"
+		}
 	case "decision":
-		if _, ok := args["sdr_id"]; !ok {
+		v, ok := args["sdr_id"]
+		if !ok {
 			return "missing required parameter: sdr_id"
 		}
+		if str, ok := v.(string); !ok || str == "" {
+			return "sdr_id must be a non-empty string"
+		}
 	case "extract_decision":
-		if _, ok := args["content"]; !ok {
+		v, ok := args["content"]
+		if !ok {
 			return "missing required parameter: content"
 		}
+		if str, ok := v.(string); !ok {
+			return "content must be a string"
+		} else if len(str) > maxLLMInputSize {
+			return fmt.Sprintf("content too large (%d bytes, max %d)", len(str), maxLLMInputSize)
+		}
 	case "classify_topic":
-		if _, ok := args["decision"]; !ok {
+		dv, dok := args["decision"]
+		if !dok {
 			return "missing required parameter: decision"
+		}
+		if dstr, ok := dv.(string); ok && len(dstr) > maxLLMInputSize {
+			return fmt.Sprintf("decision too large (%d bytes, max %d)", len(dstr), maxLLMInputSize)
 		}
 		if _, ok := args["topics"]; !ok {
 			return "missing required parameter: topics"
@@ -786,8 +830,12 @@ func (s *MCPServer) validateToolArgs(name string, args map[string]any) string {
 		if _, ok := args["title"]; !ok {
 			return "missing required parameter: title"
 		}
-		if _, ok := args["decision"]; !ok {
+		dv, dok := args["decision"]
+		if !dok {
 			return "missing required parameter: decision"
+		}
+		if dstr, ok := dv.(string); ok && len(dstr) > maxLLMInputSize {
+			return fmt.Sprintf("decision too large (%d bytes, max %d)", len(dstr), maxLLMInputSize)
 		}
 		if _, ok := args["candidate_topics"]; !ok {
 			return "missing required parameter: candidate_topics"

@@ -225,10 +225,10 @@ func (mg *MemoryGraph) DetectConflicts(newNode *decision.DecisionNode) []Conflic
 
 // Conflict 冲突
 type Conflict struct {
-	ConflictID       string
-	DecisionA        string
-	DecisionB        string
-	Description      string
+	ConflictID         string
+	DecisionA          string
+	DecisionB          string
+	Description        string
 	ContradictionScore float64
 }
 
@@ -299,11 +299,13 @@ func appendUnique(slice []string, item string) []string {
 }
 
 func containsIgnoreCase(s, substr string) bool {
+	if substr == "" {
+		return false
+	}
 	return len(s) >= len(substr) &&
-		(len(substr) == 0 ||
-			(len(s) > 0 &&
-				(len(s) >= len(substr) &&
-					stringsContainsIgnoreCase(s, substr))))
+		(len(s) > 0 &&
+			(len(s) >= len(substr) &&
+				stringsContainsIgnoreCase(s, substr)))
 }
 
 func stringsContainsIgnoreCase(s, substr string) bool {

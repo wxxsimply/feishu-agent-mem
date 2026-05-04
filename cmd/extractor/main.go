@@ -12,19 +12,6 @@ func main() {
 	// 加载 .env 文件
 	larkadapter.LoadEnv()
 
-	// 检查飞书配置
-	missing := larkadapter.CheckLarkConfig()
-	if len(missing) > 0 {
-		fmt.Printf("⚠️  缺少飞书配置变量: %v\n", missing)
-		fmt.Println("请在 .env 文件中配置以下变量:")
-		fmt.Println("  - LARK_APP_ID: 飞书应用 ID")
-		fmt.Println("  - LARK_APP_SECRET: 飞书应用密钥")
-		fmt.Println("  - LARK_CHAT_IDS: 监控的群聊 ID（可选，逗号分隔）")
-		fmt.Println()
-		fmt.Println("当前使用模拟数据运行...")
-		fmt.Println()
-	}
-
 	// 加载配置
 	cfg := larkadapter.LoadConfig()
 
@@ -35,7 +22,6 @@ func main() {
 		larkadapter.NewDocExtractor(cfg),
 		larkadapter.NewWikiExtractor(cfg),
 		larkadapter.NewVCExtractor(cfg),
-		larkadapter.NewMinutesExtractor(cfg),
 		larkadapter.NewTaskExtractor(cfg),
 		larkadapter.NewOKRExtractor(cfg),
 		larkadapter.NewContactExtractor(cfg),
@@ -60,14 +46,13 @@ func main() {
 	fmt.Println("开始检测状态变化...")
 	fmt.Println("================================")
 
-	// 创建检测器列表（Extractor 也实现了 Detector 时才跑）
+	// 创建检测器列表
 	detectors := []larkadapter.Detector{
 		larkadapter.NewIMExtractor(cfg),
 		larkadapter.NewCalendarExtractor(cfg),
 		larkadapter.NewDocExtractor(cfg),
 		larkadapter.NewWikiExtractor(cfg),
 		larkadapter.NewVCExtractor(cfg),
-		larkadapter.NewMinutesExtractor(cfg),
 		larkadapter.NewTaskExtractor(cfg),
 		larkadapter.NewOKRExtractor(cfg),
 		larkadapter.NewContactExtractor(cfg),

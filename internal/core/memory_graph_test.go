@@ -190,6 +190,18 @@ func TestMemoryGraph_SearchByKeywords_NoMatch(t *testing.T) {
 	}
 }
 
+func TestMemoryGraph_SearchByKeywords_EmptyQuery(t *testing.T) {
+	mg := NewMemoryGraph()
+	mg.UpsertDecision(&decision.DecisionNode{SDRID: "DEC-001", Title: "使用PostgreSQL", Topic: "数据库架构", Status: decision.StatusDecided, Project: "p"}, "p")
+	mg.UpsertDecision(&decision.DecisionNode{SDRID: "DEC-002", Title: "使用Redis", Topic: "缓存", Status: decision.StatusDecided, Project: "p"}, "p")
+
+	// 空 query 不应返回所有结果
+	results := mg.SearchByKeywords("", "")
+	if len(results) != 0 {
+		t.Errorf("Empty query should return no results, got %d", len(results))
+	}
+}
+
 func TestMemoryGraph_GetAllDecisions(t *testing.T) {
 	mg := NewMemoryGraph()
 	all := mg.GetAllDecisions()

@@ -1,88 +1,48 @@
 {
   "spaces": [
     {
-      "space_id": "7632248356646980553",
-      "space_name": "Feishu agentic memory engine 开发",
+      "space_id": "7635187235368799170",
+      "space_name": "simply",
       "nodes": {
-        "E0sbwr4sNipYcqkrrlMcytfLnDc": {
-          "node_token": "E0sbwr4sNipYcqkrrlMcytfLnDc",
-          "title": "[设计] - 记忆定义与结构化方案",
+        "JtJXw1yBAi0JiPkpPebccEjznpJ": {
+          "node_token": "JtJXw1yBAi0JiPkpPebccEjznpJ",
+          "title": "源文档-1777706128",
           "parent_node_token": "",
-          "space_id": "7632248356646980553",
-          "obj_edit_time": 1777213351,
-          "node_create_time": 1777041203
+          "space_id": "7635187235368799170",
+          "obj_edit_time": 1777706129,
+          "node_create_time": 1777706129
         },
-        "FS9DwC5lwiO54qkNOLMcjUoZnch": {
-          "node_token": "FS9DwC5lwiO54qkNOLMcjUoZnch",
-          "title": "[设计] - 方案",
+        "Mcbiw1VPZiXxAQkB2vacv3kqn4g": {
+          "node_token": "Mcbiw1VPZiXxAQkB2vacv3kqn4g",
+          "title": "内容变化测试文档",
           "parent_node_token": "",
-          "space_id": "7632248356646980553",
-          "obj_edit_time": 1777283289,
-          "node_create_time": 1777272750
+          "space_id": "7635187235368799170",
+          "obj_edit_time": 1777705963,
+          "node_create_time": 1777705736
         },
-        "HyViwozVniVK2wkob0scIaCGnKe": {
-          "node_token": "HyViwozVniVK2wkob0scIaCGnKe",
-          "title": "Feishu Agentic Memory 引擎设计方案",
+        "PHFUwP4LGigYXLkCkSDcehLWnzh": {
+          "node_token": "PHFUwP4LGigYXLkCkSDcehLWnzh",
+          "title": "测试文档-1777705999",
           "parent_node_token": "",
-          "space_id": "7632248356646980553",
-          "obj_edit_time": 1777213275,
-          "node_create_time": 1777021474
+          "space_id": "7635187235368799170",
+          "obj_edit_time": 1777706004,
+          "node_create_time": 1777706000
         },
-        "IzDKw4aNnimagmkD5BYcF81UnWe": {
-          "node_token": "IzDKw4aNnimagmkD5BYcF81UnWe",
-          "title": "[参考] - claude-mem 设计",
+        "U4wswfnrBiTj52kQ8NJcUFD3nGe": {
+          "node_token": "U4wswfnrBiTj52kQ8NJcUFD3nGe",
+          "title": "目标父节点-1777706158",
           "parent_node_token": "",
-          "space_id": "7632248356646980553",
-          "obj_edit_time": 1777024176,
-          "node_create_time": 1777023901
+          "space_id": "7635187235368799170",
+          "obj_edit_time": 1777706160,
+          "node_create_time": 1777706160
         },
-        "IzsGwFnoli2d6hkAAaecnMurnYd": {
-          "node_token": "IzsGwFnoli2d6hkAAaecnMurnYd",
-          "title": "首页",
+        "YJyTwU32EiPsaskQB30cIEUcnAf": {
+          "node_token": "YJyTwU32EiPsaskQB30cIEUcnAf",
+          "title": "目标父节点-1777706128",
           "parent_node_token": "",
-          "space_id": "7632248356646980553",
-          "obj_edit_time": 1777023174,
-          "node_create_time": 1777021297
-        },
-        "KzGqwMsnwiPZ4rkI6Crc9U1Engd": {
-          "node_token": "KzGqwMsnwiPZ4rkI6Crc9U1Engd",
-          "title": "[参考] - Herness-agent 记忆系统设计",
-          "parent_node_token": "",
-          "space_id": "7632248356646980553",
-          "obj_edit_time": 1777022992,
-          "node_create_time": 1777022598
-        },
-        "LqPUw0Tuyik8TPkrPPnczKhwnhb": {
-          "node_token": "LqPUw0Tuyik8TPkrPPnczKhwnhb",
-          "title": "整体框架",
-          "parent_node_token": "",
-          "space_id": "7632248356646980553",
-          "obj_edit_time": 1777448220,
-          "node_create_time": 1777445410
-        },
-        "NCrmwwvx4iUqPLkKo5RcdD3snaf": {
-          "node_token": "NCrmwwvx4iUqPLkKo5RcdD3snaf",
-          "title": "飞书决策信息提取方案",
-          "parent_node_token": "",
-          "space_id": "7632248356646980553",
-          "obj_edit_time": 1777345163,
-          "node_create_time": 1777345125
-        },
-        "UVl9wzjRLiklJfkxUpecbJk4nbg": {
-          "node_token": "UVl9wzjRLiklJfkxUpecbJk4nbg",
-          "title": "[参考] - Harness模式下的Agent记忆架构设计剖析：原理、权衡与场景适配",
-          "parent_node_token": "",
-          "space_id": "7632248356646980553",
-          "obj_edit_time": 1777023121,
-          "node_create_time": 1777023069
-        },
-        "VtkIwtVqSi67n4kKDcYcpe3JnoV": {
-          "node_token": "VtkIwtVqSi67n4kKDcYcpe3JnoV",
-          "title": "[参考]- Mem0 框架",
-          "parent_node_token": "",
-          "space_id": "7632248356646980553",
-          "obj_edit_time": 1777021653,
-          "node_create_time": 1777021589
+          "space_id": "7635187235368799170",
+          "obj_edit_time": 1777706131,
+          "node_create_time": 1777706131
         }
       }
     },

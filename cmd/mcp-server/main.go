@@ -8,6 +8,7 @@ import (
 
 	"feishu-mem/internal/config"
 	"feishu-mem/internal/core"
+	larkadapter "feishu-mem/internal/lark-adapter"
 	"feishu-mem/internal/mcp"
 	"feishu-mem/internal/storage/bitable"
 	"feishu-mem/internal/storage/git"
