@@ -1,0 +1,40 @@
+{"id":"cl001","decision":"我们决定使用PostgreSQL作为主数据库","expected_topic":"数据库架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl002","decision":"确认采用微服务架构","expected_topic":"系统架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl003","decision":"决定用Go重写后端服务","expected_topic":"后端架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl004","decision":"使用Redis做缓存","expected_topic":"缓存方案","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl005","decision":"前端用React框架","expected_topic":"前端架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl006","decision":"使用Docker部署","expected_topic":"部署方案","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl007","decision":"采用Kubernetes管理容器","expected_topic":"部署方案","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl008","decision":"用Jira管理项目进度","expected_topic":"项目管理","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl009","decision":"使用Scrum敏捷开发","expected_topic":"项目管理","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl010","decision":"采用OAuth2.0认证协议","expected_topic":"用户认证","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl011","decision":"API使用RESTful设计","expected_topic":"API架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl012","decision":"用ELK做日志收集","expected_topic":"基础设施","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl013","decision":"使用TypeScript重写前端","expected_topic":"前端架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl014","decision":"用MySQL存储用户数据","expected_topic":"数据库架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl015","decision":"使用阿里云作为云服务商","expected_topic":"基础设施","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl016","decision":"用GraphQL替代REST","expected_topic":"API架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl017","decision":"采用Event Sourcing架构","expected_topic":"系统架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl018","decision":"用Redis实现分布式锁","expected_topic":"缓存方案","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl019","decision":"使用Jenkins做CI/CD","expected_topic":"部署方案","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl020","decision":"采用React Query管理服务端状态","expected_topic":"前端架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl021","decision":"用Nginx做反向代理","expected_topic":"基础设施","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl022","decision":"使用MongoDB存储日志","expected_topic":"数据库架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl023","decision":"采用gRPC进行服务间通信","expected_topic":"API架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl024","decision":"用Vue3替代Vue2","expected_topic":"前端架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl025","decision":"使用GitLab做代码管理","expected_topic":"基础设施","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl026","decision":"用PostgreSQL存储订单数据","expected_topic":"数据库架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl027","decision":"采用微前端架构拆分应用","expected_topic":"前端架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl028","decision":"使用Kafka做消息队列","expected_topic":"基础设施","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl029","decision":"选择AWS作为主云平台","expected_topic":"基础设施","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl030","decision":"用Yarn替代npm","expected_topic":"前端架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl031","decision":"使用Prometheus监控","expected_topic":"基础设施","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl032","decision":"采用双周迭代模式","expected_topic":"项目管理","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl033","decision":"用Golang开发后端微服务","expected_topic":"后端架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl034","decision":"使用RabbitMQ处理异步任务","expected_topic":"基础设施","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl035","decision":"采用单元测试+集成测试双覆盖","expected_topic":"项目管理","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl036","decision":"使用Consul做服务发现","expected_topic":"基础设施","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl037","decision":"用WebSocket实现实时推送","expected_topic":"API架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl038","decision":"数据库用读写分离架构","expected_topic":"数据库架构","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl039","decision":"使用Terraform管理基础设施","expected_topic":"部署方案","confidence_lower_bound":0.70,"difficulty":"easy"}
+{"id":"cl040","decision":"采用Git Flow分支策略","expected_topic":"项目管理","confidence_lower_bound":0.70,"difficulty":"easy"}
