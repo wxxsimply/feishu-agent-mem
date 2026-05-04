@@ -53,21 +53,57 @@ type ScoreBreakdown struct {
 	Final      float64 `json:"final"`
 }
 
+// DetectorMode 检测器模式
+type DetectorMode string
+
+const (
+	ModeIM  DetectorMode = "im"  // IM 消息模式（默认）
+	ModeDoc DetectorMode = "doc" // 文档内容模式
+)
+
+// DocType 文档类型分类
+type DocType string
+
+const (
+	DocTypeUnknown      DocType = "unknown"
+	DocTypeDesign       DocType = "design_doc"      // 技术方案/设计文档
+	DocTypeWeeklyReport DocType = "weekly_report"    // 周报
+	DocTypeMeetingNotes DocType = "meeting_notes"    // 会议纪要
+	DocTypeSpec         DocType = "spec"             // 需求/技术规格
+	DocTypeDecision     DocType = "decision_log"     // 决策日志
+	DocTypeAdmin        DocType = "administrative"   // 行政/模板
+)
+
 // EnhancedDetector 增强型检测器
 type EnhancedDetector struct {
 	lexical    *LexicalAnalyzer
 	structural *StructuralAnalyzer
 	dynamic    *DynamicAnalyzer
 	pattern    *PatternMatcherV2
+	docPattern *PatternMatcherV2 // 文档模式专用 pattern（懒加载）
+	mode       DetectorMode
 }
 
-// NewEnhancedDetector 创建增强型检测器
+// NewEnhancedDetector 创建增强型检测器（IM 消息模式，默认）
 func NewEnhancedDetector() *EnhancedDetector {
 	return &EnhancedDetector{
 		lexical:    NewLexicalAnalyzer(),
 		structural: NewStructuralAnalyzer(),
 		dynamic:    NewDynamicAnalyzer(),
 		pattern:    NewPatternMatcherV2(),
+		mode:       ModeIM,
+	}
+}
+
+// NewDocumentDetector 创建文档内容检测器
+func NewDocumentDetector() *EnhancedDetector {
+	return &EnhancedDetector{
+		lexical:    NewLexicalAnalyzer(),
+		structural: NewStructuralAnalyzer(),
+		dynamic:    nil, // 文档无对话上下文
+		pattern:    NewPatternMatcherV2(),
+		docPattern: NewDocPatternMatcher(),
+		mode:       ModeDoc,
 	}
 }
 
@@ -130,6 +166,183 @@ func (d *EnhancedDetector) Analyze(content string, ctx *DetectContext) *Detectio
 	result.IsDecision = result.Level == LevelHigh || result.Level == LevelMedium
 
 	return result
+}
+
+// AnalyzeDocument 对文档内容变化进行分阶段决策检测
+// 与 Analyze() 不同，AnalyzeDocument 使用文档模式权重、文档特有反信号和分类
+func (d *EnhancedDetector) AnalyzeDocument(content string, title string, docType DocType) *DetectionResult {
+	if strings.TrimSpace(content) == "" {
+		return &DetectionResult{
+			Score:      0,
+			Level:      LevelNone,
+			IsDecision: false,
+		}
+	}
+
+	result := &DetectionResult{
+		Factors: &ScoreBreakdown{},
+	}
+
+	// Phase 1: 文档类型分类 + 反信号预检
+	antiSignals := d.detectDocAntiSignals(title, content, docType)
+	result.AntiSignals = antiSignals
+	antiScore := d.calculateAntiScore(antiSignals)
+	result.Factors.AntiScore = antiScore
+
+	// 周报/会议纪要/行政类文档直接跳过
+	if antiScore >= 0.6 || docType == DocTypeWeeklyReport || docType == DocTypeAdmin {
+		result.Level = LevelNone
+		result.IsDecision = false
+		return result
+	}
+
+	// Phase 2: 词汇信号分析（复用 IM 模式的关键词表）
+	lexSignals := d.lexical.Analyze(content)
+	lexScore := d.calculateCategoryScore(lexSignals)
+	result.Factors.Lexical = lexScore
+	result.SignalDetails = append(result.SignalDetails, lexSignals...)
+
+	// Phase 2: 结构信号分析（章节标题、列表、表格等文档特有结构）
+	structSignals := d.structural.Analyze(content)
+	structScore := d.calculateCategoryScore(structSignals)
+	result.Factors.Structural = structScore
+	result.SignalDetails = append(result.SignalDetails, structSignals...)
+
+	// Phase 2: 文档特有 pattern 匹配
+	if d.docPattern != nil {
+		patSignals := d.docPattern.Analyze(content)
+		patScore := d.calculateCategoryScore(patSignals)
+		result.Factors.Pattern = patScore
+		result.SignalDetails = append(result.SignalDetails, patSignals...)
+	} else {
+		patSignals := d.pattern.Analyze(content)
+		patScore := d.calculateCategoryScore(patSignals)
+		result.Factors.Pattern = patScore
+		result.SignalDetails = append(result.SignalDetails, patSignals...)
+	}
+
+	// 文档模式使用不同权重：提高 lexical 权重，因为文档中的明确关键词更重要
+	finalScore := lexScore*0.40 + structScore*0.20 + result.Factors.Pattern*0.35
+	// 削弱反信号的影响（文档中的内容相对更可靠）
+	finalScore *= (1.0 - antiScore*0.2)
+
+	if finalScore < 0 {
+		finalScore = 0
+	}
+	if finalScore > 1.0 {
+		finalScore = 1.0
+	}
+
+	result.Factors.Final = finalScore
+	result.Score = finalScore
+
+	// 文档模式使用更低的阈值
+	switch {
+	case finalScore >= 0.45:
+		result.Level = LevelHigh
+	case finalScore >= 0.30:
+		result.Level = LevelMedium
+	case finalScore >= 0.15:
+		result.Level = LevelLow
+	default:
+		result.Level = LevelNone
+	}
+	result.IsDecision = result.Level == LevelHigh || result.Level == LevelMedium
+
+	return result
+}
+
+// classifyDocType 根据标题和内容特征判断文档类型
+func classifyDocType(title string, content string) DocType {
+	if title == "" {
+		title = content
+		if len(title) > 100 {
+			title = title[:100]
+		}
+	}
+
+	titleLower := strings.ToLower(title)
+
+	// 优先根据标题判断
+	if len(containsAny(titleLower, []string{"周报", "weekly", "日报", "daily", "月报", "双周报"})) > 0 {
+		return DocTypeWeeklyReport
+	}
+	if len(containsAny(titleLower, []string{"会议", "纪要", "minutes", "meeting note"})) > 0 {
+		return DocTypeMeetingNotes
+	}
+	if len(containsAny(titleLower, []string{"模板", "template", "模版"})) > 0 {
+		return DocTypeAdmin
+	}
+	if len(containsAny(titleLower, []string{"方案", "设计", "架构", "技术选型", "选型"})) > 0 {
+		return DocTypeDesign
+	}
+	if len(containsAny(titleLower, []string{"规格", "spec", "需求", "requirement"})) > 0 {
+		return DocTypeSpec
+	}
+	if len(containsAny(titleLower, []string{"决定", "决策", "decision log", "决策记录", "changelog"})) > 0 {
+		return DocTypeDecision
+	}
+
+	// 标题未匹配时检查内容前 N 字
+	contentPrefix := strings.ToLower(content)
+	if len(contentPrefix) > 200 {
+		contentPrefix = contentPrefix[:200]
+	}
+
+	if len(containsAny(contentPrefix, []string{"本周工作", "下周计划", "进度同步"})) > 0 {
+		return DocTypeWeeklyReport
+	}
+	if len(containsAny(contentPrefix, []string{"会议时间", "参会人", "议程"})) > 0 {
+		return DocTypeMeetingNotes
+	}
+	if len(containsAny(contentPrefix, []string{"背景", "目标", "方案对比", "技术方案"})) > 0 {
+		return DocTypeDesign
+	}
+
+	return DocTypeUnknown
+}
+
+// detectDocAntiSignals 检测文档特有的反信号
+func (d *EnhancedDetector) detectDocAntiSignals(title, content string, docType DocType) []string {
+	var signals []string
+
+	// 根据文档类型直接判定
+	if docType == DocTypeWeeklyReport {
+		signals = append(signals, "weekly_report:"+title)
+	}
+	if docType == DocTypeMeetingNotes {
+		signals = append(signals, "meeting_notes:"+title)
+	}
+	if docType == DocTypeAdmin {
+		signals = append(signals, "template_doc:"+title)
+	}
+
+	// 内容反信号 — 先检查有没有决策信号，有就不因为内容短而拦截
+	lower := strings.ToLower(content)
+
+	// 先检查内容是否包含明确的技术决策信号
+	hasDecisionSignal := false
+	decisionKeywords := []string{"技术栈", "框架", "选用", "使用", "采用", "决定", "选择", "方案", "选型", "架构", "Gin", "React", "Vue", "Go", "Python", "Java", "MySQL", "PostgreSQL", "Redis", "MongoDB"}
+	for _, kw := range decisionKeywords {
+		if strings.Contains(lower, strings.ToLower(kw)) {
+			hasDecisionSignal = true
+			break
+		}
+	}
+
+	// 只有在没有决策信号的情况下，才因为内容短而判定为 minor_edit
+	if len(lower) < 50 && !hasDecisionSignal {
+		signals = append(signals, "minor_edit:short_change")
+	}
+	if matched := containsAny(lower, []string{"fix typo", "format", "格式", "错别字", "排版"}); len(matched) > 0 {
+		signals = append(signals, "minor_edit:"+matched[0])
+	}
+	if matched := containsAny(lower, []string{"TODO", "FIXME", "待完成", "待办"}); len(matched) > 0 {
+		// TODO 列表本身不是决策，但不算强反信号
+		signals = append(signals, "todo_list:"+matched[0])
+	}
+
+	return signals
 }
 
 // detectAntiSignals 检测反信号（降低决策置信度的因素）
@@ -326,7 +539,7 @@ func NewLexicalAnalyzer() *LexicalAnalyzer {
 		},
 		mediumWeight: []weightedPattern{
 			{keywords: []string{"采用", "选用", "使用", "用这个"}, weight: 0.65, name: "adopt"},
-			{keywords: []string{"选", "选择", "选型", "方案"}, weight: 0.55, name: "selection"},
+			{keywords: []string{"选", "选择", "选型", "方案", "技术栈", "开发语言", "语言"}, weight: 0.55, name: "selection"},
 			{keywords: []string{"建议", "推荐", "提议"}, weight: 0.50, name: "proposal"},
 			{keywords: []string{"approve", "lgtm", "LGTM", "approved", "confirmed", "agreed"}, weight: 0.70, name: "eng_approve"},
 			{keywords: []string{"decided", "decision", "finalize"}, weight: 0.75, name: "eng_decision"},
@@ -574,6 +787,61 @@ func (m *PatternMatcherV2) Analyze(content string) []SignalDetail {
 	}
 
 	return signals
+}
+
+// ============================================================
+// 文档模式匹配器 — 文档/知识库内容的决策句式模式
+// ============================================================
+
+// NewDocPatternMatcher 创建文档专用的 pattern 匹配器
+// 包含文档章节标题、决策日志、方案对比等特有模式
+func NewDocPatternMatcher() *PatternMatcherV2 {
+	return &PatternMatcherV2{
+		patterns: compileDocPatterns(),
+	}
+}
+
+func compileDocPatterns() []*decisionPattern {
+	rawPatterns := []struct {
+		name   string
+		regex  string
+		weight float64
+	}{
+		// 既有 IM 模式也适用于文档
+		{name: "adopt_solution", regex: `(采用|选用|使用|用)\s*[，,。.\s]*(方案|方式|方法|技术|框架|工具)`, weight: 0.75},
+		{name: "decided_action", regex: `(决定|确认|同意)\s*(使用|采用|用|选|选择)`, weight: 0.80},
+		{name: "conclusion_statement", regex: `结论[是就]`, weight: 0.75},
+		{name: "approve_proposal", regex: `(同意|批准|通过)\s*(这个|该|此)`, weight: 0.80},
+		{name: "rejection", regex: `(不|别|不用|不需要|没必要)\s*(考虑|使用|采用|选)`, weight: 0.55},
+
+		// 文档特有：章节标题中的决策信号
+		{name: "doc_decision_section", regex: `#+\s*(决定|结论|决策|方案选择|技术选型)`, weight: 0.80},
+		{name: "doc_architecture_section", regex: `#+\s*(架构|设计|方案|技术方案)`, weight: 0.65},
+		{name: "doc_rationale_section", regex: `#+\s*(理由|原因|依据|考量|权衡|对比)`, weight: 0.55},
+
+		// 文档特有：方案对比和权衡
+		{name: "doc_pros_cons", regex: `(优点|缺点|优势|劣势|Pros|Cons|好处|坏处)`, weight: 0.55},
+		{name: "doc_option_list", regex: `(方案[一二三123ABC]|Option\s*[ABC]|对比项)`, weight: 0.50},
+
+		// 文档特有：技术选型
+		{name: "doc_tech_selection", regex: `(技术选型|框架选择|工具选择|数据库选型)`, weight: 0.80},
+		{name: "doc_final_recommendation", regex: `(最终推荐|推荐方案|建议方案|最终选择)`, weight: 0.85},
+
+		// 简单明确的技术栈声明（如"技术栈：Gin"）
+		{name: "doc_tech_stack_statement", regex: `(技术栈|使用|采用|选用)[：:]\s*\S+`, weight: 0.75},
+		{name: "doc_tech_choice", regex: `(使用|采用|选用|选择)\s*(Gin|React|Vue|Go|Python|Java|MySQL|PostgreSQL|Redis|MongoDB|Kubernetes|Docker)`, weight: 0.80},
+	}
+
+	var compiled []*decisionPattern
+	for _, rp := range rawPatterns {
+		re, err := regexp.Compile(rp.regex)
+		if err == nil {
+			compiled = append(compiled, &decisionPattern{
+				name: rp.name, regex: re, weight: rp.weight,
+			})
+		}
+	}
+	return compiled
 }
 
 // ============================================================

@@ -17,10 +17,11 @@ type CalendarSnapshot struct {
 
 // EventSnapshot 单个日程的快照
 type EventSnapshot struct {
-	EventID   string `json:"event_id"`
-	Title     string `json:"title"`
-	StartTime int64  `json:"start_time"`
-	UpdatedAt int64  `json:"updated_at"`
+	EventID          string `json:"event_id"`
+	Title            string `json:"title"`
+	StartTime        int64  `json:"start_time"`
+	UpdatedAt        int64  `json:"updated_at"`
+	ExpiredNotified  bool   `json:"expired_notified"`
 }
 
 // CalendarExtractor 日程提取器
@@ -157,25 +158,64 @@ func (e *CalendarExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 		}
 	}
 
-	// 更新日程
+	// 日程重命名
 	for eventID, currEv := range current.Events {
 		prevEv, exists := previous.Events[eventID]
-		if exists {
-			if currEv.Title != prevEv.Title || currEv.StartTime != prevEv.StartTime {
-				changes = append(changes, Change{
-					Type:       "updated_event",
-					EntityType: "event",
-					EntityID:   eventID,
-					Summary:    fmt.Sprintf("日程更新: %s", currEv.Title),
-					Timestamp:  time.Now().Unix(),
-				})
-			}
+		if exists && currEv.Title != prevEv.Title {
+			changes = append(changes, Change{
+				Type:       "event_renamed",
+				EntityType: "event",
+				EntityID:   eventID,
+				Summary:    fmt.Sprintf("日程重命名: %s", currEv.Title),
+				Timestamp:  time.Now().Unix(),
+			})
 		}
 	}
 
-	// 已删除的日程（可选，暂不报告）
+	// 日程时间调整
+	for eventID, currEv := range current.Events {
+		prevEv, exists := previous.Events[eventID]
+		if exists && currEv.StartTime != prevEv.StartTime {
+			changes = append(changes, Change{
+				Type:       "event_rescheduled",
+				EntityType: "event",
+				EntityID:   eventID,
+				Summary:    fmt.Sprintf("日程时间调整: %s", currEv.Title),
+				Timestamp:  time.Now().Unix(),
+			})
+		}
+	}
 
-	// 4. 保存当前快照
+	// 已删除的日程
+	for eventID, prevEv := range previous.Events {
+		if _, exists := current.Events[eventID]; !exists {
+			changes = append(changes, Change{
+				Type:       "deleted_event",
+				EntityType: "event",
+				EntityID:   eventID,
+				Summary:    fmt.Sprintf("日程已删除: %s", prevEv.Title),
+				Timestamp:  time.Now().Unix(),
+			})
+		}
+	}
+
+	// 4. 过期日程检测（start_time 已过 24h 且尚未通知）
+	now := time.Now().Unix()
+	for id, ev := range current.Events {
+		if ev.StartTime > 0 && ev.StartTime+86400 < now && !ev.ExpiredNotified {
+			changes = append(changes, Change{
+				Type:       "event_expired",
+				EntityType: "event",
+				EntityID:   id,
+				Summary:    fmt.Sprintf("日程已过期: %s", ev.Title),
+				Timestamp:  now,
+			})
+			ev.ExpiredNotified = true
+			current.Events[id] = ev
+		}
+	}
+
+	// 5. 保存当前快照
 	_ = e.saveSnapshot(current)
 
 	result := &DetectResult{

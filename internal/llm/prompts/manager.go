@@ -42,6 +42,15 @@ func (pm *PromptManager) registerAllTemplates() {
 		Temperature: 0.3,
 	}
 
+	// 场景 1b: 文档决策提取（分阶段分析模式）
+	pm.templates["extraction_doc"] = &PromptTemplate{
+		Name:        "extraction_doc",
+		Static:      extractionDocStaticPrompt,
+		Dynamic:     extractionDocDynamicBuilder,
+		MaxTokens:   4000,
+		Temperature: 0.3,
+	}
+
 	// 场景 2: 议题分类
 	pm.templates["classification"] = &PromptTemplate{
 		Name:        "classification",
@@ -98,6 +107,7 @@ func (pm *PromptManager) GetTemplate(name string) (*PromptTemplate, bool) {
 
 var (
 	ExtractionStaticPrompt     = extractionStaticPrompt
+	ExtractionDocStaticPrompt  = extractionDocStaticPrompt
 	ClassificationStaticPrompt = classificationStaticPrompt
 	CrossTopicStaticPrompt     = crosstopicStaticPrompt
 	ConflictStaticPrompt       = conflictStaticPrompt
@@ -267,6 +277,90 @@ var conflictStaticPrompt = `# 系统提示词：决策冲突评估器
 - 如果两个决策在不同阶段生效（phase 不同），矛盾应降级
 `
 
+var extractionDocStaticPrompt = `# 系统提示词：文档决策提取器（分阶段分析模式）
+
+## 角色
+你是一个技术文档决策分析专家。对文档变更内容进行分阶段分析，严格区分真实决策与非决策修改。
+
+## 阶段 1：变更类型识别
+
+分析下面给出的文档变更内容（diff），确定变更的类型：
+
+- **decision** —— 明确的技术选择或方案确认（例："决定使用 PostgreSQL"、"采用微服务架构"）
+- **discussion** —— 讨论中但未定论（例："正在评估A和B方案"、"对比了两种方案"）
+- **status_update** —— 进度同步、状态更新（例："已完成模块X的开发"、"本周进展"）
+- **clarification** —— 澄清说明、格式修正、错别字修改
+- **administrative** —— 行政类、模板类（例："填写周报模板"、"更新团队成员名单"）
+- **mixed** —— 混合类型（同时包含决策和非决策内容）
+
+### 分类规则
+- 如果变更内容主要是状态更新但最后做出了决定 → mixed
+- 如果变更只是格式调整/排版/错别字 → clarification
+- 如果变更包含"决定/确认/结论/通过"等明确决策词汇且有上下文佐证 → decision
+- 纯周报/日报/进度同步 → status_update
+
+## 阶段 2：决策信息提取
+
+仅当阶段 1 判定为 "decision" 或 "mixed" 时执行。提取以下信息：
+
+1. **决策标题**：一句话概括决定内容
+2. **决策结论**：从变更中精确引用被确定的具体方案或选择
+3. **决策依据**：决策的理由和依据（从 diff 中找到 1-2 条理由）
+4. **影响范围**：哪些模块/系统/议题受影响（根据候选议题列表匹配）
+5. **影响级别**：advisory（建议性）/ minor（次要）/ major（重要）/ critical（关键）
+6. **决策类型**：new（新决策）/ confirmation（确认已有决策）/ rejection（否决/取消之前决定）
+7. **相关实体**：关联的文档 token、议题 ID 等
+8. **提出人/执行人**：如有明确提及
+
+## 阶段 3：置信度评估
+
+- **高置信度 (>= 0.8)**：明确的技术选型陈述，有上下文和理由
+  - 例："经过评估，团队决定使用 Go 重写后端服务，原因是性能需求和高并发场景"
+- **中置信度 (0.6-0.7)**：有明显决策倾向但表达不够明确
+  - 例："推荐使用方案A，大家没有异议的话就这么定了"
+- **低置信度 (< 0.6)**：仅讨论、推测、报告他人意见
+  - 例："我觉得可能用 PostgreSQL 比较好"
+  - → has_decision: false 且不输出 decision 字段
+- **零置信度 (0.0)**：纯状态更新、格式修正、闲聊
+  - → has_decision: false
+
+## 输出格式
+
+仅当 confidence >= 0.6 时考虑输出决策。最终决定必须达到 0.8 以上才输出完整 decision。
+
+{
+  "has_decision": true/false,
+  "change_type": "decision/discussion/status_update/clarification/administrative/mixed",
+  "confidence": 0.0-1.0,
+  "decision": {
+    "title": "一句话决策标题",
+    "decision": "决策结论（从原文或 diff 中精确引用）",
+    "rationale": "决策依据（1-2 条理由）",
+    "suggested_topic": "建议归属的议题（从候选列表中选择）",
+    "impact_level": "advisory/minor/major/critical",
+    "proposer": "提出人姓名",
+    "executor": "执行者姓名（如果提到）",
+    "decision_type": "new/confirmation/rejection",
+    "related_entities": {
+      "chat_ids": [],
+      "doc_tokens": [],
+      "meeting_ids": [],
+      "task_guids": [],
+      "event_ids": []
+    }
+  },
+  "analysis": "一句话概括本次变更的性质和判断理由"
+}
+
+## 规则
+- confidence < 0.6 不输出任何 decision 字段
+- 如果变更包含多个修改但只有一部分是决策，将 change_type 设为 mixed 并提取决策部分
+- 不要在决策字段中编造原文没有的内容
+- 宁缺毋滥：不确定时不输出
+- 技术文档中的决策通常伴随理由说明，如果只有结论没有理由，置信度应降低
+- 报告其他人的决定（"leader 说要用 X"）置信度不应超过 0.6
+`
+
 // ========== 动态段构建函数 ==========
 
 func extractionDynamicBuilder(ctx map[string]any) string {
@@ -321,6 +415,23 @@ func conflictDynamicBuilder(ctx map[string]any) string {
 	}
 	if decisionB, ok := ctx["decisionB"].(string); ok {
 		sb.WriteString(fmt.Sprintf("## 决策 B（已有决策）\n%s\n", decisionB))
+	}
+	return sb.String()
+}
+
+func extractionDocDynamicBuilder(ctx map[string]any) string {
+	var sb strings.Builder
+	if content, ok := ctx["content"].(string); ok {
+		sb.WriteString(fmt.Sprintf("\n## 文档变更内容（diff）\n%s\n", content))
+	}
+	if docType, ok := ctx["doc_type"].(string); ok {
+		sb.WriteString(fmt.Sprintf("\n## 文档类型\n%s\n", docType))
+	}
+	if title, ok := ctx["title"].(string); ok {
+		sb.WriteString(fmt.Sprintf("\n## 文档标题\n%s\n", title))
+	}
+	if topics, ok := ctx["topics"].([]string); ok {
+		sb.WriteString(fmt.Sprintf("\n## 候选议题\n%v\n", topics))
 	}
 	return sb.String()
 }

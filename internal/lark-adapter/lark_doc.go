@@ -3,6 +3,7 @@ package larkadapter
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -34,14 +35,17 @@ func (e *DocExtractor) Name() string {
 
 // Detect 检测文档变化（新增/更新/评论/权限变更等）
 func (e *DocExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
+	log.Printf("[lark_doc] Detect called, lastCheck: %v", lastCheck)
 	changes := []Change{}
 
 	// 尝试使用 docs +search 按时间过滤获取文档变化
 	docsResult, err := e.searchDocsByTime(lastCheck)
 	if err != nil {
+		log.Printf("[lark_doc] searchDocsByTime failed: %v, falling back to legacy search", err)
 		// 如果搜索失败，尝试原来的方式
 		output, err2 := e.cli.RunCommand("docs", "+search")
 		if err2 != nil {
+			log.Printf("[lark_doc] legacy +search failed: %v", err2)
 			result := &DetectResult{
 				Source:     e.Name(),
 				HasChanges: false,
@@ -56,6 +60,7 @@ func (e *DocExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 		if err := json.Unmarshal(output, &docsList); err != nil {
 			var single any
 			if err := json.Unmarshal(output, &single); err != nil {
+				log.Printf("[lark_doc] failed to unmarshal legacy search result: %v", err)
 				result := &DetectResult{
 					Source:     e.Name(),
 					HasChanges: false,
@@ -69,12 +74,15 @@ func (e *DocExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 		}
 
 		cutoff := lastCheck.Unix()
+		log.Printf("[lark_doc] processing %d docs from legacy search, cutoff: %d", len(docsList), cutoff)
 		for _, doc := range docsList {
 			docChanges := e.analyzeDocChanges(doc, cutoff, lastCheck.IsZero())
+			log.Printf("[lark_doc] analyzed doc, got %d changes", len(docChanges))
 			changes = append(changes, docChanges...)
 		}
 	} else {
 		// 使用搜索到的结果
+		log.Printf("[lark_doc] got %d changes from searchDocsByTime", len(docsResult))
 		changes = append(changes, docsResult...)
 	}
 
@@ -86,23 +94,34 @@ func (e *DocExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 		Changes:    changes,
 	}
 
-	_ = SaveDetectResult(result)
+	log.Printf("[lark_doc] Detect finished, HasChanges: %v, Changes: %d", result.HasChanges, len(changes))
+	for i, ch := range changes {
+		log.Printf("[lark_doc] Change[%d]: %s (Type: %s, EntityID: %s)", i, ch.Summary, ch.Type, ch.EntityID)
+	}
+
+	if err := SaveDetectResult(result); err != nil {
+		log.Printf("[lark_doc] failed to save DetectResult: %v", err)
+	}
 	return result, nil
 }
 
 // searchDocsByTime 使用 docs +search 按时间过滤搜索文档
 func (e *DocExtractor) searchDocsByTime(lastCheck time.Time) ([]Change, error) {
+	log.Printf("[lark_doc] searchDocsByTime called, lastCheck: %v", lastCheck)
 	var changes []Change
 
 	// 直接搜索所有文档（不使用filter，避免时间格式问题）
+	log.Printf("[lark_doc] calling docs +search")
 	output, err := e.cli.RunCommand("docs", "+search")
 	if err != nil {
+		log.Printf("[lark_doc] docs +search failed: %v", err)
 		return changes, err
 	}
 
 	// 解析结果
 	var searchResult map[string]any
 	if err := json.Unmarshal(output, &searchResult); err != nil {
+		log.Printf("[lark_doc] failed to unmarshal +search result: %v", err)
 		return changes, err
 	}
 
@@ -113,7 +132,10 @@ func (e *DocExtractor) searchDocsByTime(lastCheck time.Time) ([]Change, error) {
 			results = items
 		}
 	}
+	log.Printf("[lark_doc] got %d results from +search", len(results))
 
+	cutoff := lastCheck.Unix()
+	filteredCount := 0
 	for _, item := range results {
 		itemMap, ok := item.(map[string]any)
 		if !ok {
@@ -136,15 +158,17 @@ func (e *DocExtractor) searchDocsByTime(lastCheck time.Time) ([]Change, error) {
 			checkTimestamp = createTimestamp
 		}
 		// 比较时间
-		if checkTimestamp == 0 || checkTimestamp <= lastCheck.Unix() {
+		if checkTimestamp == 0 || checkTimestamp <= cutoff {
 			continue
 		}
+		filteredCount++
 		change := e.parseSearchItemToChange(itemMap)
 		if change.Type != "" {
 			changes = append(changes, change)
 		}
 	}
 
+	log.Printf("[lark_doc] filtered out %d old results, %d new changes to process", len(results)-filteredCount, len(changes))
 	return changes, nil
 }
 

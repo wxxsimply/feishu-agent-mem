@@ -116,6 +116,74 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 	return mut, nil
 }
 
+// ProcessSignalForDocJob 处理文档类型信号的决策提取（使用分阶段分析 prompt）
+func (e *SignalActivationEngine) ProcessSignalForDocJob(sig *StateChangeSignal, proposer, content, docType, title string) (*DecisionMutation, error) {
+	log.Println("========== SIGNAL ENGINE DOC PROCESS ==========")
+	log.Printf("[SignalEngine] ProcessSignalForDocJob called")
+	log.Printf("[SignalEngine] Proposer: %s", proposer)
+	log.Printf("[SignalEngine] DocType: %s, Title: %s", docType, title)
+	log.Printf("[SignalEngine] Content length: %d", len(content))
+	log.Printf("[SignalEngine] LLM available: %v", e.llmAgent.IsAvailable())
+
+	var newNode *decision.DecisionNode
+
+	if e.llmAgent.IsAvailable() {
+		log.Println("[SignalEngine] LLM is available, calling ExtractDecisionFromDoc...")
+
+		topics := e.getAllTopics()
+		log.Printf("[SignalEngine] Available topics: %v", topics)
+
+		result, err := e.llmAgent.ExtractDecisionFromDoc(content, topics, docType, title)
+		if err != nil {
+			log.Printf("[SignalEngine] LLM doc extraction failed: %v, falling back to heuristic", err)
+			newNode = e.createDecisionFallback(proposer, content)
+		} else {
+			log.Printf("[SignalEngine] LLM doc extraction result: HasDecision=%v, Confidence=%.2f",
+				result.HasDecision, result.Confidence)
+
+			if result.Decision != nil {
+				log.Printf("[SignalEngine] Doc decision details: Title=%s, Topic=%s",
+					result.Decision.Title, result.Decision.SuggestedTopic)
+			}
+
+			if result.HasDecision && result.Confidence >= 0.6 && result.Decision != nil {
+				newNode = decision.NewDecisionNode(
+					GenerateSDRID(),
+					result.Decision.Title,
+					"feishu-mem",
+					result.Decision.SuggestedTopic,
+				)
+				newNode.Decision = result.Decision.Decision
+				newNode.Rationale = result.Decision.Rationale
+				newNode.Proposer = proposer
+				newNode.Executor = result.Decision.Executor
+				newNode.ImpactLevel = decision.ImpactLevel(result.Decision.ImpactLevel)
+				newNode.Status = decision.StatusPending
+
+				log.Printf("[SignalEngine] Decision extracted from doc: %s", result.Decision.Title)
+			} else if !result.HasDecision {
+				log.Printf("[SignalEngine] LLM determined no decision in doc, skipping entirely")
+				log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
+				return nil, nil
+			} else {
+				log.Printf("[SignalEngine] LLM confidence too low (%.2f < 0.6), skipping",
+					result.Confidence)
+				log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
+				return nil, nil
+			}
+		}
+	} else {
+		log.Println("[SignalEngine] LLM not available, using heuristic fallback")
+		newNode = e.createDecisionFallback(proposer, content)
+	}
+
+	mut := e.StateMachine.CreateMutationForNewDecision(newNode, sig)
+
+	log.Printf("[SignalEngine] Created mutation: Type=%s, SDRID=%s", mut.Type, mut.SDRID)
+	log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
+	return mut, nil
+}
+
 func (e *SignalActivationEngine) getAllTopics() []string {
 	var topics []string
 	seen := make(map[string]bool)

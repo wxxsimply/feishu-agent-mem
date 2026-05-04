@@ -3,6 +3,7 @@ package larkadapter
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -165,11 +166,14 @@ func (e *WikiExtractor) buildCurrentState() (*WikiSnapshot, error) {
 
 // Detect 检测知识库状态变化（新增/删除知识库、新增/删除/移动/更新文档）
 func (e *WikiExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
+	log.Printf("[lark_wiki] Detect called, lastCheck: %v", lastCheck)
 	cutoff := lastCheck.Unix()
 
 	// 1. 获取当前状态
+	log.Printf("[lark_wiki] building current state")
 	current, err := e.buildCurrentState()
 	if err != nil {
+		log.Printf("[lark_wiki] buildCurrentState failed: %v", err)
 		result := &DetectResult{
 			Source:     e.Name(),
 			HasChanges: false,
@@ -179,12 +183,17 @@ func (e *WikiExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 		_ = SaveDetectResult(result)
 		return result, nil
 	}
+	log.Printf("[lark_wiki] current state has %d spaces", len(current.Spaces))
 
 	// 2. 加载上次快照
+	log.Printf("[lark_wiki] loading previous snapshot")
 	previous, err := e.loadSnapshot()
 	if err != nil || previous == nil {
+		log.Printf("[lark_wiki] no previous snapshot, saving current as baseline")
 		// 首次检测或快照损坏：保存基线快照，不报告变化
-		_ = e.saveSnapshot(current)
+		if err := e.saveSnapshot(current); err != nil {
+			log.Printf("[lark_wiki] failed to save snapshot: %v", err)
+		}
 		result := &DetectResult{
 			Source:     e.Name(),
 			HasChanges: false,
@@ -194,6 +203,7 @@ func (e *WikiExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 		_ = SaveDetectResult(result)
 		return result, nil
 	}
+	log.Printf("[lark_wiki] previous snapshot has %d spaces", len(previous.Spaces))
 
 	// 3. 构建快照 lookup map
 	prevSpaceMap := make(map[string]*SpaceSnapshot, len(previous.Spaces))
@@ -211,8 +221,10 @@ func (e *WikiExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 	// === 3a. 知识库级别 diff ===
 
 	// 新增知识库
+	spaceAdded := 0
 	for _, cs := range current.Spaces {
 		if _, exists := prevSpaceMap[cs.SpaceID]; !exists {
+			spaceAdded++
 			changes = append(changes, Change{
 				Type:       "new",
 				EntityType: "wiki_space",
@@ -221,10 +233,15 @@ func (e *WikiExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 			})
 		}
 	}
+	if spaceAdded > 0 {
+		log.Printf("[lark_wiki] detected %d new spaces", spaceAdded)
+	}
 
 	// 删除知识库
+	spaceDeleted := 0
 	for _, ps := range previous.Spaces {
 		if _, exists := currSpaceMap[ps.SpaceID]; !exists {
+			spaceDeleted++
 			changes = append(changes, Change{
 				Type:       "deleted",
 				EntityType: "wiki_space",
@@ -233,8 +250,16 @@ func (e *WikiExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 			})
 		}
 	}
+	if spaceDeleted > 0 {
+		log.Printf("[lark_wiki] detected %d deleted spaces", spaceDeleted)
+	}
 
 	// === 3b-3d. 节点级别 diff（仅对前后都存在的空间） ===
+
+	nodesAdded := 0
+	nodesMoved := 0
+	nodesUpdated := 0
+	nodesDeleted := 0
 
 	for _, cs := range current.Spaces {
 		ps, exists := prevSpaceMap[cs.SpaceID]
@@ -242,12 +267,14 @@ func (e *WikiExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 			// 新增空间的节点由 space-level change 体现，避免重复
 			continue
 		}
+		log.Printf("[lark_wiki] checking space: %s (%s)", cs.SpaceName, cs.SpaceID)
 
 		// 3b. 新增节点 + 3c 移动检测 + 3d 内容更新检测
 		for nodeToken, cn := range cs.Nodes {
 			pn, nodeExists := ps.Nodes[nodeToken]
 			if !nodeExists {
 				// 3b. 新增节点
+				nodesAdded++
 				changes = append(changes, Change{
 					Type:       "new",
 					EntityType: "wiki_node",
@@ -258,6 +285,7 @@ func (e *WikiExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 			} else {
 				// 3c. 节点移动检测
 				if cn.ParentNodeToken != pn.ParentNodeToken {
+					nodesMoved++
 					changes = append(changes, Change{
 						Type:       "moved",
 						EntityType: "wiki_node",
@@ -268,6 +296,7 @@ func (e *WikiExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 
 				// 3d. 节点内容更新检测
 				if cn.ObjEditTime > cutoff && cn.ObjEditTime > pn.ObjEditTime {
+					nodesUpdated++
 					changes = append(changes, Change{
 						Type:       "updated",
 						EntityType: "wiki_node",
@@ -282,6 +311,7 @@ func (e *WikiExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 		// 3b. 删除节点
 		for nodeToken, pn := range ps.Nodes {
 			if _, exists := cs.Nodes[nodeToken]; !exists {
+				nodesDeleted++
 				changes = append(changes, Change{
 					Type:       "deleted",
 					EntityType: "wiki_node",
@@ -292,8 +322,13 @@ func (e *WikiExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 		}
 	}
 
+	log.Printf("[lark_wiki] node changes: added=%d, moved=%d, updated=%d, deleted=%d", nodesAdded, nodesMoved, nodesUpdated, nodesDeleted)
+
 	// 4. 保存当前快照供下次对比
-	_ = e.saveSnapshot(current)
+	log.Printf("[lark_wiki] saving current snapshot")
+	if err := e.saveSnapshot(current); err != nil {
+		log.Printf("[lark_wiki] failed to save snapshot: %v", err)
+	}
 
 	result := &DetectResult{
 		Source:     e.Name(),
@@ -303,7 +338,14 @@ func (e *WikiExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 		Changes:    changes,
 	}
 
-	_ = SaveDetectResult(result)
+	log.Printf("[lark_wiki] Detect finished, HasChanges: %v, total Changes: %d", result.HasChanges, len(changes))
+	for i, ch := range changes {
+		log.Printf("[lark_wiki] Change[%d]: %s (Type: %s, EntityID: %s)", i, ch.Summary, ch.Type, ch.EntityID)
+	}
+
+	if err := SaveDetectResult(result); err != nil {
+		log.Printf("[lark_wiki] failed to save DetectResult: %v", err)
+	}
 	return result, nil
 }
 
@@ -454,23 +496,26 @@ func parseNodeTime(timeStr string) int64 {
 
 // FetchWikiNodeContent 获取知识库节点内容
 func (e *WikiExtractor) FetchWikiNodeContent(nodeToken string) (string, error) {
-	output, err := e.cli.RunCommand("wiki", "nodes", "get", "--node-token", nodeToken)
-	if err != nil {
-		return "", err
-	}
+	// 先试试直接用docs +fetch能不能获取wiki节点内容？
+	// 或者先用原生API获取节点信息，找到对应的文档token
+	log.Printf("[lark_wiki] Fetching wiki node content: %s", nodeToken)
 
-	var result map[string]any
-	if err := json.Unmarshal(output, &result); err != nil {
-		return "", err
-	}
-
-	if data, ok := result["data"].(map[string]any); ok {
-		if markdown, ok := data["markdown"].(string); ok {
-			return markdown, nil
+	// 先试试直接用docs +fetch
+	output, err := e.cli.RunCommand("docs", "+fetch", "--doc", nodeToken)
+	if err == nil {
+		var result map[string]any
+		if err := json.Unmarshal(output, &result); err == nil {
+			if data, ok := result["data"].(map[string]any); ok {
+				if markdown, ok := data["markdown"].(string); ok {
+					log.Printf("[lark_wiki] Success fetching via docs +fetch: %d chars", len(markdown))
+					return markdown, nil
+				}
+			}
 		}
 	}
 
-	return "", fmt.Errorf("could not extract markdown content")
+	log.Printf("[lark_wiki] docs +fetch failed, trying alternative methods: %v", err)
+	return "", fmt.Errorf("could not fetch wiki node content: %w", err)
 }
 
 // CompareWikiNodeContent 比较知识库节点内容

@@ -102,6 +102,81 @@ func (a *MemoryAgent) ExtractDecision(content string, topics []string) (*Extract
 	return result, nil
 }
 
+// ========== 文档决策提取 ==========
+
+// ExtractDecisionFromDoc 从文档中提取决策（使用分阶段分析 prompt）
+func (a *MemoryAgent) ExtractDecisionFromDoc(content string, topics []string, docType string, title string) (*ExtractionResult, error) {
+	log.Println("========== EXTRACT DECISION FROM DOC START ==========")
+	log.Printf("[Agent] Doc content length: %d", len(content))
+	log.Printf("[Agent] Doc type: %s, title: %s", docType, title)
+	log.Printf("[Agent] Topics: %v", topics)
+
+	if !a.llmClient.IsAvailable() {
+		log.Println("[Agent] LLM not available, returning fallback")
+		log.Println("========== EXTRACT DECISION FROM DOC END ==========")
+		return &ExtractionResult{
+			HasDecision:    false,
+			Confidence:     0.0,
+			ExtractedFrom: content,
+		}, fmt.Errorf("ARK_API_KEY is not set")
+	}
+
+	log.Println("[Agent] Building doc extraction prompts...")
+	systemPrompt, userPrompt, err := a.buildDocExtractionPrompts(content, topics, docType, title)
+	if err != nil {
+		log.Printf("[Agent] Build prompts failed: %v", err)
+		log.Println("========== EXTRACT DECISION FROM DOC END ==========")
+		return &ExtractionResult{
+			HasDecision:    false,
+			Confidence:     0.0,
+			ExtractedFrom: content,
+		}, err
+	}
+
+	log.Printf("[Agent] Doc system prompt (first 500 chars): %s", truncateForLog(systemPrompt, 500))
+	log.Printf("[Agent] Doc user prompt (first 500 chars): %s", truncateForLog(userPrompt, 500))
+
+	log.Println("[Agent] Calling LLM for doc extraction...")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	llmResponse, err := a.llmClient.Call(ctx, systemPrompt, userPrompt)
+	if err != nil {
+		log.Printf("[Agent] LLM call failed: %v", err)
+		log.Println("========== EXTRACT DECISION FROM DOC END ==========")
+		return &ExtractionResult{
+			HasDecision:    false,
+			Confidence:     0.0,
+			ExtractedFrom: content,
+		}, err
+	}
+
+	log.Printf("[Agent] Raw LLM response: %s", llmResponse)
+
+	log.Println("[Agent] Parsing LLM response...")
+	result, err := ParseExtractionResult(llmResponse)
+	if err != nil {
+		log.Printf("[Agent] Parse failed: %v, using fallback", err)
+		log.Println("========== EXTRACT DECISION FROM DOC END ==========")
+		return &ExtractionResult{
+			HasDecision:    false,
+			Confidence:     0.0,
+			ExtractedFrom: content,
+		}, err
+	}
+
+	log.Printf("[Agent] Doc parse result: HasDecision=%v, Confidence=%.2f, ChangeType=%v",
+		result.HasDecision, result.Confidence, result.Decision)
+	if result.Decision != nil {
+		log.Printf("[Agent] Doc decision title: %s", result.Decision.Title)
+		log.Printf("[Agent] Doc decision content: %s", truncateForLog(result.Decision.Decision, 200))
+	}
+
+	result.ExtractedFrom = content
+	log.Println("========== EXTRACT DECISION FROM DOC END ==========")
+	return result, nil
+}
+
 // ClassifyTopic 分类议题
 func (a *MemoryAgent) ClassifyTopic(decision string, topics []string) (*ClassificationResult, error) {
 	log.Printf("[Agent] ClassifyTopic called: decision=%s, topics=%v", truncateForLog(decision, 100), topics)
@@ -229,6 +304,22 @@ func (a *MemoryAgent) buildExtractionPrompts(content string, topics []string) (s
 	userPrompt, err := a.promptMgr.BuildPrompt("extraction", map[string]any{
 		"content": content,
 		"topics":  topics,
+	})
+	if err != nil {
+		return "", "", err
+	}
+
+	return systemPrompt, userPrompt, nil
+}
+
+func (a *MemoryAgent) buildDocExtractionPrompts(content string, topics []string, docType string, title string) (string, string, error) {
+	systemPrompt := prompts.ExtractionDocStaticPrompt
+
+	userPrompt, err := a.promptMgr.BuildPrompt("extraction_doc", map[string]any{
+		"content":  content,
+		"topics":   topics,
+		"doc_type": docType,
+		"title":    title,
 	})
 	if err != nil {
 		return "", "", err

@@ -134,8 +134,18 @@ func (bs *BitableStore) findRecordIDBySDRID(sdrID string) (string, error) {
 		return "", err
 	}
 
+	log.Printf("[Bitable] Raw output length: %d bytes", len(output))
+	if len(output) > 0 {
+		preview := string(output)
+		if len(preview) > 300 {
+			preview = preview[:300] + "..."
+		}
+		log.Printf("[Bitable] Raw output preview: %s", preview)
+	}
 	var resp BitableResponse
 	if err := json.Unmarshal(output, &resp); err != nil {
+		log.Printf("[Bitable] JSON parse error: %v", err)
+		log.Printf("[Bitable] Raw output (full): %s", string(output))
 		return "", fmt.Errorf("解析响应失败: %w", err)
 	}
 
