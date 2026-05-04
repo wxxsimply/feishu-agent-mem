@@ -22,18 +22,18 @@ type LarkCLIConfig struct {
 
 // GitStorageConfig Git 存储配置
 type GitStorageConfig struct {
-	WorkDir          string              `yaml:"work_dir"`
-	Remote           string              `yaml:"remote"`
-	AutoPush         bool                `yaml:"auto_push"`
-	Branch           string              `yaml:"branch"`
+	WorkDir          string                 `yaml:"work_dir"`
+	Remote           string                 `yaml:"remote"`
+	AutoPush         bool                   `yaml:"auto_push"`
+	Branch           string                 `yaml:"branch"`
 	ConsistencyCheck ConsistencyCheckConfig `yaml:"consistency_check"`
-	Archive          ArchiveConfig       `yaml:"archive"`
-	Maintenance      MaintenanceConfig   `yaml:"maintenance"`
+	Archive          ArchiveConfig          `yaml:"archive"`
+	Maintenance      MaintenanceConfig      `yaml:"maintenance"`
 }
 
 // ConsistencyCheckConfig 一致性检查配置
 type ConsistencyCheckConfig struct {
-	Enabled bool          `yaml:"enabled"`
+	Enabled  bool          `yaml:"enabled"`
 	Interval time.Duration `yaml:"interval"`
 }
 
@@ -50,7 +50,7 @@ type MaintenanceConfig struct {
 
 // BitableConfig Bitable 配置
 type BitableConfig struct {
-	BaseToken string      `yaml:"base_token"`
+	BaseToken string       `yaml:"base_token"`
 	Tables    TablesConfig `yaml:"tables"`
 }
 
@@ -64,7 +64,7 @@ type TablesConfig struct {
 
 // EventsConfig 事件配置
 type EventsConfig struct {
-	Enabled bool     `yaml:"enabled"`
+	Enabled   bool     `yaml:"enabled"`
 	Subscribe []string `yaml:"subscribe"`
 }
 
@@ -81,9 +81,9 @@ type MCPConfig struct {
 
 // MemoryConfig 内存配置
 type MemoryConfig struct {
-	PreloadOnStart      bool `yaml:"preload_on_start"`
-	MaxCacheSize        int  `yaml:"max_cache_size"`
-	DirtyFlushInterval  int  `yaml:"dirty_flush_interval_seconds"`
+	PreloadOnStart     bool `yaml:"preload_on_start"`
+	MaxCacheSize       int  `yaml:"max_cache_size"`
+	DirtyFlushInterval int  `yaml:"dirty_flush_interval_seconds"`
 }
 
 // ServiceConfig mem-service配置 (v2)
@@ -158,7 +158,7 @@ type Settings struct {
 func DefaultSettings() *Settings {
 	return &Settings{
 		Project: ProjectConfig{
-			Name: "feishu-mem",
+			Name:   "feishu-mem",
 			Topics: []string{"general"},
 			Phases: []string{"initial"},
 		},
@@ -167,10 +167,10 @@ func DefaultSettings() *Settings {
 		},
 		Git: GitStorageConfig{
 			WorkDir: "./data",
-			Branch: "main",
+			Branch:  "main",
 		},
 		Polling: PollingConfig{
-			Interval: 30 * time.Second,
+			Interval: 5 * time.Second,
 		},
 		MCP: MCPConfig{
 			Port: 37777,

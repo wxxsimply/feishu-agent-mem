@@ -1,8 +1,12 @@
 package larkadapter
 
 import (
+	"log"
 	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/joho/godotenv"
 )
 
 // Config 飞书适配器配置
@@ -11,6 +15,50 @@ type Config struct {
 	AppSecret string
 	ChatIDs   []string
 	UserID    string
+}
+
+// LoadEnv 从多个位置加载 .env 文件，提高兼容性
+func LoadEnv() {
+	// 按优先级尝试的路径
+	candidates := []string{
+		".env",
+		"../.env",
+		filepath.Join(os.Getenv("PROJECT_ROOT"), ".env"),
+	}
+
+	// 尝试通过可执行文件路径推断
+	if exe, err := os.Executable(); err == nil {
+		candidates = append(candidates, filepath.Join(filepath.Dir(exe), ".env"))
+		candidates = append(candidates, filepath.Join(filepath.Dir(exe), "..", ".env"))
+	}
+
+	loaded := false
+	for _, path := range candidates {
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			continue
+		}
+		if _, err := os.Stat(absPath); err != nil {
+			continue
+		}
+		if err := godotenv.Load(absPath); err == nil {
+			log.Printf("[Config] Loaded .env from: %s", absPath)
+			loaded = true
+			break
+		}
+	}
+
+	if !loaded {
+		log.Println("[Config] No .env file found (using system environment variables)")
+	}
+
+	// 验证关键配置
+	if os.Getenv("LARK_APP_ID") == "" {
+		log.Println("[Config] WARNING: LARK_APP_ID is not set")
+	}
+	if os.Getenv("LARK_CHAT_IDS") != "" {
+		log.Printf("[Config] LARK_CHAT_IDS=%s", os.Getenv("LARK_CHAT_IDS"))
+	}
 }
 
 // LoadConfig 从环境变量加载配置（默认使用 LARK_*）

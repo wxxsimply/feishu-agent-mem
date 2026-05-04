@@ -4,13 +4,12 @@ import (
 	"context"
 	"log"
 	"os"
+	gosignal "os/signal"
 	"path/filepath"
 	"runtime"
 	gosignal "os/signal"
 	"syscall"
 	"time"
-
-	"github.com/joho/godotenv"
 
 	"feishu-mem/internal/config"
 	"feishu-mem/internal/core"
@@ -33,7 +32,7 @@ type detectorState struct {
 }
 
 func main() {
-	_ = godotenv.Load()
+	larkadapter.LoadEnv()
 
 	log.Println("========================================")
 	log.Println("Starting feishu-agent-mem service... (v2)")

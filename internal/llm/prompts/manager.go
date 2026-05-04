@@ -16,7 +16,7 @@ type PromptManager struct {
 // PromptTemplate 提示词模板
 type PromptTemplate struct {
 	Name        string
-	Static      string // 静态段（通用规则，跨用户共享缓存）
+	Static      string                          // 静态段（通用规则，跨用户共享缓存）
 	Dynamic     func(ctx map[string]any) string // 动态段（用户特有信息）
 	MaxTokens   int
 	Temperature float64

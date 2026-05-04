@@ -20,7 +20,7 @@ type DecisionLevel string
 
 const (
 	LevelHigh   DecisionLevel = "high"   // 明确决策信号 → 直接 LLM 处理
-	LevelMedium DecisionLevel = "medium" // 可能决策信号 → 批量/延迟 LLM 处理
+	LevelMedium DecisionLevel = "medium" // 可能决策信号 → LLM 处理
 	LevelLow    DecisionLevel = "low"    // 弱信号 → 暂不处理
 	LevelNone   DecisionLevel = "none"   // 无决策信号 → 跳过
 )

@@ -1,0 +1,100 @@
+{"id":"c001","source":"im","text":"我们决定使用PostgreSQL作为主数据库","is_decision":true,"expected_topic":"数据库架构","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"显式决策：决定+使用"}
+{"id":"c002","source":"im","text":"确认采用微服务架构","is_decision":true,"expected_topic":"系统架构","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"显式决策：确认+采用"}
+{"id":"c003","source":"im","text":"最终决定用Go重写后端服务","is_decision":true,"expected_topic":"后端架构","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"显式决策：最终决定"}
+{"id":"c004","source":"im","text":"审批通过这个方案","is_decision":true,"expected_topic":"项目管理","expected_impact":"minor","min_confidence":0.65,"difficulty":"easy","notes":"显式决策：审批通过"}
+{"id":"c005","source":"im","text":"定下来了，就用方案A","is_decision":true,"expected_topic":"项目管理","expected_impact":"minor","min_confidence":0.50,"difficulty":"easy","notes":"显式决策：定下来"}
+{"id":"c006","source":"im","text":"结论是使用Redis做缓存","is_decision":true,"expected_topic":"缓存方案","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"显式决策：结论"}
+{"id":"c007","source":"im","text":"不再讨论这个问题了，到此为止","is_decision":true,"expected_topic":"项目管理","expected_impact":"minor","min_confidence":0.50,"difficulty":"easy","notes":"关闭讨论"}
+{"id":"c008","source":"im","text":"LGTM","is_decision":true,"expected_topic":"","expected_impact":"advisory","min_confidence":0.20,"difficulty":"medium","notes":"英文审批，需要上下文"}
+{"id":"c009","source":"im","text":"approved","is_decision":true,"expected_topic":"","expected_impact":"advisory","min_confidence":0.20,"difficulty":"medium","notes":"英文批准"}
+{"id":"c010","source":"im","text":"LGTM, approved","is_decision":true,"expected_topic":"","expected_impact":"advisory","min_confidence":0.20,"difficulty":"medium","notes":"英文组合批准"}
+{"id":"c011","source":"im","text":"We decided to use Redis for caching","is_decision":true,"expected_topic":"缓存方案","expected_impact":"major","min_confidence":0.50,"difficulty":"medium","notes":"英文决策"}
+{"id":"c012","source":"im","text":"采用方案B，就这么办","is_decision":true,"expected_topic":"项目管理","expected_impact":"minor","min_confidence":0.65,"difficulty":"easy","notes":"采用+就这么办"}
+{"id":"c013","source":"im","text":"那就用方案A吧","is_decision":true,"expected_topic":"项目管理","expected_impact":"minor","min_confidence":0.50,"difficulty":"medium","notes":"隐式决策：那就"}
+{"id":"c014","source":"im","text":"ok，按你说的办","is_decision":true,"expected_topic":"","expected_impact":"advisory","min_confidence":0.45,"difficulty":"medium","notes":"隐式同意"}
+{"id":"c015","source":"im","text":"行，就这样吧","is_decision":true,"expected_topic":"","expected_impact":"advisory","min_confidence":0.45,"difficulty":"medium","notes":"隐式确认"}
+{"id":"c016","source":"im","text":"建议使用Kubernetes部署","is_decision":false,"expected_topic":"部署方案","expected_impact":"advisory","min_confidence":0.50,"difficulty":"medium","notes":"建议性表述，非决策"}
+{"id":"c017","source":"im","text":"我推荐用GraphQL","is_decision":false,"expected_topic":"API架构","expected_impact":"advisory","min_confidence":0.50,"difficulty":"medium","notes":"推荐表述，非决策"}
+{"id":"c018","source":"im","text":"需要尽快修复这个bug","is_decision":false,"expected_topic":"","expected_impact":"advisory","min_confidence":0.20,"difficulty":"medium","notes":"需求表述，非明确决策"}
+{"id":"c019","source":"im","text":"进度：已完成登录模块开发","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"状态更新","anti_signal_categories":["status_update"]}
+{"id":"c020","source":"im","text":"早上好","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"问候","anti_signal_categories":["greeting"]}
+{"id":"c021","source":"im","text":"下午好","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"问候","anti_signal_categories":["greeting"]}
+{"id":"c022","source":"im","text":"大家好","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"问候","anti_signal_categories":["greeting"]}
+{"id":"c023","source":"im","text":"辛苦了","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"客套话","anti_signal_categories":["greeting"]}
+{"id":"c024","source":"im","text":"谢谢","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"感谢","anti_signal_categories":["greeting"]}
+{"id":"c025","source":"im","text":"这个方案怎么样？","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"纯问题","anti_signal_categories":["pure_question"]}
+{"id":"c026","source":"im","text":"你吃饭了吗","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"闲聊问题","anti_signal_categories":["small_talk","pure_question"]}
+{"id":"c027","source":"im","text":"今天天气不错","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"闲聊","anti_signal_categories":["small_talk"]}
+{"id":"c028","source":"im","text":"可能用MySQL也可能用PostgreSQL，再讨论一下","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"不确定性","anti_signal_categories":["uncertain"]}
+{"id":"c029","source":"im","text":"也许可以试试K8s","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"不确定性","anti_signal_categories":["uncertain"]}
+{"id":"c030","source":"im","text":"再看看，不着急","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"拖延","anti_signal_categories":["uncertain"]}
+{"id":"c031","source":"im","text":"再说吧，以后再说","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"拖延","anti_signal_categories":["uncertain"]}
+{"id":"c032","source":"im","text":"FYI，这份文档供参考","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"信息分享","anti_signal_categories":["information_sharing"]}
+{"id":"c033","source":"im","text":"分享一篇文章给大家","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"信息分享","anti_signal_categories":["information_sharing"]}
+{"id":"c034","source":"im","text":"通知：下周一开始上线","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"medium","notes":"通知，非决策但含计划","anti_signal_categories":["information_sharing"]}
+{"id":"c035","source":"im","text":"打算用Go写后端，不过还没定","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"medium","notes":"计划性表述+不确定性","anti_signal_categories":["aspirational","uncertain"]}
+{"id":"c036","source":"im","text":"他说这个方案不错","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"medium","notes":"转述他人","anti_signal_categories":["reporting_others"]}
+{"id":"c037","source":"im","text":"张总提到可以考虑用AWS","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"medium","notes":"转述+不确定性","anti_signal_categories":["reporting_others","uncertain"]}
+{"id":"c038","source":"im","text":"👍","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"纯 emoji","anti_signal_categories":["pure_emoji"]}
+{"id":"c039","source":"im","text":"👍🎉❤️","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"多个 emoji","anti_signal_categories":["pure_emoji"]}
+{"id":"c040","source":"im","text":"我们决定使用PostgreSQL，但可能根据后续测试结果调整","is_decision":true,"expected_topic":"数据库架构","expected_impact":"major","min_confidence":0.50,"difficulty":"hard","notes":"决策+不确定性混合","anti_signal_categories":["uncertain"]}
+{"id":"c041","source":"im","text":"目前正在处理用户认证模块，预计下周完成。另外决定使用OAuth2.0协议","is_decision":true,"expected_topic":"用户认证","expected_impact":"major","min_confidence":0.50,"difficulty":"hard","notes":"状态更新+决策混合"}
+{"id":"c042","source":"im","text":"张三来负责这个模块的开发","is_decision":false,"expected_topic":"","expected_impact":"advisory","min_confidence":0.45,"difficulty":"medium","notes":"任务分配"}
+{"id":"c043","source":"im","text":"由前端团队处理这个需求","is_decision":false,"expected_topic":"","expected_impact":"advisory","min_confidence":0.45,"difficulty":"medium","notes":"任务分配"}
+{"id":"c044","source":"im","text":"否决这个方案，原因是不够成熟","is_decision":true,"expected_topic":"项目管理","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"否决决策"}
+{"id":"c045","source":"im","text":"不同意采用这个框架","is_decision":true,"expected_topic":"前端架构","expected_impact":"major","min_confidence":0.50,"difficulty":"easy","notes":"拒绝决策"}
+{"id":"c046","source":"im","text":"投票决定使用方案A，5票赞成2票反对","is_decision":true,"expected_topic":"项目管理","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"投票决策"}
+{"id":"c047","source":"im","text":"总结一下：1. 使用PostgreSQL 2. 前端用React 3. 部署用Docker","is_decision":true,"expected_topic":"系统架构","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"总结+列举决策"}
+{"id":"c048","source":"im","text":"因此我们决定采用方案A，放弃方案B","is_decision":true,"expected_topic":"项目管理","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"因果推理决策"}
+{"id":"c049","source":"im","text":"那行，就按这个方案执行吧","is_decision":true,"expected_topic":"项目管理","expected_impact":"minor","min_confidence":0.50,"difficulty":"medium","notes":"口语化确认"}
+{"id":"c050","source":"im","text":"可以，就照这个方向推进","is_decision":true,"expected_topic":"","expected_impact":"minor","min_confidence":0.45,"difficulty":"medium","notes":"同意推进"}
+{"id":"c051","source":"doc","text":"会议决定：采用微服务架构，各团队独立部署","is_decision":true,"expected_topic":"系统架构","expected_impact":"critical","min_confidence":0.65,"difficulty":"easy","notes":"文档中的决策"}
+{"id":"c052","source":"doc","text":"/approve","is_decision":true,"expected_topic":"","expected_impact":"advisory","min_confidence":0.50,"difficulty":"hard","notes":"文档审批评论"}
+{"id":"c053","source":"doc","text":"同意这个设计方案","is_decision":true,"expected_topic":"","expected_impact":"minor","min_confidence":0.65,"difficulty":"easy","notes":"文档评论批准"}
+{"id":"c054","source":"doc","text":"最终方案：使用TypeScript重写前端","is_decision":true,"expected_topic":"前端架构","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"文档中的最终方案"}
+{"id":"c055","source":"vc","text":"会议达成共识：使用Scrum流程，两周一个sprint","is_decision":true,"expected_topic":"项目管理","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"会议纪要决策"}
+{"id":"c056","source":"vc","text":"确认使用Jira管理项目进度","is_decision":true,"expected_topic":"项目管理","expected_impact":"minor","min_confidence":0.65,"difficulty":"easy","notes":"会议确认"}
+{"id":"c057","source":"vc","text":"讨论结论：先做MVP，再逐步迭代","is_decision":true,"expected_topic":"项目管理","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"会议结论"}
+{"id":"c058","source":"vc","text":"确定了API的版本管理策略：使用URL路径版本号","is_decision":true,"expected_topic":"API架构","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"会议决策"}
+{"id":"c059","source":"task","text":"【已完成】数据库迁移方案设计","is_decision":true,"expected_topic":"数据库架构","expected_impact":"major","min_confidence":0.50,"difficulty":"medium","notes":"任务完成可能含决策"}
+{"id":"c060","source":"task","text":"【已完成】确定缓存方案：使用Redis Cluster","is_decision":true,"expected_topic":"缓存方案","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"任务标题含明确决策"}
+{"id":"c061","source":"calendar","text":"[决策评审] 架构方案评审会议","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"medium","notes":"日历事件标题含决策关键词但只是个会议"}
+{"id":"c062","source":"calendar","text":"技术方案选型讨论","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"medium","notes":"讨论会非决策"}
+{"id":"c063","source":"im","text":"优先做用户模块，其他的以后再说","is_decision":true,"expected_topic":"项目管理","expected_impact":"major","min_confidence":0.50,"difficulty":"medium","notes":"优先级决策"}
+{"id":"c064","source":"im","text":"1. 先修复线上bug 2. 再开发新功能 3. 最后做性能优化","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0.20,"difficulty":"hard","notes":"列清单但非决策"}
+{"id":"c065","source":"im","text":"对比Redis和MongoDB，推荐用Redis","is_decision":false,"expected_topic":"缓存方案","expected_impact":"advisory","min_confidence":0.50,"difficulty":"hard","notes":"对比+推荐，非最终决策"}
+{"id":"c066","source":"im","text":"刚刚对比了AWS和阿里云，综合来看阿里云更适合我们","is_decision":false,"expected_topic":"基础设施","expected_impact":"","min_confidence":0.20,"difficulty":"hard","notes":"观察结论非决策"}
+{"id":"c067","source":"im","text":"代码审查意见：这里应该用接口而不是具体实现","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"medium","notes":"代码审查建议"}
+{"id":"c068","source":"im","text":"请问有人用过GraphQL吗？想听听经验","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"咨询问题","anti_signal_categories":["pure_question"]}
+{"id":"c069","source":"im","text":"这周末大家有空吗？一起吃个饭","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"社交闲聊","anti_signal_categories":["small_talk","pure_question"]}
+{"id":"c070","source":"im","text":"确认一下，这个周五上线没问题吧？","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0.20,"difficulty":"hard","notes":"确认语气但是个问题"}
+{"id":"c071","source":"im","text":"更新一下当前状态：API开发完成80%，前端完成60%","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"进度更新","anti_signal_categories":["status_update"]}
+{"id":"c072","source":"im","text":"给客户演示一下最新版本的成果","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"medium","notes":"演示通知","anti_signal_categories":["information_sharing"]}
+{"id":"c073","source":"im","text":"打算试试用Rust重写性能关键模块","is_decision":false,"expected_topic":"后端架构","expected_impact":"","min_confidence":0.20,"difficulty":"medium","notes":"打算性表述","anti_signal_categories":["aspirational"]}
+{"id":"c074","source":"im","text":"我计划做一个性能测试，看看哪个方案更好","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0.20,"difficulty":"medium","notes":"计划+评估","anti_signal_categories":["aspirational"]}
+{"id":"c075","source":"im","text":"考虑使用Docker，但也担心学习成本","is_decision":false,"expected_topic":"部署方案","expected_impact":"","min_confidence":0.20,"difficulty":"hard","notes":"考虑+犹豫","anti_signal_categories":["aspirational","uncertain"]}
+{"id":"c076","source":"im","text":"这个bug必须今天修复，影响到线上用户了","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0.20,"difficulty":"hard","notes":"强调紧急但非决策"}
+{"id":"c077","source":"im","text":"我来负责数据库迁移的工作","is_decision":false,"expected_topic":"","expected_impact":"advisory","min_confidence":0.45,"difficulty":"medium","notes":"自我任务分配"}
+{"id":"c078","source":"im","text":"截止日期：5月15日，在此之前必须完成","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0.20,"difficulty":"medium","notes":"截止日期通知"}
+{"id":"c079","source":"im","text":"明天下午3点开会讨论方案","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"会议通知"}
+{"id":"c080","source":"im","text":"好的收到","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"简单确认回复"}
+{"id":"c081","source":"im","text":"这个API接口需要增加超时控制","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"medium","notes":"技术讨论中的需求描述"}
+{"id":"c082","source":"im","text":"我们有三条路：A用原生Go、B用框架、C自己造轮子","is_decision":false,"expected_topic":"后端架构","expected_impact":"","min_confidence":0.20,"difficulty":"hard","notes":"方案列举未决策"}
+{"id":"c083","source":"im","text":"A方案成本低但风险高，B方案成本高但稳定，大家怎么看？","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"medium","notes":"方案对比征求建议","anti_signal_categories":["pure_question"]}
+{"id":"c084","source":"im","text":"我倾向于方案A，但最终由领导决定","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0.20,"difficulty":"medium","notes":"个人倾向非最终决策"}
+{"id":"c085","source":"im","text":"经过讨论，团队一致同意使用方案C","is_decision":true,"expected_topic":"项目管理","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"团队共识决策"}
+{"id":"c086","source":"im","text":"ok，那就这么定了","is_decision":true,"expected_topic":"","expected_impact":"minor","min_confidence":0.50,"difficulty":"medium","notes":"口语化定论"}
+{"id":"c087","source":"im","text":"经过充分讨论，结论如下：采用方案A进行实施","is_decision":true,"expected_topic":"项目管理","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"正式结论"}
+{"id":"c088","source":"im","text":"我决定辞职","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0.20,"difficulty":"hard","notes":"个人决定非技术决策"}
+{"id":"c089","source":"im","text":"决定了，今晚吃火锅","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"生活决策非技术","anti_signal_categories":["small_talk"]}
+{"id":"c090","source":"im","text":"approve the PR please","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0.20,"difficulty":"hard","notes":"请求审批非决策本身"}
+{"id":"c091","source":"doc","text":"## 决策记录\n\n使用PostgreSQL作为主数据库\n\n## 原因\n\n成熟稳定，生态好","is_decision":true,"expected_topic":"数据库架构","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"文档中的结构化决策记录"}
+{"id":"c092","source":"doc","text":"本文档描述了系统的整体架构设计，仅供参考","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"信息性文档","anti_signal_categories":["information_sharing"]}
+{"id":"c093","source":"im","text":"action item: 张三负责数据库迁移，李四负责API改造","is_decision":false,"expected_topic":"","expected_impact":"advisory","min_confidence":0.45,"difficulty":"medium","notes":"待办事项分配"}
+{"id":"c094","source":"im","text":"todo: 下周前完成性能测试","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0.20,"difficulty":"medium","notes":"待办事项"}
+{"id":"c095","source":"im","text":"这次sprint的goal是完成支付模块","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"medium","notes":"迭代目标说明"}
+{"id":"c096","source":"im","text":"我建议采用Event Sourcing架构，大家觉得呢？","is_decision":false,"expected_topic":"系统架构","expected_impact":"","min_confidence":0.20,"difficulty":"hard","notes":"建议+征求反馈","anti_signal_categories":["pure_question"]}
+{"id":"c097","source":"im","text":"反对引入新的ORM框架，增加维护成本","is_decision":false,"expected_topic":"后端架构","expected_impact":"","min_confidence":0.20,"difficulty":"hard","notes":"反对意见非决策"}
+{"id":"c098","source":"im","text":"经过POC验证，决定采用React Query替代Redux","is_decision":true,"expected_topic":"前端架构","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"经过验证的决策"}
+{"id":"c099","source":"im","text":"凌晨两点还在改bug，太累了","is_decision":false,"expected_topic":"","expected_impact":"","min_confidence":0,"difficulty":"easy","notes":"抱怨/吐槽","anti_signal_categories":["small_talk"]}
+{"id":"c100","source":"im","text":"我们最终决定放弃自建日志系统，改用ELK","is_decision":true,"expected_topic":"基础设施","expected_impact":"major","min_confidence":0.65,"difficulty":"easy","notes":"放弃+改用决策"}

@@ -1,0 +1,15 @@
+{"id":"ct001","title":"user_profile表的session_token字段变更","decision":"从256字节扩展到512字节","candidate_topics":["数据库架构","用户认证","API网关"],"expected_is_cross_topic":true,"expected_affected_topics":["用户认证"],"notes":"数据库变更影响用户认证"}
+{"id":"ct002","title":"API网关限流配置","decision":"每IP每秒100次请求限制","candidate_topics":["API架构","基础设施","安全策略"],"expected_is_cross_topic":false,"expected_affected_topics":[],"notes":"API架构单一影响"}
+{"id":"ct003","title":"引入消息队列处理订单","decision":"使用Kafka处理订单事件","candidate_topics":["基础设施","后端架构","系统架构"],"expected_is_cross_topic":true,"expected_affected_topics":["后端架构","系统架构"],"notes":"中间件变更影响多个议题"}
+{"id":"ct004","title":"前端构建工具迁移","decision":"从Webpack迁移到Vite","candidate_topics":["前端架构","部署方案"],"expected_is_cross_topic":true,"expected_affected_topics":["部署方案"],"notes":"前端工具迁移影响部署流程"}
+{"id":"ct005","title":"代码规范制定","decision":"统一使用ESLint+Prettier","candidate_topics":["前端架构","后端架构","项目管理"],"expected_is_cross_topic":true,"expected_affected_topics":["前端架构","后端架构"],"notes":"规范影响前后端"}
+{"id":"ct006","title":"数据库备份策略","decision":"每天凌晨3点全量备份","candidate_topics":["数据库架构","基础设施"],"expected_is_cross_topic":false,"expected_affected_topics":[],"notes":"单一议题影响"}
+{"id":"ct007","title":"SSO单点登录方案","decision":"使用Keycloak实现SSO","candidate_topics":["用户认证","API架构","基础设施"],"expected_is_cross_topic":true,"expected_affected_topics":["API架构","基础设施"],"notes":"SSO影响多个系统"}
+{"id":"ct008","title":"容器镜像仓库选择","decision":"使用Harbor搭建私有仓库","candidate_topics":["部署方案","基础设施"],"expected_is_cross_topic":false,"expected_affected_topics":[],"notes":"部署相关单一议题"}
+{"id":"ct009","title":"日志格式标准化","decision":"所有服务使用JSON格式日志","candidate_topics":["后端架构","基础设施","API架构"],"expected_is_cross_topic":true,"expected_affected_topics":["后端架构","API架构"],"notes":"日志标准化影响所有服务"}
+{"id":"ct010","title":"移动端推送方案","decision":"使用极光推送","candidate_topics":["前端架构","用户认证","基础设施"],"expected_is_cross_topic":false,"expected_affected_topics":[],"notes":"单一功能"}
+{"id":"ct011","title":"配置文件管理方案","decision":"使用ConfigMap管理配置","candidate_topics":["部署方案","基础设施","后端架构"],"expected_is_cross_topic":true,"expected_affected_topics":["部署方案","后端架构"],"notes":"配置管理影响部署和应用"}
+{"id":"ct012","title":"性能监控告警阈值","decision":"CPU使用率超过80%告警","candidate_topics":["基础设施","后端架构"],"expected_is_cross_topic":false,"expected_affected_topics":[],"notes":"运维监控单一议题"}
+{"id":"ct013","title":"灰度发布策略","decision":"先10%流量再逐步放量","candidate_topics":["部署方案","API架构","系统架构"],"expected_is_cross_topic":true,"expected_affected_topics":["系统架构"],"notes":"发布策略影响整体系统"}
+{"id":"ct014","title":"前端错误监控","decision":"使用Sentry收集前端错误","candidate_topics":["前端架构","基础设施"],"expected_is_cross_topic":false,"expected_affected_topics":[],"notes":"前端工具单一影响"}
+{"id":"ct015","title":"API版本管理策略","decision":"使用URL路径版本号v1/v2","candidate_topics":["API架构","后端架构","系统架构"],"expected_is_cross_topic":true,"expected_affected_topics":["后端架构","系统架构"],"notes":"API版本策略影响后端和整体系统设计"}

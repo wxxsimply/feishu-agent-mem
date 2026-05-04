@@ -1,0 +1,20 @@
+{"id":"cf001","decision_a":"使用PostgreSQL作为主数据库","decision_b":"使用MySQL作为主数据库","expected_contradiction_range":[0.7,1.0],"expected_type":"direct","notes":"直接冲突：两个数据库选型方案"}
+{"id":"cf002","decision_a":"前端用React框架","decision_b":"前端用Vue框架","expected_contradiction_range":[0.7,1.0],"expected_type":"direct","notes":"技术栈冲突"}
+{"id":"cf003","decision_a":"采用微服务架构","decision_b":"采用单体架构","expected_contradiction_range":[0.8,1.0],"expected_type":"direct","notes":"架构方案冲突"}
+{"id":"cf004","decision_a":"用Docker部署","decision_b":"用Terraform部署","expected_contradiction_range":[0.0,0.3],"expected_type":"none","notes":"互补工具不冲突"}
+{"id":"cf005","decision_a":"使用Redis做缓存","decision_b":"使用MongoDB做缓存","expected_contradiction_range":[0.5,0.8],"expected_type":"partial","notes":"同用途不同工具"}
+{"id":"cf006","decision_a":"使用PostgreSQL作为主数据库","decision_b":"使用Redis做缓存","expected_contradiction_range":[0.0,0.2],"expected_type":"none","notes":"不同用途不冲突"}
+{"id":"cf007","decision_a":"使用Scrum敏捷开发","decision_b":"使用Kanban方法","expected_contradiction_range":[0.3,0.6],"expected_type":"partial","notes":"不同方法论但可混合"}
+{"id":"cf008","decision_a":"采用OAuth2.0认证","decision_b":"采用JWT认证","expected_contradiction_range":[0.0,0.3],"expected_type":"none","notes":"可结合使用不冲突"}
+{"id":"cf009","decision_a":"API使用RESTful设计","decision_b":"API使用GraphQL","expected_contradiction_range":[0.5,0.8],"expected_type":"partial","notes":"API风格冲突"}
+{"id":"cf010","decision_a":"用Go开发后端","decision_b":"用Java开发后端","expected_contradiction_range":[0.5,0.8],"expected_type":"direct","notes":"语言选型冲突"}
+{"id":"cf011","decision_a":"使用阿里云","decision_b":"使用AWS","expected_contradiction_range":[0.7,1.0],"expected_type":"direct","notes":"云服务商冲突"}
+{"id":"cf012","decision_a":"用Kubernetes管理容器","decision_b":"用Docker Compose","expected_contradiction_range":[0.5,0.8],"expected_type":"partial","notes":"容器编排方案冲突"}
+{"id":"cf013","decision_a":"使用Jenkins做CI/CD","decision_b":"使用GitHub Actions","expected_contradiction_range":[0.5,0.8],"expected_type":"partial","notes":"CI工具选型冲突"}
+{"id":"cf014","decision_a":"采用微服务架构","decision_b":"使用Docker部署","expected_contradiction_range":[0.0,0.2],"expected_type":"none","notes":"不同层面不冲突"}
+{"id":"cf015","decision_a":"使用PostgreSQL","decision_b":"采用Scrum开发流程","expected_contradiction_range":[0.0,0.1],"expected_type":"none","notes":"完全无关的决策"}
+{"id":"cf016","decision_a":"采用双周迭代","decision_b":"使用月度发布","expected_contradiction_range":[0.3,0.6],"expected_type":"partial","notes":"发布周期冲突"}
+{"id":"cf017","decision_a":"使用React Query管理状态","decision_b":"使用Redux管理状态","expected_contradiction_range":[0.5,0.8],"expected_type":"partial","notes":"状态管理工具冲突"}
+{"id":"cf018","decision_a":"用ELK做日志收集","decision_b":"用Prometheus做监控","expected_contradiction_range":[0.0,0.3],"expected_type":"none","notes":"不同用途可共存"}
+{"id":"cf019","decision_a":"使用Kafka做消息队列","decision_b":"使用RabbitMQ做消息队列","expected_contradiction_range":[0.5,0.8],"expected_type":"partial","notes":"消息队列选型冲突"}
+{"id":"cf020","decision_a":"使用Git Flow分支策略","decision_b":"使用Trunk Based开发","expected_contradiction_range":[0.5,0.8],"expected_type":"partial","notes":"分支策略冲突"}
