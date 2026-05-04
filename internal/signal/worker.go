@@ -104,7 +104,6 @@ func (wp *WorkerPool) processJob(job *DetectionJob) *DecisionResult {
 	log.Printf("[Worker] Change.Type: %s", job.Change.Type)
 	log.Printf("[Worker] Change.Summary: %s", truncateForLog(job.Change.Summary, 300))
 
-	// 按适配器类型分发处理
 	switch job.AdapterType {
 	case AdapterIM:
 		return wp.processIMJob(job, result)
@@ -125,37 +124,61 @@ func (wp *WorkerPool) processJob(job *DetectionJob) *DecisionResult {
 	}
 }
 
-// processIMJob 处理 IM 类型任务 — 使用增强型多因子检测
+// processIMJob 处理 IM 类型任务 — 使用增强型多因子检测 + 上下文
 func (wp *WorkerPool) processIMJob(job *DetectionJob, result *DecisionResult) *DecisionResult {
-	// 只处理文本类型的消息
 	if job.Change.Type != "new_text" && job.Change.Type != "new_post" {
 		log.Println("[Worker] Not a text message, skipping")
 		log.Println("========== WORKER PROCESS END ==========")
 		return result
 	}
 
-	// 初始化增强型检测器（懒加载）
 	if wp.engine.detector == nil {
 		wp.engine.detector = NewEnhancedDetector()
 	}
 
-	// 构建检测上下文
-	ctx := &DetectContext{
-		IsReply:      false, // 可由上游进一步填充
-		HasMention:   false,
-		MessageIndex: 1,
-		SenderName:   extractSenderFromSummary(job.Change.Summary),
+	// 使用 Change 中的上下文字段构建真实 DetectContext
+	change := job.Change
+	hasThread := change.ThreadID != ""
+	hasMentions := len(change.MentionIDs) > 0
+	// 优先使用拼接上下文文本（含历史讨论），其次原文，最后摘要
+	content := change.ContextText
+	if content == "" {
+		content = change.RawContent
+	}
+	if content == "" {
+		content = change.Summary
+	}
+	if change.ContextText != "" {
+		log.Printf("[Worker] Using context text (%d chars)", len(change.ContextText))
+	} else if change.RawContent != "" {
+		log.Printf("[Worker] Using raw content (%d chars)", len(change.RawContent))
 	}
 
-	log.Printf("[Worker] Running enhanced decision detection on: %s", truncateForLog(job.Change.Summary, 100))
+	ctx := &DetectContext{
+		IsReply:      hasThread,
+		HasMention:   hasMentions,
+		MessageIndex: 1,
+		SenderName:   change.SenderName,
+	}
+	if ctx.SenderName == "" {
+		ctx.SenderName = extractSenderFromSummary(change.Summary)
+	}
 
-	// 多因子检测
-	detectResult := wp.engine.detector.Analyze(job.Change.Summary, ctx)
+	if hasThread {
+		log.Printf("[Worker] Message is in thread %s", change.ThreadID)
+	}
+	if hasMentions {
+		log.Printf("[Worker] Message mentions %d user(s): %v", len(change.MentionIDs), change.MentionIDs)
+	}
+
+	log.Printf("[Worker] Running enhanced decision detection on: %s", truncateForLog(content, 100))
+
+	// 多因子检测（使用原文而非截断的 summary）
+	detectResult := wp.engine.detector.Analyze(content, ctx)
 	log.Printf("[Worker] Detection score=%.2f, level=%s, signals=%d, anti=%d",
 		detectResult.Score, detectResult.Level,
 		len(detectResult.SignalDetails), len(detectResult.AntiSignals))
 
-	// 输出各维度分数
 	if detectResult.Factors != nil {
 		log.Printf("[Worker]  Breakdown: lexical=%.2f structural=%.2f dynamic=%.2f pattern=%.2f anti=%.2f",
 			detectResult.Factors.Lexical, detectResult.Factors.Structural,
@@ -163,7 +186,6 @@ func (wp *WorkerPool) processIMJob(job *DetectionJob, result *DecisionResult) *D
 			detectResult.Factors.AntiScore)
 	}
 
-	// 根据检测等级决定是否处理
 	switch detectResult.Level {
 	case LevelHigh:
 		log.Printf("[Worker] High-confidence decision signal (score=%.2f)", detectResult.Score)
@@ -179,29 +201,30 @@ func (wp *WorkerPool) processIMJob(job *DetectionJob, result *DecisionResult) *D
 		return result
 	}
 
-	// 提取信号名作为决策关键词
 	var signalNames []string
 	for _, s := range detectResult.SignalDetails {
 		signalNames = append(signalNames, s.Name)
 	}
 
-	// 根据检测分数决定信号强度
 	signalStrength := StrengthMedium
 	if detectResult.Level == LevelHigh {
 		signalStrength = StrengthStrong
 	}
 
-	// 创建信号
-	sig := NewSignal(job.AdapterType, job.Change.Summary)
+	// 创建信号（使用完整原文）
+	sig := NewSignal(job.AdapterType, content)
 	sig.Strength = signalStrength
-	sig.Context.ContentSnippet = job.Change.Summary
+	sig.Context.ContentSnippet = content
 	sig.Context.Keywords = signalNames
 	sig.Context.DecisionSignals = signalNames
 	sig.Context.Score = detectResult.Score
 
-	// 通过信号引擎处理
-	proposer := extractSenderFromSummary(job.Change.Summary)
-	mut, err := wp.engine.ProcessSignalForJob(sig, proposer, job.Change.Summary)
+	// 通过信号引擎处理（传递完整内容而非截断的 summary）
+	proposer := change.SenderName
+	if proposer == "" {
+		proposer = extractSenderFromSummary(change.Summary)
+	}
+	mut, err := wp.engine.ProcessSignalForJob(sig, proposer, content)
 	if err != nil {
 		log.Printf("[Worker] Error processing signal: %v", err)
 		result.Err = err
@@ -214,7 +237,6 @@ func (wp *WorkerPool) processIMJob(job *DetectionJob, result *DecisionResult) *D
 
 // processVCJob 处理 VC 类型任务
 func (wp *WorkerPool) processVCJob(job *DetectionJob, result *DecisionResult) *DecisionResult {
-	// 会议纪要和妙记相关是强信号，直接处理
 	if job.Change.Type == "meeting_minutes_available" || job.Change.Type == "meeting_todos" || job.Change.Type == "minute_created" ||
 		job.Change.Type == "minutes_created" || job.Change.Type == "minutes_updated" || job.Change.Type == "minutes_ai_summary_ready" {
 		sig := NewSignal(job.AdapterType, job.Change.Summary)
@@ -237,7 +259,6 @@ func (wp *WorkerPool) processVCJob(job *DetectionJob, result *DecisionResult) *D
 
 // processDocsJob 处理 Docs 类型任务
 func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) *DecisionResult {
-	// 决策文档和审批评论是强信号
 	if job.Change.Type == "doc_decision" || job.Change.Type == "doc_comment_approval" || containsDecisionKeyword(job.Change.Summary) {
 		sig := NewSignal(job.AdapterType, job.Change.Summary)
 		sig.Strength = StrengthStrong
@@ -259,10 +280,8 @@ func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) 
 
 // processCalendarJob 处理 Calendar 类型任务
 func (wp *WorkerPool) processCalendarJob(job *DetectionJob, result *DecisionResult) *DecisionResult {
-	// 日历主要作为上下文补充，不直接提取决策，但标记重要会议
 	if containsDecisionKeyword(job.Change.Summary) {
 		log.Printf("[Worker] Found decision-related calendar event: %s", job.Change.Summary)
-		// 这里可以添加到上下文，但不直接提取决策
 	}
 
 	log.Println("========== WORKER PROCESS END ==========")
@@ -271,7 +290,6 @@ func (wp *WorkerPool) processCalendarJob(job *DetectionJob, result *DecisionResu
 
 // processTaskJob 处理 Task 类型任务
 func (wp *WorkerPool) processTaskJob(job *DetectionJob, result *DecisionResult) *DecisionResult {
-	// 任务完成是重要信号
 	if job.Change.Type == "task_completed" {
 		sig := NewSignal(job.AdapterType, job.Change.Summary)
 		sig.Strength = StrengthMedium
@@ -294,7 +312,6 @@ func (wp *WorkerPool) processTaskJob(job *DetectionJob, result *DecisionResult) 
 
 // processWikiJob 处理 Wiki 类型任务
 func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) *DecisionResult {
-	// 知识库决策节点更新
 	if containsDecisionKeyword(job.Change.Summary) {
 		sig := NewSignal(job.AdapterType, job.Change.Summary)
 		sig.Strength = StrengthMedium

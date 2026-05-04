@@ -5,14 +5,12 @@ import (
 	"log"
 	"time"
 
-	"github.com/joho/godotenv"
-
 	larkadapter "feishu-mem/internal/lark-adapter"
 )
 
 func main() {
 	// 加载 .env 文件
-	_ = godotenv.Load()
+	larkadapter.LoadEnv()
 
 	// 检查飞书配置
 	missing := larkadapter.CheckLarkConfig()

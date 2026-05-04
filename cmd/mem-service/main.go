@@ -4,14 +4,12 @@ import (
 	"context"
 	"log"
 	"os"
+	gosignal "os/signal"
 	"path/filepath"
 	"runtime"
-	gosignal "os/signal"
 	"sync"
 	"syscall"
 	"time"
-
-	"github.com/joho/godotenv"
 
 	"feishu-mem/internal/config"
 	"feishu-mem/internal/core"
@@ -23,7 +21,7 @@ import (
 )
 
 func main() {
-	_ = godotenv.Load()
+	larkadapter.LoadEnv()
 
 	log.Println("========================================")
 	log.Println("Starting feishu-agent-mem service...")
@@ -214,10 +212,10 @@ func runDetectionCycle(
 
 			result, err := larkadapter.ExtractDetect(d)
 			detectChan <- &detectResult{
-				adapter: a,
-				detector: d,
-				result: result,
-				err: err,
+				adapter:    a,
+				detector:   d,
+				result:     result,
+				err:        err,
 				detectTime: lastCheck,
 			}
 		}(adapter, detector)
@@ -263,9 +261,9 @@ func runDetectionCycle(
 
 // detectResult 用于传递检测结果
 type detectResult struct {
-	adapter signal.AdapterType
-	detector larkadapter.Detector
-	result *larkadapter.DetectResult
-	err error
+	adapter    signal.AdapterType
+	detector   larkadapter.Detector
+	result     *larkadapter.DetectResult
+	err        error
 	detectTime time.Time
 }

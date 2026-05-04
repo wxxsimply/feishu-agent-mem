@@ -3,21 +3,24 @@ package larkadapter
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 )
 
 // IMExtractor 群聊消息提取器
 type IMExtractor struct {
-	config *Config
-	cli    *LarkCLI
+	config  *Config
+	cli     *LarkCLI
+	batcher *MessageBatcher
 }
 
 // NewIMExtractor 创建群聊提取器
 func NewIMExtractor(cfg *Config) *IMExtractor {
 	return &IMExtractor{
-		config: cfg,
-		cli:    NewLarkCLI(),
+		config:  cfg,
+		cli:     NewLarkCLI(),
+		batcher: NewMessageBatcher(),
 	}
 }
 
@@ -64,11 +67,10 @@ func (e *IMExtractor) Name() string {
 	return "lark_im"
 }
 
-// Detect 检测消息变化：群聊 + P2P
+// Detect 检测消息变化：群聊 + P2P（带上下文拼接）
 func (e *IMExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 	var changes []Change
 
-	// 首次检测：拉取最近 1 小时的消息作为基线
 	if lastCheck.IsZero() {
 		lastCheck = time.Now().Add(-1 * time.Hour)
 	}
@@ -76,27 +78,35 @@ func (e *IMExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 	cutoff := lastCheck.Unix()
 
 	// 1. 检测群聊消息
-	for _, chatID := range e.config.ChatIDs {
-		id := chatID
-		if strings.Contains(id, ",") {
-			id = strings.Split(id, ",")[0]
+	for _, rawChatID := range e.config.ChatIDs {
+		chatID := rawChatID
+		if strings.Contains(chatID, ",") {
+			chatID = strings.Split(chatID, ",")[0]
 		}
 
-		items, err := e.getGroupMessageItems(id, lastCheck)
+		log.Printf("[IM] Polling chat %s (since %d)", chatID, cutoff)
+		items, err := e.getGroupMessageItems(chatID, lastCheck)
 		if err != nil {
+			log.Printf("[IM] Error polling chat %s: %v", chatID, err)
 			continue
 		}
+		log.Printf("[IM] Chat %s returned %d messages", chatID, len(items))
 
+		var records []MessageRecord
 		for _, item := range items {
 			ts := extractTimestamp(item)
 			if ts <= cutoff {
 				continue
 			}
-			mid, _ := item["message_id"].(string)
-			body := extractBody(item)
-			senderName := extractSender(item)
-			msgType, _ := item["msg_type"].(string)
-			changes = append(changes, e.classifyMessageChange("group_message", mid, msgType, senderName, body, ts))
+			records = append(records, extractMessageRecord(item, chatID))
+		}
+
+		e.batcher.UpdateCache(chatID, records)
+
+		for i, record := range records {
+			ctxMsg := e.batcher.BuildContext(record, i, records)
+			ctxMsg.Change.ContextText = ctxMsg.BuildLLMInput()
+			changes = append(changes, ctxMsg.Change)
 		}
 	}
 
@@ -113,7 +123,7 @@ func (e *IMExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 				body := extractBody(item)
 				senderName := extractSender(item)
 				msgType, _ := item["msg_type"].(string)
-				changes = append(changes, e.classifyMessageChange("p2p_message", mid, msgType, senderName, body, ts))
+				changes = append(changes, e.classifyMessageChange("p2p_message", mid, msgType, senderName, "", "", body, ts))
 			}
 		}
 	}
@@ -125,12 +135,47 @@ func (e *IMExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 		LastCheck:  lastCheck,
 		Changes:    changes,
 	}
+	log.Printf("[IM] Detect complete: %d changes", len(changes))
 	_ = SaveDetectResult(result)
 	return result, nil
 }
 
-// classifyMessageChange 根据消息类型分类变化
-func (e *IMExtractor) classifyMessageChange(entityType, entityID, msgType, senderName, body string, timestamp int64) Change {
+func extractMessageRecord(item map[string]any, chatID string) MessageRecord {
+	record := MessageRecord{
+		MessageID:  getStringField(item, "message_id"),
+		ChatID:     chatID,
+		CreateTime: extractTimestamp(item),
+		MsgType:    getStringField(item, "msg_type"),
+	}
+	record.ThreadID = getStringField(item, "thread_id")
+	record.Content = extractBody(item)
+
+	if sender, ok := item["sender"].(map[string]any); ok {
+		record.SenderName = getStringField(sender, "name")
+		record.SenderID = getStringField(sender, "id")
+	}
+
+	if mentions, ok := item["mentions"].([]any); ok {
+		for _, m := range mentions {
+			if mm, ok := m.(map[string]any); ok {
+				if id := getStringField(mm, "id"); id != "" {
+					record.Mentions = append(record.Mentions, id)
+				}
+			}
+		}
+	}
+
+	return record
+}
+
+func getStringField(m map[string]any, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+func (e *IMExtractor) classifyMessageChange(entityType, entityID, msgType, senderName, chatID, threadID, body string, timestamp int64) Change {
 	var changeType, summary string
 
 	switch msgType {
@@ -178,6 +223,10 @@ func (e *IMExtractor) classifyMessageChange(entityType, entityID, msgType, sende
 		EntityID:   entityID,
 		Summary:    summary,
 		Timestamp:  timestamp,
+		ChatID:     chatID,
+		ThreadID:   threadID,
+		SenderName: senderName,
+		RawContent: body,
 	}
 }
 
@@ -218,7 +267,7 @@ func (e *IMExtractor) Extract() error {
 // ========== P2P 双人会话 ==========
 
 func (e *IMExtractor) getP2PMessageItems(lastCheck time.Time) ([]map[string]any, error) {
-	args := []string{"im", "+chat-messages-list", "--user-id", e.config.UserID}
+	args := []string{"im", "+chat-messages-list", "--user-id", e.config.UserID, "--format", "json"}
 	if !lastCheck.IsZero() {
 		args = append(args, "--start", lastCheck.Format(time.RFC3339))
 	}
@@ -232,20 +281,13 @@ func (e *IMExtractor) getP2PMessageItems(lastCheck time.Time) ([]map[string]any,
 // ========== 群聊 ==========
 
 func (e *IMExtractor) getGroupMessageItems(chatID string, lastCheck time.Time) ([]map[string]any, error) {
-	args := []string{"im", "+chat-messages-list", "--chat-id", chatID}
+	args := []string{"im", "+chat-messages-list", "--chat-id", chatID, "--format", "json"}
 	if !lastCheck.IsZero() {
 		args = append(args, "--start", lastCheck.Format(time.RFC3339))
 	}
 	output, err := e.cli.RunCommand(args...)
 	if err != nil {
-		args2 := []string{"im", "+chat-messages-list", "--chat-id", chatID}
-		if !lastCheck.IsZero() {
-			args2 = append(args2, "--start", lastCheck.Format(time.RFC3339))
-		}
-		output, err = e.cli.RunCommand(args2...)
-		if err != nil {
-			return nil, err
-		}
+		return nil, fmt.Errorf("getGroupMessageItems failed for %s: %w", chatID, err)
 	}
 	return parseChatMessageList(output)
 }
@@ -253,29 +295,50 @@ func (e *IMExtractor) getGroupMessageItems(chatID string, lastCheck time.Time) (
 // ========== 解析工具 ==========
 
 func parseChatMessageList(output []byte) ([]map[string]any, error) {
-	// lark-cli +chat-messages-list 直接返回数组格式
 	var list []map[string]any
 	if err := json.Unmarshal(output, &list); err == nil {
 		return list, nil
 	}
 
-	// 兜底：可能是 {data: {messages: [...]}} 格式
 	var wrapper map[string]any
 	if err := json.Unmarshal(output, &wrapper); err != nil {
-		return nil, fmt.Errorf("failed to parse chat-messages-list output: %s", err)
+		return nil, fmt.Errorf("parseChatMessageList: invalid JSON: %s", err)
 	}
-	if data, ok := wrapper["data"].(map[string]any); ok {
-		if msgs, ok := data["messages"].([]any); ok {
-			var result []map[string]any
-			for _, m := range msgs {
-				if mm, ok := m.(map[string]any); ok {
-					result = append(result, mm)
-				}
+
+	data, ok := wrapper["data"].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("parseChatMessageList: no 'data' key, top keys: %v", mapKeys(wrapper))
+	}
+
+	if msgs, ok := data["items"].([]any); ok {
+		return extractMessageItems(msgs), nil
+	}
+	if msgs, ok := data["messages"].([]any); ok {
+		return extractMessageItems(msgs), nil
+	}
+
+	return nil, fmt.Errorf("parseChatMessageList: no items/messages in data, data keys: %v", mapKeys(data))
+}
+
+func extractMessageItems(msgs []any) []map[string]any {
+	var result []map[string]any
+	for _, m := range msgs {
+		if mm, ok := m.(map[string]any); ok {
+			if del, ok := mm["deleted"].(bool); ok && del {
+				continue
 			}
-			return result, nil
+			result = append(result, mm)
 		}
 	}
-	return nil, fmt.Errorf("could not parse chat-messages-list output")
+	return result
+}
+
+func mapKeys(m map[string]any) []string {
+	var keys []string
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func extractTimestamp(item map[string]any) int64 {
@@ -284,17 +347,11 @@ func extractTimestamp(item map[string]any) int64 {
 			return ts
 		}
 	}
-	if mt, ok := item["msg_time"].(string); ok {
-		if ts := parseMessageTime(mt); ts > 0 {
-			return ts
-		}
-	}
 	return 0
 }
 
 func extractBody(item map[string]any) string {
 	if content, ok := item["content"].(string); ok && content != "" {
-		// 飞书文本消息 content 可能是 JSON: {"text":"xxx"}
 		if strings.HasPrefix(content, "{") {
 			var obj map[string]any
 			if err := json.Unmarshal([]byte(content), &obj); err == nil {
@@ -334,6 +391,9 @@ func truncateContent(s string, maxLen int) string {
 }
 
 func parseMessageTime(timeStr string) int64 {
+	if ts, err := time.Parse(time.RFC3339, timeStr); err == nil {
+		return ts.Unix()
+	}
 	formats := []string{
 		"2006-01-02 15:04:05",
 		"2006-01-02T15:04:05",

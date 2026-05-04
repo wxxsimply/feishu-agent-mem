@@ -33,15 +33,15 @@ func (a *MemoryAgent) ExtractDecision(content string, topics []string) (*Extract
 	log.Printf("[Agent] Content length: %d", len(content))
 	log.Printf("[Agent] Topics: %v", topics)
 
-	// 检查 LLM 是否可用
+	// LLM 不可用时使用降级策略
 	if !a.llmClient.IsAvailable() {
-		log.Println("[Agent] LLM not available, returning fallback")
+		log.Println("[Agent] LLM not available, using keyword fallback")
+		fallbackResult := a.fallback.ExtractDecision(content)
+		fallbackResult.ExtractedFrom = content
+		log.Printf("[Agent] Fallback result: HasDecision=%v, Confidence=%.2f",
+			fallbackResult.HasDecision, fallbackResult.Confidence)
 		log.Println("========== EXTRACT DECISION END ==========")
-		return &ExtractionResult{
-			HasDecision:    false,
-			Confidence:     0.0,
-			ExtractedFrom: content,
-		}, fmt.Errorf("ARK_API_KEY is not set")
+		return fallbackResult, nil
 	}
 
 	// 构建提示词
@@ -51,8 +51,8 @@ func (a *MemoryAgent) ExtractDecision(content string, topics []string) (*Extract
 		log.Printf("[Agent] Build prompts failed: %v", err)
 		log.Println("========== EXTRACT DECISION END ==========")
 		return &ExtractionResult{
-			HasDecision:    false,
-			Confidence:     0.0,
+			HasDecision:   false,
+			Confidence:    0.0,
 			ExtractedFrom: content,
 		}, err
 	}
@@ -70,8 +70,8 @@ func (a *MemoryAgent) ExtractDecision(content string, topics []string) (*Extract
 		log.Printf("[Agent] LLM call failed: %v", err)
 		log.Println("========== EXTRACT DECISION END ==========")
 		return &ExtractionResult{
-			HasDecision:    false,
-			Confidence:     0.0,
+			HasDecision:   false,
+			Confidence:    0.0,
 			ExtractedFrom: content,
 		}, err
 	}
@@ -83,12 +83,11 @@ func (a *MemoryAgent) ExtractDecision(content string, topics []string) (*Extract
 	result, err := ParseExtractionResult(llmResponse)
 	if err != nil {
 		log.Printf("[Agent] Parse failed: %v, using fallback", err)
+		// 解析失败时回退到降级策略
+		fallbackResult := a.fallback.ExtractDecision(content)
+		fallbackResult.ExtractedFrom = content
 		log.Println("========== EXTRACT DECISION END ==========")
-		return &ExtractionResult{
-			HasDecision:    false,
-			Confidence:     0.0,
-			ExtractedFrom: content,
-		}, err
+		return fallbackResult, nil
 	}
 
 	log.Printf("[Agent] Parse result: HasDecision=%v, Confidence=%.2f", result.HasDecision, result.Confidence)

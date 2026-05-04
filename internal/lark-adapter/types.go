@@ -35,11 +35,20 @@ type DetectResult struct {
 
 // Change 变化条目
 type Change struct {
-	Type       string `json:"type"`       // "new" | "updated" | "deleted"
+	Type       string `json:"type"`        // "new" | "updated" | "deleted"
 	EntityType string `json:"entity_type"` // "message", "pin", "event", "doc", "task", etc.
 	EntityID   string `json:"entity_id"`
 	Summary    string `json:"summary"`
 	Timestamp  int64  `json:"timestamp,omitempty"`
+
+	// IM 消息上下文
+	ChatID      string   `json:"chat_id,omitempty"`      // 群聊 ID
+	ThreadID    string   `json:"thread_id,omitempty"`    // 线程 ID
+	SenderID    string   `json:"sender_id,omitempty"`    // 发送者 open_id
+	SenderName  string   `json:"sender_name,omitempty"`  // 发送者姓名
+	MentionIDs  []string `json:"mention_ids,omitempty"`  // @提及的用户 ID
+	RawContent  string   `json:"raw_content,omitempty"`  // 原始消息全文
+	ContextText string   `json:"context_text,omitempty"` // LLM 拼接上下文文本
 }
 
 // ExtractionResult 提取结果

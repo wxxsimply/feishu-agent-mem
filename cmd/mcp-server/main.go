@@ -6,8 +6,6 @@ import (
 	gosignal "os/signal"
 	"syscall"
 
-	"github.com/joho/godotenv"
-
 	"feishu-mem/internal/config"
 	"feishu-mem/internal/core"
 	"feishu-mem/internal/mcp"
@@ -17,7 +15,7 @@ import (
 
 func main() {
 	// 1. 加载配置
-	_ = godotenv.Load()
+	larkadapter.LoadEnv()
 
 	settings := config.DefaultSettings()
 	if cfgPath := os.Getenv("CONFIG_PATH"); cfgPath != "" {

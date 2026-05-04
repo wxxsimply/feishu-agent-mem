@@ -13,13 +13,15 @@ import (
 	"github.com/volcengine/volcengine-go-sdk/service/arkruntime"
 	"github.com/volcengine/volcengine-go-sdk/service/arkruntime/model"
 	"github.com/volcengine/volcengine-go-sdk/volcengine"
+
+	"feishu-mem/internal/llm/tools"
 )
 
 // Config LLM 配置
 type Config struct {
-	APIKey     string
-	BaseURL    string
-	Model      string
+	APIKey  string
+	BaseURL string
+	Model   string
 }
 
 // Client LLM 客户端
@@ -36,7 +38,6 @@ func NewClient() *Client {
 
 // LoadConfig 从环境变量加载配置
 func LoadConfig() *Config {
-	// 尝试多个路径加载 .env
 	paths := []string{
 		".env",
 		"../.env",
@@ -158,16 +159,33 @@ func ExtractJSON(content string) string {
 	return cleaned
 }
 
-// ParseExtractionResult 解析决策提取结果
+// ParseExtractionResult 解析决策提取结果（含容错处理）
 func ParseExtractionResult(content string) (*ExtractionResult, error) {
 	log.Printf("[LLM] ParseExtractionResult called")
-	jsonStr := ExtractJSON(content)
-	log.Printf("[LLM] Extracted JSON: %s", truncateForLog(jsonStr, 200))
+	rawJSON := ExtractJSON(content)
+	log.Printf("[LLM] Extracted JSON: %s", truncateForLog(rawJSON, 200))
+
+	// 使用 ParseTool 进行容错解析
+	pt := &tools.ParseTool{}
+	parsed, parseErr := pt.ParseJSON(rawJSON)
+	if parseErr != nil {
+		log.Printf("[LLM] ERROR: JSON parse failed: %v", parseErr)
+		return nil, fmt.Errorf("json parse failed after retries: %w", parseErr)
+	}
+
+	// 修复常见字段类型错误
+	parsed = pt.FixExtractionResult(parsed)
+
+	// 转回 JSON 并反序列化为结构体
+	fixedJSON, err := json.Marshal(parsed)
+	if err != nil {
+		return nil, fmt.Errorf("re-marshal failed: %w", err)
+	}
 
 	var result ExtractionResult
-	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		log.Printf("[LLM] ERROR: JSON parse failed: %v", err)
-		return nil, fmt.Errorf("json parse failed: %w", err)
+	if err := json.Unmarshal(fixedJSON, &result); err != nil {
+		log.Printf("[LLM] ERROR: Re-parse failed: %v", err)
+		return nil, fmt.Errorf("re-parse failed: %w", err)
 	}
 
 	log.Printf("[LLM] Parse result: HasDecision=%v, Confidence=%.2f", result.HasDecision, result.Confidence)
