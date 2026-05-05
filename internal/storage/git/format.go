@@ -80,6 +80,34 @@ func ParseDecisionFile(data []byte) (*decision.DecisionNode, error) {
 	return &node, nil
 }
 
+// ParseObjectionFile 解析反对意见文件
+func ParseObjectionFile(data []byte) (*decision.Objection, error) {
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	var frontmatter bytes.Buffer
+	inFrontmatter := false
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.TrimSpace(line) == "---" {
+			if !inFrontmatter {
+				inFrontmatter = true
+				continue
+			} else {
+				break
+			}
+		} else if inFrontmatter {
+			frontmatter.WriteString(line + "\n")
+		}
+	}
+	if frontmatter.Len() == 0 {
+		return nil, fmt.Errorf("no frontmatter found")
+	}
+	var obj decision.Objection
+	if err := yaml.Unmarshal(frontmatter.Bytes(), &obj); err != nil {
+		return nil, err
+	}
+	return &obj, nil
+}
+
 // FormatDecisionNode 格式化决策节点为简洁视图
 func FormatDecisionNode(node *decision.DecisionNode) string {
 	var buf bytes.Buffer
