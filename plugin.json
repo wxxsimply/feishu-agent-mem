@@ -1,0 +1,53 @@
+{
+  "name": "feishu-memory",
+  "version": "2.0.0",
+  "description": "飞书记忆代理 - 智能记录项目决策",
+  "author": "Your Team",
+  "type": "service",
+  "entrypoint": "bin/mem-service",
+  "mcp_servers": [
+    {
+      "name": "feishu-memory-mcp",
+      "command": "bin/mem-service",
+      "args": ["--mode=mcp"],
+      "env": {
+        "CONFIG_PATH": "config/openclaw.yaml"
+      }
+    }
+  ],
+  "hooks": {
+    "pre_tool_use": {
+      "command": "bin/openclaw-hooks",
+      "args": ["--hook=pre-tool-use"],
+      "description": "使用工具前检查决策冲突"
+    },
+    "post_tool_use": {
+      "command": "bin/openclaw-hooks",
+      "args": ["--hook=post-tool-use"],
+      "description": "使用工具后自动记录决策"
+    }
+  },
+  "scheduled_tasks": [
+    {
+      "name": "decision-sync",
+      "cron": "*/5 * * * *",
+      "command": "bin/openclaw-hooks",
+      "args": ["--task=sync"],
+      "description": "每5分钟同步 Git 和 Bitable"
+    },
+    {
+      "name": "consistency-check",
+      "cron": "0 */1 * * *",
+      "command": "bin/openclaw-hooks",
+      "args": ["--task=consistency"],
+      "description": "每小时执行一致性检查"
+    },
+    {
+      "name": "lark-detector",
+      "cron": "*/10 * * * *",
+      "command": "bin/openclaw-hooks",
+      "args": ["--task=lark-detector"],
+      "description": "每10分钟检测飞书变更"
+    }
+  ]
+}

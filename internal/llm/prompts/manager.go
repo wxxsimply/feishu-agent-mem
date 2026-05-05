@@ -77,6 +77,24 @@ func (pm *PromptManager) registerAllTemplates() {
 		MaxTokens:   3000,
 		Temperature: 0.2,
 	}
+
+	// 场景 5: 决策去重+冲突联合判断
+	pm.templates["dedup"] = &PromptTemplate{
+		Name:        "dedup",
+		Static:      dedupStaticPrompt,
+		Dynamic:     dedupDynamicBuilder,
+		MaxTokens:   2000,
+		Temperature: 0.1,
+	}
+
+	// 场景 6: 冲突解决判断（占位提示词，后续补充更多逻辑）
+	pm.templates["conflict_resolve"] = &PromptTemplate{
+		Name:        "conflict_resolve",
+		Static:      conflictResolveStaticPrompt,
+		Dynamic:     conflictResolveDynamicBuilder,
+		MaxTokens:   2000,
+		Temperature: 0.1,
+	}
 }
 
 // BuildPrompt 构建完整提示词
@@ -110,7 +128,9 @@ var (
 	ExtractionDocStaticPrompt  = extractionDocStaticPrompt
 	ClassificationStaticPrompt = classificationStaticPrompt
 	CrossTopicStaticPrompt     = crosstopicStaticPrompt
-	ConflictStaticPrompt       = conflictStaticPrompt
+	ConflictStaticPrompt         = conflictStaticPrompt
+	DedupStaticPrompt            = dedupStaticPrompt
+	ConflictResolveStaticPrompt  = conflictResolveStaticPrompt
 )
 
 var extractionStaticPrompt = `# 系统提示词：决策提取器（严格模式）
@@ -148,12 +168,26 @@ var extractionStaticPrompt = `# 系统提示词：决策提取器（严格模式
 - confidence 0.6-0.7: 有较强的决策语气但缺乏部分信息
 - confidence < 0.6: 一律 has_decision: false
 
+## 反对意见提取（新增）
+除了提取决策结论外，也从讨论内容中提取反对意见（objections）。反对意见定义为：
+1. 对某个方案/选择的明确反对或不同意见（"我不同意"、"我反对"、"持保留意见"）
+2. 提出了不同的方案/选择作为替代（"我觉得应该用X代替Y"、"建议用X而不是Y"）
+3. 有核心理由说明为什么不同意（"这个方案有风险，因为..."）
+
+### 判定规则
+- "可能不太行"、"这个方案有风险" + 核心理由 → 算反对意见
+- "我不同意"、"我反对"、"不同意这个方案" → 明确反对
+- "我觉得应该用X代替Y" → 包含替代方案的反对意见，alternative 字段填写"X"
+- "我不确定"、"我再想想"、"说不好" → 不算反对意见
+- "好的"、"同意"、"没问题" → 不算反对意见
+
 ## 输出格式
 仅当 confidence >= 0.6 时考虑输出决策。最终决定必须达到 0.8 以上才输出完整 decision。
 
 {
   "has_decision": true/false,
   "confidence": 0.0-1.0,
+  "has_objections": true/false,
   "decision": {
     "title": "一句话决策标题",
     "decision": "决策结论（从原文或对话中精确引用）",
@@ -168,6 +202,15 @@ var extractionStaticPrompt = `# 系统提示词：决策提取器（严格模式
     },
     "decision_type": "new/confirmation/rejection"
   },
+  "objections": [
+    {
+      "objection_content": "反对的具体内容",
+      "rationale": "核心理由",
+      "alternative": "提出的替代方案（如：建议使用X替代Y）",
+      "objector": "反对人姓名",
+      "source": "im"
+    }
+  ],
   "extracted_from": "消息/会议/文档的摘要（< 100 字）"
 }
 
@@ -324,6 +367,14 @@ var extractionDocStaticPrompt = `# 系统提示词：文档决策提取器（分
 - **零置信度 (0.0)**：纯状态更新、格式修正、闲聊
   - → has_decision: false
 
+## 反对意见提取（新增）
+如果文档内容或评论中包含对已有决策的反对意见，也一并提取。反对意见定义为：
+1. 对某个方案/选择的明确反对或不同意见
+2. 提出了不同的替代方案
+3. 有核心理由说明为什么不同意
+
+如果输入是文档评论内容（source=comment），评论中可能包含对文档中已有决策的反对意见。
+
 ## 输出格式
 
 仅当 confidence >= 0.6 时考虑输出决策。最终决定必须达到 0.8 以上才输出完整 decision。
@@ -332,6 +383,7 @@ var extractionDocStaticPrompt = `# 系统提示词：文档决策提取器（分
   "has_decision": true/false,
   "change_type": "decision/discussion/status_update/clarification/administrative/mixed",
   "confidence": 0.0-1.0,
+  "has_objections": true/false,
   "decision": {
     "title": "一句话决策标题",
     "decision": "决策结论（从原文或 diff 中精确引用）",
@@ -349,6 +401,15 @@ var extractionDocStaticPrompt = `# 系统提示词：文档决策提取器（分
       "event_ids": []
     }
   },
+  "objections": [
+    {
+      "objection_content": "反对的具体内容",
+      "rationale": "核心理由",
+      "alternative": "提出的替代方案（如：建议使用X替代Y）",
+      "objector": "反对人姓名",
+      "source": "im/comment/doc"
+    }
+  ],
   "analysis": "一句话概括本次变更的性质和判断理由"
 }
 
@@ -438,6 +499,108 @@ func extractionDocDynamicBuilder(ctx map[string]any) string {
 	}
 	if topics, ok := ctx["topics"].([]string); ok {
 		sb.WriteString(fmt.Sprintf("\n## 候选议题\n%v\n", topics))
+	}
+	return sb.String()
+}
+
+// ========== 场景 5: 决策去重+冲突联合判断 ==========
+
+var dedupStaticPrompt = `# 系统提示词：决策去重与冲突联合判断
+
+## 角色
+你是项目决策一致性检查专家。比较新旧两个决策，同时判断是否存在重复（需要去重）以及是否存在冲突。
+
+## 判断标准
+
+你需要输出一个动作（action），三选一：
+
+### skip — 跳过，不创建新决策
+- 新旧决策说的是同一件事，仅有措辞、标点、空格差异
+- 例："后端语言：Python" → "后端开发语言为 Python"（只是表述方式不同，事实不变）
+- 例："使用 PostgreSQL" → "使用 PostgreSQL 数据库"（补充了"数据库"三个字，无实质变化）
+
+### update — 更新现有决策
+- 同一议题下的信息补充或细化，不矛盾
+- 例："后端语言：Python" → "后端语言：Python，框架：Django"（补充了框架信息）
+- 例："使用缓存" → "使用 Redis 作为缓存方案"（从模糊到具体）
+
+### conflict — 标记冲突
+- 新旧决策对同一事项给出了不同甚至矛盾的结论
+- 例："后端语言：Python" → "后端语言：Golang"（语言变了）
+- 例："使用 MySQL" → "使用 PostgreSQL"（数据库变了）
+- 例："token 长度 256" → "token 长度 512"（参数变了）
+- 即使只是细微差异，只要是**不同的事实陈述**就是冲突
+
+## 输出格式（严格遵守）
+{
+  "action": "skip|update|conflict",
+  "reason": "一句话说明判断理由"
+}
+
+## 规则
+- 只看事实是否一致，不评价"哪个更好"
+- 值变更（即使是同义词）≠ skip，而是 conflict
+- 补充新信息但不动原有内容 = update
+- 只输出 JSON，不要任何额外文字
+`
+
+func dedupDynamicBuilder(ctx map[string]any) string {
+	var sb strings.Builder
+	if title, ok := ctx["new_title"].(string); ok {
+		sb.WriteString(fmt.Sprintf("\n## 新决策标题\n%s\n", title))
+	}
+	if decision, ok := ctx["new_decision"].(string); ok {
+		sb.WriteString(fmt.Sprintf("## 新决策内容\n%s\n", decision))
+	}
+	if title, ok := ctx["existing_title"].(string); ok {
+		sb.WriteString(fmt.Sprintf("## 已有决策标题\n%s\n", title))
+	}
+	if decision, ok := ctx["existing_decision"].(string); ok {
+		sb.WriteString(fmt.Sprintf("## 已有决策内容\n%s\n", decision))
+	}
+	return sb.String()
+}
+
+// ========== 场景 6: 冲突解决判断 ==========
+
+var conflictResolveStaticPrompt = `# 系统提示词：冲突自动解决判断器
+
+## 角色
+你是项目决策冲突解决专家。判断新旧决策之间的冲突能否自动合并。
+
+## 判断标准
+
+### merge — 可自动合并
+- 两个决策说的是同一件事，但措辞不同 → 合并为更清晰的版本
+- 新决策是对旧决策的合理更新/细化 → 用新决策覆盖
+- 例: "后端语言: Python" vs "后端开发语言为 Python" → 可合并
+- 例: "使用缓存" vs "使用 Redis 缓存" → 可合并为 "使用 Redis 缓存"
+
+### keep_both — 无法自动合并，需人工介入
+- 两个决策对同一事项给出矛盾结论
+- 例: "后端语言: Python" vs "后端语言: Golang" → 需人工
+- 例: "使用 MySQL" vs "使用 PostgreSQL" → 需人工
+- 无法判断哪个版本更正确
+
+## 规则
+- 只看事实是否一致，不评价"哪个更好"
+- 如果难以判断是否矛盾，优先 keep_both
+- 结构化输出由 JSON Schema 强制约束
+`
+
+func conflictResolveDynamicBuilder(ctx map[string]any) string {
+	var sb strings.Builder
+	if title, ok := ctx["new_title"].(string); ok {
+		sb.WriteString(fmt.Sprintf("\n## 新决策标题\n%s\n", title))
+	}
+	if decision, ok := ctx["new_decision"].(string); ok {
+		sb.WriteString(fmt.Sprintf("## 新决策内容\n%s\n", decision))
+	}
+	if title, ok := ctx["existing_title"].(string); ok {
+		sb.WriteString(fmt.Sprintf("## 已有决策标题\n%s\n", title))
+	}
+	if decision, ok := ctx["existing_decision"].(string); ok {
+		sb.WriteString(fmt.Sprintf("## 已有决策内容\n%s\n", decision))
 	}
 	return sb.String()
 }

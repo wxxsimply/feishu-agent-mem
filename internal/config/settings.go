@@ -110,11 +110,12 @@ type DetectorsConfig struct {
 
 // DetectorConfig 单个检测器配置
 type DetectorConfig struct {
-	Enabled           bool          `yaml:"enabled"`
-	Interval          time.Duration `yaml:"interval"`
-	BurstInterval     time.Duration `yaml:"burst_interval"`
-	BurstTimeout      time.Duration `yaml:"burst_timeout"`
-	HeartbeatInterval time.Duration `yaml:"heartbeat_interval"`
+	Enabled              bool          `yaml:"enabled"`
+	Interval             time.Duration `yaml:"interval"`
+	BurstInterval        time.Duration `yaml:"burst_interval"`
+	BurstTimeout         time.Duration `yaml:"burst_timeout"`
+	HeartbeatInterval    time.Duration `yaml:"heartbeat_interval"`
+	CommentCheckInterval int           `yaml:"comment_check_interval_seconds"` // 评论检测周期（秒），0=不检测
 }
 
 // StorageConfigV2 存储配置 (v2)
@@ -202,6 +203,7 @@ func DefaultSettings() *Settings {
 				BurstInterval: 5 * time.Second,
 				BurstTimeout: 1 * time.Minute,
 				HeartbeatInterval: 15 * time.Second,
+				CommentCheckInterval: 150,
 			},
 			LarkWiki: DetectorConfig{
 				Enabled: true,

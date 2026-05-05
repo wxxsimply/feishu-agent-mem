@@ -756,6 +756,10 @@ func compilePatterns() []*decisionPattern {
 		{name: "ab_selection", regex: `(用|选|采用)\s*\S{1,10}\s*(还是|或|or|vs)\s*\S{1,10}`, weight: 0.45},
 		{name: "rejection", regex: `(不|别|不用|不需要|没必要)\s*(考虑|使用|采用|选)`, weight: 0.55},
 		{name: "reject_proposal", regex: `(否决|驳回|不同意|反对)\s*(这个|该|此)`, weight: 0.75},
+		{name: "explicit_objection", regex: `(我反对|我不同意|持保留意见|有异议|不认同)`, weight: 0.80},
+		{name: "alternative_proposal", regex: `(应该用|不如用|建议用|推荐用|换成|改用)\s*\S+\s*(代替|替代|而不是|而非)`, weight: 0.70},
+		{name: "reasoned_disagreement", regex: `(不同意|反对|不认可).{2,20}(因为|原因是|理由|风险|问题)`, weight: 0.85},
+		{name: "reject_decision", regex: `(这个决定|这个方案|这个选择).{0,10}(有问题|不合适|不对|不好|不行)`, weight: 0.75},
 		{name: "deadline", regex: `(截止|之前|前|ddl|deadline)\s*[：:为]?\s*\d{1,2}[月/.]`, weight: 0.40},
 		{name: "voting", regex: `(投票|表决|举手表决|投票决定|投票结果)`, weight: 0.70},
 	}

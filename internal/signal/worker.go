@@ -1,6 +1,7 @@
 package signal
 
 import (
+	"fmt"
 	"log"
 	"runtime"
 	"strings"
@@ -21,6 +22,7 @@ type DetectionJob struct {
 type DecisionResult struct {
 	Job       *DetectionJob
 	Mutation  *DecisionMutation
+	PendingMutations []*DecisionMutation // 附加变更（如反对意见），在 pipeline 中一并处理
 	Processed time.Time
 	Err       error
 }
@@ -225,7 +227,7 @@ func (wp *WorkerPool) processIMJob(job *DetectionJob, result *DecisionResult) *D
 	if proposer == "" {
 		proposer = extractSenderFromSummary(change.Summary)
 	}
-	mut, err := wp.engine.ProcessSignalForJob(sig, proposer, content)
+	mut, _, err := wp.engine.ProcessSignalForJob(sig, proposer, content)
 	if err != nil {
 		log.Printf("[Worker] Error processing signal: %v", err)
 		result.Err = err
@@ -245,7 +247,7 @@ func (wp *WorkerPool) processVCJob(job *DetectionJob, result *DecisionResult) *D
 		sig.Context.ContentSnippet = job.Change.Summary
 
 		proposer := "会议系统"
-		mut, err := wp.engine.ProcessSignalForJob(sig, proposer, job.Change.Summary)
+		mut, _, err := wp.engine.ProcessSignalForJob(sig, proposer, job.Change.Summary)
 		if err != nil {
 			log.Printf("[Worker] Error processing VC signal: %v", err)
 			result.Err = err
@@ -283,28 +285,50 @@ func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) 
 		return result
 	}
 
+	// 评论变更：不获取完整文档内容，直接用评论摘要送 LLM
+	if job.Change.Type == "doc_comment_added" {
+		log.Printf("[Worker] Processing document comment: %s", job.Change.Summary)
+		return wp.processDocComment(job, result, docToken)
+	}
+
 	// Phase 1: Context Gathering — 获取文档内容
 	cfg := larkadapter.LoadConfig()
 	docExt := larkadapter.NewDocExtractor(cfg)
 
 	content, err := docExt.FetchDocumentContent(docToken)
 	if err != nil {
-		log.Printf("[Worker] Failed to fetch doc content: %v, falling back to keyword check", err)
-		if containsDecisionKeyword(job.Change.Summary) {
-			return wp.processDocFallback(job, result)
-		}
-		log.Println("========== WORKER PROCESS END ==========")
-		return result
+		log.Printf("[Worker] Failed to fetch doc content: %v, falling back with docToken=%s", err, docToken)
+		return wp.processDocFallback(job, result)
 	}
 
 	title := extractDocTitleFromSummary(job.Change.Summary)
 	log.Printf("[Worker] Doc content fetched: title=%s, content_len=%d", title, len(content))
+
+	// 获取文档评论（用于反对意见提取）
+	actualDocToken := docToken
+	if tok, ok := job.Change.Meta["actual_doc_token"]; ok && tok != "" {
+		actualDocToken = tok
+	}
+	comments, _ := docExt.FetchDocumentComments(actualDocToken)
+	if len(comments) > 0 {
+		log.Printf("[Worker] Fetched %d comments for doc %s", len(comments), actualDocToken)
+		var commentTexts []string
+		for _, c := range comments {
+			if c.Text != "" {
+				commentTexts = append(commentTexts, fmt.Sprintf("[comment by %s] %s (quote: %s)", c.Author, c.Text, c.Quote))
+			}
+		}
+		if len(commentTexts) > 0 {
+			content += "\n\n## 文档评论\n" + strings.Join(commentTexts, "\n")
+		}
+	}
 
 	// 直接送 LLM 判断，不经过本地 pattern 过滤
 	docType := classifyDocType(title, content)
 
 	// Phase 3-4: LLM Extraction + Output
 	sig := NewSignal(job.AdapterType, job.Change.Summary)
+	sig.PrimaryID = docToken
 	sig.Strength = StrengthStrong
 	sig.Context.ContentSnippet = truncateForLog(content, 1000)
 	sig.Context.IsDecision = true
@@ -316,7 +340,7 @@ func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) 
 	}
 
 	proposer := "文档系统"
-	mut, err := wp.engine.ProcessSignalForDocJob(sig, proposer, analysisContent, string(docType), title)
+	mut, _, err := wp.engine.ProcessSignalForDocJob(sig, proposer, analysisContent, string(docType), title)
 	if err != nil {
 		log.Printf("[Worker] Error processing doc signal: %v", err)
 		result.Err = err
@@ -347,7 +371,7 @@ func (wp *WorkerPool) processTaskJob(job *DetectionJob, result *DecisionResult) 
 		sig.Context.DecisionSignals = []string{"task_done"}
 
 		proposer := "任务系统"
-		mut, err := wp.engine.ProcessSignalForJob(sig, proposer, job.Change.Summary)
+		mut, _, err := wp.engine.ProcessSignalForJob(sig, proposer, job.Change.Summary)
 		if err != nil {
 			log.Printf("[Worker] Error processing Task signal: %v", err)
 			result.Err = err
@@ -360,14 +384,36 @@ func (wp *WorkerPool) processTaskJob(job *DetectionJob, result *DecisionResult) 
 	return result
 }
 
-// processDocFallback Docs 决策关键词降级处理（内容获取失败时使用）
+// processDocComment 处理文档评论（反对意见来源之一）
+func (wp *WorkerPool) processDocComment(job *DetectionJob, result *DecisionResult, docToken string) *DecisionResult {
+	sig := NewSignal(job.AdapterType, job.Change.Summary)
+	sig.PrimaryID = docToken
+	sig.Strength = StrengthMedium
+	sig.Context.ContentSnippet = job.Change.Summary
+
+	proposer := "文档系统"
+	mut, _, err := wp.engine.ProcessSignalForDocJob(sig, proposer, job.Change.Summary, "comment", "")
+	if err != nil {
+		log.Printf("[Worker] Error processing doc comment signal: %v", err)
+		result.Err = err
+		return result
+	}
+	result.Mutation = mut
+
+	log.Println("========== WORKER PROCESS END ==========")
+	return result
+}
+
+// processDocFallback Docs 降级处理（内容获取失败时使用）
 func (wp *WorkerPool) processDocFallback(job *DetectionJob, result *DecisionResult) *DecisionResult {
 	sig := NewSignal(job.AdapterType, job.Change.Summary)
+	sig.PrimaryID = job.Change.EntityID // 即使内容获取失败，也要设置 docToken 用于去重
 	sig.Strength = StrengthStrong
 	sig.Context.ContentSnippet = job.Change.Summary
 
 	proposer := "文档系统"
-	mut, err := wp.engine.ProcessSignalForJob(sig, proposer, job.Change.Summary)
+	// 使用 ProcessSignalForDocJob 确保 token 被保存到 FeishuLinks
+	mut, _, err := wp.engine.ProcessSignalForDocJob(sig, proposer, job.Change.Summary, "doc", "")
 	if err != nil {
 		log.Printf("[Worker] Error processing Docs fallback signal: %v", err)
 		result.Err = err
@@ -388,12 +434,8 @@ func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) 
 
 	nodeToken := job.Change.EntityID
 	if nodeToken == "" {
-		log.Println("[Worker] No wiki node token, falling back to keyword check")
-		if containsDecisionKeyword(job.Change.Summary) {
-			return wp.processWikiFallback(job, result)
-		}
-		log.Println("========== WORKER PROCESS END ==========")
-		return result
+		log.Println("[Worker] No wiki node token, falling back anyway")
+		return wp.processWikiFallback(job, result)
 	}
 
 	// Phase 1: Context Gathering — 获取知识库节点内容
@@ -402,12 +444,8 @@ func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) 
 
 	content, err := wikiExt.FetchWikiNodeContent(nodeToken)
 	if err != nil {
-		log.Printf("[Worker] Failed to fetch wiki content: %v, falling back to keyword check", err)
-		if containsDecisionKeyword(job.Change.Summary) {
-			return wp.processWikiFallback(job, result)
-		}
-		log.Println("========== WORKER PROCESS END ==========")
-		return result
+		log.Printf("[Worker] Failed to fetch wiki content: %v, falling back with nodeToken=%s", err, nodeToken)
+		return wp.processWikiFallback(job, result)
 	}
 
 	title := extractDocTitleFromSummary(job.Change.Summary)
@@ -418,6 +456,7 @@ func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) 
 
 	// Phase 3-4: LLM Extraction + Output
 	sig := NewSignal(job.AdapterType, job.Change.Summary)
+	sig.PrimaryID = nodeToken
 	sig.Strength = StrengthMedium
 	sig.Context.ContentSnippet = truncateForLog(content, 1000)
 	sig.Context.IsDecision = true
@@ -428,7 +467,7 @@ func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) 
 	}
 
 	proposer := "知识库系统"
-	mut, err := wp.engine.ProcessSignalForDocJob(sig, proposer, analysisContent, string(docType), title)
+	mut, _, err := wp.engine.ProcessSignalForDocJob(sig, proposer, analysisContent, string(docType), title)
 	if err != nil {
 		log.Printf("[Worker] Error processing Wiki signal: %v", err)
 		result.Err = err
@@ -443,11 +482,13 @@ func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) 
 // processWikiFallback Wiki 决策关键词降级处理
 func (wp *WorkerPool) processWikiFallback(job *DetectionJob, result *DecisionResult) *DecisionResult {
 	sig := NewSignal(job.AdapterType, job.Change.Summary)
+	sig.PrimaryID = job.Change.EntityID // 即使内容获取失败，也要设置 nodeToken 用于去重
 	sig.Strength = StrengthMedium
 	sig.Context.ContentSnippet = job.Change.Summary
 
 	proposer := "知识库系统"
-	mut, err := wp.engine.ProcessSignalForJob(sig, proposer, job.Change.Summary)
+	// 使用 ProcessSignalForDocJob 确保 token 被保存到 FeishuLinks
+	mut, _, err := wp.engine.ProcessSignalForDocJob(sig, proposer, job.Change.Summary, "wiki", "")
 	if err != nil {
 		log.Printf("[Worker] Error processing Wiki fallback signal: %v", err)
 		result.Err = err
