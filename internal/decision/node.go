@@ -102,6 +102,7 @@ type FeishuLinks struct {
 	RelatedMeetingIDs []string `json:"related_meeting_ids" yaml:"related_meeting_ids"`
 	RelatedTaskGUIDs []string `json:"related_task_guids" yaml:"related_task_guids"`
 	RelatedMinuteTokens []string `json:"related_minute_tokens" yaml:"related_minute_tokens"`
+	RelatedCommentIDs   []string `json:"related_comment_ids,omitempty" yaml:"related_comment_ids,omitempty"`
 }
 
 // AccessStats 访问统计（用于热点值计算）

@@ -58,8 +58,7 @@ func (a *MemoryAgent) ExtractDecision(content string, topics []string) (*Extract
 		}, err
 	}
 
-	log.Printf("[Agent] System prompt (first 500 chars): %s", truncateForLog(systemPrompt, 500))
-	log.Printf("[Agent] User prompt (first 500 chars): %s", truncateForLog(userPrompt, 500))
+	// Prompt logging suppressed
 
 	// 调用 LLM
 	log.Println("[Agent] Calling LLM...")
@@ -139,8 +138,7 @@ func (a *MemoryAgent) ExtractDecisionFromDoc(content string, topics []string, do
 		}, err
 	}
 
-	log.Printf("[Agent] Doc system prompt (first 500 chars): %s", truncateForLog(systemPrompt, 500))
-	log.Printf("[Agent] Doc user prompt (first 500 chars): %s", truncateForLog(userPrompt, 500))
+	// Doc prompt logging suppressed
 
 	log.Println("[Agent] Calling LLM for doc extraction...")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -221,8 +219,7 @@ func (a *MemoryAgent) ExtractDecisionFromDocWithContext(
 		}, err
 	}
 
-	log.Printf("[Agent] Doc system prompt (first 500 chars): %s", truncateForLog(systemPrompt, 500))
-	log.Printf("[Agent] Doc user prompt (first 500 chars): %s", truncateForLog(userPrompt, 500))
+	// Doc prompt logging suppressed
 
 	log.Println("[Agent] Calling LLM for doc extraction...")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -305,8 +302,7 @@ func (a *MemoryAgent) ExtractDecisionWithContext(
 		}, err
 	}
 
-	log.Printf("[Agent] System prompt (first 500 chars): %s", truncateForLog(systemPrompt, 500))
-	log.Printf("[Agent] User prompt (first 500 chars): %s", truncateForLog(userPrompt, 500))
+	// Prompt logging suppressed
 
 	// 调用 LLM
 	log.Println("[Agent] Calling LLM...")

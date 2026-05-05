@@ -48,7 +48,8 @@ type Change struct {
 	SenderName  string   `json:"sender_name,omitempty"`  // 发送者姓名
 	MentionIDs  []string `json:"mention_ids,omitempty"`  // @提及的用户 ID
 	RawContent  string   `json:"raw_content,omitempty"`  // 原始消息全文
-	ContextText string            `json:"context_text,omitempty"` // LLM 拼接上下文文本
+	ContextText string            `json:"context_text,omitempty"`
+	CommentID  string             `json:"comment_id,omitempty"` // LLM 拼接上下文文本
 	Meta        map[string]string `json:"meta,omitempty"`         // 附加元数据（如实际 doc token）
 }
 

@@ -116,6 +116,7 @@ type DetectorConfig struct {
 	BurstTimeout         time.Duration `yaml:"burst_timeout"`
 	HeartbeatInterval    time.Duration `yaml:"heartbeat_interval"`
 	CommentCheckInterval int           `yaml:"comment_check_interval_seconds"` // 评论检测周期（秒），0=不检测
+	DocTokens    []string      `yaml:"doc_tokens"`             // 可检测评论的文档 token 白名单
 }
 
 // StorageConfigV2 存储配置 (v2)

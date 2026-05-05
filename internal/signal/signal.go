@@ -47,6 +47,7 @@ type StateChangeSignal struct {
 	ChangeSummary string         `json:"change_summary"`
 	PrimaryID     string         `json:"primary_id"`
 	RelatedIDs    []string       `json:"related_ids"`
+	CommentID     string         `json:"comment_id,omitempty"`
 	Context       SignalContext  `json:"context"`
 	Strength      SignalStrength `json:"strength"`
 }

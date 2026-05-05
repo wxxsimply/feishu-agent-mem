@@ -410,6 +410,14 @@ var extractionDocStaticPrompt = `# 系统提示词：文档决策提取器（分
       "source": "im/comment/doc"
     }
   ],
+  "has_deletions": true/false,
+  "deletions": [
+    {
+      "original_decision": "被删除的决策内容",
+      "action": "rejected/deprecated/superseded",
+      "replaced_by": "取代的新决策标题（如有）"
+    }
+  ],
   "analysis": "一句话概括本次变更的性质和判断理由"
 }
 

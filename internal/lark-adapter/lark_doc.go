@@ -21,7 +21,9 @@ type DocExtractor struct {
 	processedLock       sync.Mutex
 	commentCheckTicker  int                // 周期性评论检测计数器
 	commentCheckEvery   int                // 每 N 次检测扫描一次评论（默认 5）
-	lastCommentCheck    int64              // 上次检查评论时的 Unix 时间戳（秒），用于评论新增判断
+	lastCommentCheck    int64              // 上次检查评论时的 Unix 时间戳
+	processedCommentIDs map[string]bool     // 已处理的评论 ID
+	docTokensWhitelist    []string           // 白名单：只检测这些 token 的文档（秒），用于评论新增判断
 }
 
 // NewDocExtractor 创建云文档提取器
@@ -37,6 +39,14 @@ func NewDocExtractor(cfg *Config) *DocExtractor {
 }
 
 // SetCommentCheckInterval 设置评论检测周期（秒）
+// SetDocTokens 设置文档检测白名单（只检测这些 token 的文档正文和评论）
+func (e *DocExtractor) SetDocTokens(tokens []string) {
+	if len(tokens) > 0 {
+		e.docTokensWhitelist = tokens
+		log.Printf("[lark_doc] Tracked doc tokens: %v", tokens)
+	}
+}
+
 func (e *DocExtractor) SetCommentCheckInterval(seconds int) {
 	if seconds > 0 {
 		// 将秒数转换为检测次数（每次检测间隔约 30s）
@@ -228,6 +238,7 @@ func (e *DocExtractor) searchDocsByTime(lastCheck time.Time) ([]Change, error) {
 		e.commentCheckTicker = 0
 		commentCutoff := e.lastCommentCheck
 		e.lastCommentCheck = time.Now().Unix()
+		e.processedCommentIDs = make(map[string]bool)
 		log.Printf("[lark_doc] Periodic comment check starting (since cutoff=%d)...", commentCutoff)
 		commentChanges := e.detectNewComments(results, commentCutoff)
 		if len(commentChanges) > 0 {
@@ -272,6 +283,13 @@ func (e *DocExtractor) detectNewComments(results []any, cutoff int64) []Change {
 
 		// 解析实际文档 token
 		docToken := e.resolveActualDocToken(resultMeta, token)
+
+		// 白名单过滤
+		if len(e.docTokensWhitelist) > 0 {
+			if !stringSliceContains(e.docTokensWhitelist, docToken) {
+				continue
+			}
+		}
 
 		// 获取文档评论
 		comments, err := e.FetchDocumentComments(docToken)
@@ -877,6 +895,16 @@ func containsDecisionKeyword(text string) bool {
 	lowerText := strings.ToLower(text)
 	for _, kw := range decisionKeywords {
 		if strings.Contains(lowerText, strings.ToLower(kw)) {
+			return true
+		}
+	}
+	return false
+}
+
+// stringSliceContains 检查字符串切片中是否包含目标
+func stringSliceContains(slice []string, target string) bool {
+	for _, s := range slice {
+		if s == target {
 			return true
 		}
 	}
