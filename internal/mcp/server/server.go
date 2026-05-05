@@ -78,6 +78,33 @@ func (s *MemoryMCPServer) registerTools() {
 		Description: "更新已有决策",
 	}, s.handleUpdateDecision)
 
+	
+	mcp.AddTool(s.sdkServer, &mcp.Tool{
+		Name:        "hot_decisions",
+		Description: "按热点值查询决策，从高到低排序",
+	}, s.handleHotDecisions)
+
+	mcp.AddTool(s.sdkServer, &mcp.Tool{
+		Name:        "decision_card",
+		Description: "获取决策的飞书卡片 JSON",
+	}, s.handleDecisionCard)
+
+	mcp.AddTool(s.sdkServer, &mcp.Tool{
+		Name:        "search_fulltext",
+		Description: "全文搜索决策记录",
+	}, s.handleFulltextSearch)
+
+	mcp.AddTool(s.sdkServer, &mcp.Tool{
+		Name:        "conflict_list",
+		Description: "列出所有决策冲突，或指定决策的冲突",
+	}, s.handleConflictList)
+
+	mcp.AddTool(s.sdkServer, &mcp.Tool{
+		Name:        "objection_list",
+		Description: "列出反对意见",
+	}, s.handleObjectionList)
+
+
 	mcp.AddTool(s.sdkServer, &mcp.Tool{
 		Name:        "extract_decision",
 		Description: "从文本内容中智能提取决策信息 (非LLM版本)",
@@ -96,6 +123,33 @@ type topicArgs struct {
 
 type decisionArgs struct {
 	SdrID string `json:"sdr_id" jsonschema:"决策ID"`
+}
+
+
+
+type listObjectionsArgs struct {
+	Topic  string `json:"topic,omitempty" jsonschema:"议题过滤"`
+	SdrID  string `json:"sdr_id,omitempty" jsonschema:"关联决策ID"`
+	Limit  float64 `json:"limit,omitempty" jsonschema:"结果限制"`
+}
+
+type hotDecisionsArgs struct {
+	MinScore float64 `json:"min_score,omitempty" jsonschema:"最低热点值"`
+	Limit    float64 `json:"limit,omitempty" jsonschema:"结果限制"`
+}
+
+type decisionCardArgs struct {
+	SdrID string `json:"sdr_id" jsonschema:"决策ID"`
+	ChatID string `json:"chat_id" jsonschema:"飞书群聊ID（可选）"`
+}
+
+type fulltextSearchArgs struct {
+	Query string `json:"query" jsonschema:"搜索关键词"`
+	Project string `json:"project,omitempty" jsonschema:"项目过滤"`
+}
+
+type conflictListArgs struct {
+	SdrID string `json:"sdr_id,omitempty" jsonschema:"决策ID（可选，返回该决策的所有冲突）"`
 }
 
 type extractDecisionArgs struct {
@@ -330,6 +384,185 @@ func (s *MemoryMCPServer) handleExtractDecision(ctx context.Context, req *mcp.Ca
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: text}},
 	}, emptyResult{}, nil
+}
+
+
+
+func (s *MemoryMCPServer) handleHotDecisions(ctx context.Context, req *mcp.CallToolRequest, args hotDecisionsArgs) (*mcp.CallToolResult, emptyResult, error) {
+	minScore := 0.0
+	if args.MinScore > 0 {
+		minScore = args.MinScore
+	}
+	limit := 20
+	if args.Limit > 0 {
+		limit = int(args.Limit)
+	}
+
+	var decisions []*decision.DecisionNode
+	if s.memoryGraph != nil {
+		decisions = s.memoryGraph.GetDecisionsByHotScore(minScore)
+		if len(decisions) > limit {
+			decisions = decisions[:limit]
+		}
+	}
+
+	text := "## 热点决策排行\n\n"
+	if len(decisions) == 0 {
+		text += "暂无数据"
+	} else {
+		for i, d := range decisions {
+			cat := "遗忘"
+			if d.AccessStats.HotScore >= 80 { cat = "活跃" } else if d.AccessStats.HotScore >= 50 { cat = "正常" } else if d.AccessStats.HotScore >= 20 { cat = "模糊" }
+			text += fmt.Sprintf("%d. [%s] %s (%.0f分, %s)\n", i+1, d.Status, d.Title, d.AccessStats.HotScore, cat)
+		}
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: text}},
+	}, emptyResult{}, nil
+}
+
+func (s *MemoryMCPServer) handleDecisionCard(ctx context.Context, req *mcp.CallToolRequest, args decisionCardArgs) (*mcp.CallToolResult, emptyResult, error) {
+	d, found := s.memoryGraph.GetDecision(args.SdrID)
+	if !found || d == nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "未找到指定的决策"}},
+		}, emptyResult{}, nil
+	}
+
+	text := fmt.Sprintf("## 决策卡片: %s\n\n", d.Title)
+	text += fmt.Sprintf("- **SDR ID**: %s\n", d.SDRID)
+	text += fmt.Sprintf("- **议题**: %s\n", d.Topic)
+	text += fmt.Sprintf("- **状态**: %s\n", d.Status)
+	text += fmt.Sprintf("- **影响等级**: %s\n", d.ImpactLevel)
+	text += fmt.Sprintf("- **热点值**: %.0f\n", d.AccessStats.HotScore)
+	if d.AccessStats.HotScore >= 80 {
+		text += "\n🔥 **活跃决策** — 近期频繁被引用/访问"
+	} else if d.AccessStats.HotScore >= 50 {
+		text += "\n✅ **正常决策** — 处于常规使用状态"
+	} else if d.AccessStats.HotScore >= 20 {
+		text += "\n🌫️ **模糊决策** — 回忆度较低，建议回顾"
+	} else {
+		text += "\n💤 **遗忘决策** — 长期未被引用，可能已过时"
+	}
+	text += fmt.Sprintf("\n\n### 决策内容\n\n%s\n\n", d.Decision)
+	if d.Rationale != "" {
+		text += fmt.Sprintf("**依据**: %s\n\n", d.Rationale)
+	}
+	text += fmt.Sprintf("**提出人**: %s | **执行人**: %s\n", d.Proposer, d.Executor)
+
+	// 如果有冲突关系
+	relations := s.memoryGraph.GetRelations(args.SdrID)
+	for _, rel := range relations {
+		if rel.Type == decision.RelationConflictsWith {
+			text += fmt.Sprintf("\n⚠️ **冲突**: %s\n", rel.Description)
+		}
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: text}},
+	}, emptyResult{}, nil
+}
+
+func (s *MemoryMCPServer) handleFulltextSearch(ctx context.Context, req *mcp.CallToolRequest, args fulltextSearchArgs) (*mcp.CallToolResult, emptyResult, error) {
+	var results []*decision.DecisionNode
+	if s.memoryGraph != nil {
+		results = s.memoryGraph.SearchByKeywords(args.Query, "")
+	}
+
+	text := fmt.Sprintf("## 全文搜索: %s\n\n", args.Query)
+	if len(results) == 0 {
+		text += "未找到匹配的决策"
+	} else {
+		text += fmt.Sprintf("共找到 %d 个匹配\n\n", len(results))
+		for _, r := range results[:min(20, len(results))] {
+			text += fmt.Sprintf("- [%s] **%s** (%s)\n  %s\n", r.Status, r.Title, r.SDRID, truncateStr(r.Decision, 100))
+		}
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: text}},
+	}, emptyResult{}, nil
+}
+
+func (s *MemoryMCPServer) handleConflictList(ctx context.Context, req *mcp.CallToolRequest, args conflictListArgs) (*mcp.CallToolResult, emptyResult, error) {
+	text := "## 决策冲突列表\n\n"
+	found := false
+
+	if args.SdrID != "" {
+		// 查询单个决策的冲突
+		relations := s.memoryGraph.GetRelations(args.SdrID)
+		text += fmt.Sprintf("### 决策 %s 的冲突\n\n", args.SdrID)
+		for _, rel := range relations {
+			if rel.Type == decision.RelationConflictsWith {
+				found = true
+				text += fmt.Sprintf("- ⚠️ %s → %s\n", args.SdrID, rel.TargetSDRID)
+				text += fmt.Sprintf("  %s\n", rel.Description)
+			}
+		}
+	} else {
+		// 列出所有冲突
+		allDecisions := s.memoryGraph.GetAllDecisions()
+		for _, d := range allDecisions {
+			for _, rel := range d.Relations {
+				if rel.Type == decision.RelationConflictsWith {
+					found = true
+					text += fmt.Sprintf("- ⚠️ %s ↔ %s\n", d.SDRID, rel.TargetSDRID)
+					text += fmt.Sprintf("  %s: %s\n", d.Title, rel.Description)
+				}
+			}
+		}
+	}
+
+	if !found {
+		text += "未发现决策冲突"
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: text}},
+	}, emptyResult{}, nil
+}
+
+func (s *MemoryMCPServer) handleObjectionList(ctx context.Context, req *mcp.CallToolRequest, args listObjectionsArgs) (*mcp.CallToolResult, emptyResult, error) {
+	text := "## 反对意见列表\n\n"
+
+	limit := 20
+	if args.Limit > 0 {
+		limit = int(args.Limit)
+	}
+
+	if s.gitStorage != nil {
+		objections, err := s.gitStorage.ListObjections("feishu-mem", args.Topic)
+		if err != nil {
+			text += fmt.Sprintf("查询失败: %v", err)
+		} else if len(objections) == 0 {
+			text += "暂无反对意见"
+		} else {
+			text += fmt.Sprintf("共 %d 条反对意见\n\n", len(objections))
+			count := 0
+			for _, obj := range objections {
+				if count >= limit { break }
+				if args.SdrID != "" && obj.ReferencesDecision != args.SdrID { continue }
+				text += fmt.Sprintf("- **%s**: %s\n", obj.OID, obj.ObjectionContent)
+				text += fmt.Sprintf("  反对人: %s | 状态: %s | 来源: %s\n", obj.Objector, obj.Status, obj.SourceType)
+				if obj.ReferencesDecision != "" {
+					text += fmt.Sprintf("  关联决策: %s\n", obj.ReferencesDecision)
+				}
+				count++
+			}
+		}
+	} else {
+		text += "Git 存储未初始化"
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: text}},
+	}, emptyResult{}, nil
+}
+
+func truncateStr(s string, maxLen int) string {
+	if len(s) <= maxLen { return s }
+	return s[:maxLen] + "..."
 }
 
 func (s *MemoryMCPServer) registerResources() {
