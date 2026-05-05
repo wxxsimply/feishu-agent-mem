@@ -15,6 +15,7 @@ import (
 	"feishu-mem/internal/core"
 	larkadapter "feishu-mem/internal/lark-adapter"
 	"feishu-mem/internal/mcp/server"
+	"feishu-mem/internal/push"
 	"feishu-mem/internal/signal"
 	"feishu-mem/internal/storage/bitable"
 	"feishu-mem/internal/storage/git"
@@ -198,6 +199,43 @@ func main() {
 	defer cancel()
 
 	go resultProcessor(ctx, workerPool, pipeline, workerPool.Results())
+
+	// 启动状态自动更新器
+	statusUpdater := signal.NewStatusUpdater(memoryGraph, pipeline, 5*time.Minute)
+	go statusUpdater.Start(ctx)
+	log.Println("[Service] StatusUpdater started (interval: 5m)")
+
+	// 启动脏数据定期持久化（每 5 分钟把 AccessStats 变更写回 Git）
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				dirtyNodes := memoryGraph.GetDirtyAndClean()
+				for _, node := range dirtyNodes {
+					if _, err := gitStorage.WriteDecision(node); err != nil {
+						log.Printf("[Flush] Failed to persist %s: %v", node.SDRID, err)
+					}
+				}
+				if len(dirtyNodes) > 0 {
+					log.Printf("[Flush] Persisted %d dirty nodes to Git", len(dirtyNodes))
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	log.Println("[Service] Dirty flush goroutine started (interval: 5m)")
+
+	// 启动推送调度器
+	chatIDs := larkCfg.ChatIDs
+	if len(chatIDs) > 0 {
+		pushEngine := push.NewPushEngine(memoryGraph)
+		pushScheduler := push.NewPushScheduler(pushEngine, chatIDs)
+		go pushScheduler.Start(ctx)
+		log.Printf("[Service] PushScheduler started (chats: %v)", chatIDs)
+	}
 
 	// 初始化所有检测器的lastCheck
 	log.Println("[Service] Initializing detector states...")

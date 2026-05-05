@@ -20,6 +20,13 @@ type DecisionNode struct {
 	PhaseScope  PhaseScope  `json:"phase_scope" yaml:"phase_scope"`
 	VersionRange VersionRange `json:"version_range" yaml:"version_range"`
 
+	// === 时间关联（用于项目阶段追踪）===
+	ProjectPhase  string  `json:"project_phase,omitempty" yaml:"project_phase,omitempty"`   // 项目阶段标识（如 "Phase 1: 数据库迁移"）
+	DecisionTime  string  `json:"decision_time,omitempty" yaml:"decision_time,omitempty"`   // 决策时间点（如 "2026-05-06"、"上周五"）
+	EffectiveTime string  `json:"effective_time,omitempty" yaml:"effective_time,omitempty"` // 生效时间
+	Deadline      string  `json:"deadline,omitempty" yaml:"deadline,omitempty"`             // 截止时间
+	DecisionType  string  `json:"decision_type,omitempty" yaml:"decision_type,omitempty"`   // 决策类型（new/confirmation/rejection）
+
 	// === 影响级别 ===
 	ImpactLevel ImpactLevel `json:"impact_level" yaml:"impact_level"`
 
@@ -144,7 +151,7 @@ func NewDecisionNode(sdrID, title, project, topic string) *DecisionNode {
 		AccessStats: AccessStats{
 			AccessCount:    0,
 			ReferenceCount: 0,
-			HotScore:       0,
+			HotScore:       100, // 新决策初始热点值为最大值
 			LastCalculated: &now,
 		},
 	}

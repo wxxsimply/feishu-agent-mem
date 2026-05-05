@@ -14,6 +14,8 @@ import (
 type MemoryGraphInterface interface {
 	GetAllDecisions() []*decision.DecisionNode
 	UpsertDecision(node *decision.DecisionNode, project string)
+	RecordReference(sdrID string) error
+	UpdateAccessStats(sdrID string) error
 }
 
 type PipelineInterface interface {
@@ -161,6 +163,24 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 				newNode.ImpactLevel = decision.ImpactLevel(result.Decision.ImpactLevel)
 				newNode.Status = decision.StatusPending
 
+				// 设置时间相关字段
+				if result.Decision.ProjectPhase != "" {
+					newNode.ProjectPhase = result.Decision.ProjectPhase
+					newNode.Phase = result.Decision.ProjectPhase
+				}
+				if result.Decision.DecisionTime != "" {
+					newNode.DecisionTime = result.Decision.DecisionTime
+				}
+				if result.Decision.EffectiveTime != "" {
+					newNode.EffectiveTime = result.Decision.EffectiveTime
+				}
+				if result.Decision.Deadline != "" {
+					newNode.Deadline = result.Decision.Deadline
+				}
+				if result.Decision.DecisionType != "" {
+					newNode.DecisionType = result.Decision.DecisionType
+				}
+
 				// 记录来源信息到 FeishuLinks
 				newNode.FeishuLinks.RelatedChatIDs = appendRelatedIDs(newNode.FeishuLinks.RelatedChatIDs, sig)
 				newNode.FeishuLinks.RelatedDocTokens = appendRelatedTokens(newNode.FeishuLinks.RelatedDocTokens, sig)
@@ -210,6 +230,7 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 		// Step 2b: 跨文档匹配 → evaluateDedupAction（可能检测到冲突）
 		if existing := e.findSimilarDecision(newNode, sig, allDecisions); existing != nil {
 			log.Printf("[SignalEngine] Found similar/related decision: %s (%s)", existing.Title, existing.SDRID)
+			_ = e.Memory.RecordReference(existing.SDRID) // 记录被引用
 
 			action := e.evaluateDedupAction(newNode, existing)
 			switch action {
@@ -401,11 +422,21 @@ func (e *SignalActivationEngine) ProcessSignalForDocJob(sig *StateChangeSignal, 
 		newNode.Status = decision.StatusPending
 
 		// 设置时间相关字段
-		if dec.DecisionTime != "" {
-			newNode.Phase = dec.DecisionTime
-		}
 		if dec.ProjectPhase != "" {
-			newNode.Phase = dec.ProjectPhase
+			newNode.ProjectPhase = dec.ProjectPhase
+			newNode.Phase = dec.ProjectPhase // 兼容旧逻辑
+		}
+		if dec.DecisionTime != "" {
+			newNode.DecisionTime = dec.DecisionTime
+		}
+		if dec.EffectiveTime != "" {
+			newNode.EffectiveTime = dec.EffectiveTime
+		}
+		if dec.Deadline != "" {
+			newNode.Deadline = dec.Deadline
+		}
+		if dec.DecisionType != "" {
+			newNode.DecisionType = dec.DecisionType
 		}
 
 		// 设置飞书关联
@@ -432,6 +463,7 @@ func (e *SignalActivationEngine) ProcessSignalForDocJob(sig *StateChangeSignal, 
 		// Step 3b: 跨文档匹配 → evaluateDedupAction
 		if existing := e.findSimilarDecision(newNode, sig, allDecisions); existing != nil {
 			log.Printf("[SignalEngine] Found similar decision: %s (%s)", existing.Title, existing.SDRID)
+			_ = e.Memory.RecordReference(existing.SDRID) // 记录被引用
 
 			action := e.evaluateDedupAction(newNode, existing)
 			switch action {

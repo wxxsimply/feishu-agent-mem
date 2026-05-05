@@ -42,6 +42,26 @@ func RenderDecisionFile(node *decision.DecisionNode) string {
 	if node.Executor != "" {
 		buf.WriteString(fmt.Sprintf("- **执行人**: %s\n", node.Executor))
 	}
+	if node.DecisionType != "" {
+		buf.WriteString(fmt.Sprintf("- **决策类型**: %s\n", node.DecisionType))
+	}
+
+	// 时间关联
+	if node.ProjectPhase != "" || node.DecisionTime != "" || node.EffectiveTime != "" || node.Deadline != "" {
+		buf.WriteString("\n## 时间关联\n\n")
+		if node.ProjectPhase != "" {
+			buf.WriteString(fmt.Sprintf("- **项目阶段**: %s\n", node.ProjectPhase))
+		}
+		if node.DecisionTime != "" {
+			buf.WriteString(fmt.Sprintf("- **决策时间**: %s\n", node.DecisionTime))
+		}
+		if node.EffectiveTime != "" {
+			buf.WriteString(fmt.Sprintf("- **生效时间**: %s\n", node.EffectiveTime))
+		}
+		if node.Deadline != "" {
+			buf.WriteString(fmt.Sprintf("- **截止时间**: %s\n", node.Deadline))
+		}
+	}
 
 	return buf.String()
 }

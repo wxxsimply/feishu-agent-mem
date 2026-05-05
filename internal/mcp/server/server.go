@@ -282,6 +282,10 @@ func (s *MemoryMCPServer) handleSearch(ctx context.Context, req *mcp.CallToolReq
 		if len(results) > limit {
 			results = results[:limit]
 		}
+		// 记录访问
+		for _, r := range results {
+			_ = s.memoryGraph.UpdateAccessStats(r.SDRID)
+		}
 	}
 
 	text := "## 搜索结果\n\n"
@@ -303,6 +307,10 @@ func (s *MemoryMCPServer) handleTopic(ctx context.Context, req *mcp.CallToolRequ
 	var decisions []*decision.DecisionNode
 	if s.memoryGraph != nil {
 		decisions = s.memoryGraph.QueryByTopic("", args.Topic)
+		// 记录访问
+		for _, d := range decisions {
+			_ = s.memoryGraph.UpdateAccessStats(d.SDRID)
+		}
 	}
 
 	text := fmt.Sprintf("## 议题: %s\n\n", args.Topic)
@@ -321,6 +329,9 @@ func (s *MemoryMCPServer) handleDecision(ctx context.Context, req *mcp.CallToolR
 	var found bool
 	if s.memoryGraph != nil {
 		d, found = s.memoryGraph.GetDecision(args.SdrID)
+		if found && d != nil {
+			_ = s.memoryGraph.UpdateAccessStats(args.SdrID) // 记录访问
+		}
 	}
 
 	var text string
@@ -458,6 +469,10 @@ func (s *MemoryMCPServer) handleHotDecisions(ctx context.Context, req *mcp.CallT
 		if len(decisions) > limit {
 			decisions = decisions[:limit]
 		}
+		// 记录访问
+		for _, d := range decisions {
+			_ = s.memoryGraph.UpdateAccessStats(d.SDRID)
+		}
 	}
 
 	text := "## 热点决策排行\n\n"
@@ -542,6 +557,10 @@ func (s *MemoryMCPServer) handleRecentDecisions(ctx context.Context, req *mcp.Ca
 	var decisions []*decision.DecisionNode
 	if s.memoryGraph != nil {
 		decisions = s.memoryGraph.GetRecentDecisions(since)
+		// 记录访问
+		for _, d := range decisions {
+			_ = s.memoryGraph.UpdateAccessStats(d.SDRID)
+		}
 	}
 
 	text := fmt.Sprintf("## 最近 %.0f 小时的决策\n\n", hours)
