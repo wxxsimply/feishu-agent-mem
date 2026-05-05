@@ -107,6 +107,10 @@ func main() {
 	signalEngine := signal.NewSignalActivationEngine(pipeline, memoryGraph)
 
 	// 初始化检测器状态
+	docExtractor := larkadapter.NewDocExtractor(larkCfg)
+	if len(settings.Detectors.LarkDoc.DocTokens) > 0 {
+		docExtractor.SetDocTokens(settings.Detectors.LarkDoc.DocTokens)
+	}
 	detectorStates := map[signal.AdapterType]*detectorState{
 		signal.AdapterIM: {
 			detector: larkadapter.NewIMExtractor(larkCfg),
@@ -120,8 +124,8 @@ func main() {
 			config: settings.Detectors.LarkVC,
 			enabled: settings.Detectors.LarkVC.Enabled,
 		},
-		signal.AdapterDocs: {
-			detector: larkadapter.NewDocExtractor(larkCfg),
+	signal.AdapterDocs: {
+			detector: docExtractor,
 			adapterType: signal.AdapterDocs,
 			config: settings.Detectors.LarkDoc,
 			enabled: settings.Detectors.LarkDoc.Enabled,

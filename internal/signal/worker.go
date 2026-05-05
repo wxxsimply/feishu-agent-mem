@@ -227,7 +227,7 @@ func (wp *WorkerPool) processIMJob(job *DetectionJob, result *DecisionResult) *D
 	if proposer == "" {
 		proposer = extractSenderFromSummary(change.Summary)
 	}
-	mut, _, err := wp.engine.ProcessSignalForJob(sig, proposer, content)
+	mut, pendingMuts, err := wp.engine.ProcessSignalForJob(sig, proposer, content)
 	if err != nil {
 		log.Printf("[Worker] Error processing signal: %v", err)
 		result.Err = err
@@ -235,6 +235,7 @@ func (wp *WorkerPool) processIMJob(job *DetectionJob, result *DecisionResult) *D
 	}
 
 	result.Mutation = mut
+	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
 	return result
 }
 
@@ -247,13 +248,14 @@ func (wp *WorkerPool) processVCJob(job *DetectionJob, result *DecisionResult) *D
 		sig.Context.ContentSnippet = job.Change.Summary
 
 		proposer := "会议系统"
-		mut, _, err := wp.engine.ProcessSignalForJob(sig, proposer, job.Change.Summary)
+		mut, pendingMuts, err := wp.engine.ProcessSignalForJob(sig, proposer, job.Change.Summary)
 		if err != nil {
 			log.Printf("[Worker] Error processing VC signal: %v", err)
 			result.Err = err
 			return result
 		}
 		result.Mutation = mut
+	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
 	}
 
 	log.Println("========== WORKER PROCESS END ==========")
@@ -268,6 +270,7 @@ func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) 
 		"doc_updated":          true,
 		"doc_content_updated":  true,
 		"doc_created":          true,
+		"doc_comment_added":    true,
 	}
 	if !contentTypes[job.Change.Type] && !containsDecisionKeyword(job.Change.Summary) {
 		log.Println("[Worker] Not a document content change, skipping")
@@ -340,13 +343,14 @@ func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) 
 	}
 
 	proposer := "文档系统"
-	mut, _, err := wp.engine.ProcessSignalForDocJob(sig, proposer, analysisContent, string(docType), title)
+	mut, pendingMuts, err := wp.engine.ProcessSignalForDocJob(sig, proposer, analysisContent, string(docType), title)
 	if err != nil {
 		log.Printf("[Worker] Error processing doc signal: %v", err)
 		result.Err = err
 		return result
 	}
 	result.Mutation = mut
+	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
 
 	log.Println("========== WORKER PROCESS END ==========")
 	return result
@@ -371,13 +375,14 @@ func (wp *WorkerPool) processTaskJob(job *DetectionJob, result *DecisionResult) 
 		sig.Context.DecisionSignals = []string{"task_done"}
 
 		proposer := "任务系统"
-		mut, _, err := wp.engine.ProcessSignalForJob(sig, proposer, job.Change.Summary)
+		mut, pendingMuts, err := wp.engine.ProcessSignalForJob(sig, proposer, job.Change.Summary)
 		if err != nil {
 			log.Printf("[Worker] Error processing Task signal: %v", err)
 			result.Err = err
 			return result
 		}
 		result.Mutation = mut
+	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
 	}
 
 	log.Println("========== WORKER PROCESS END ==========")
@@ -390,15 +395,17 @@ func (wp *WorkerPool) processDocComment(job *DetectionJob, result *DecisionResul
 	sig.PrimaryID = docToken
 	sig.Strength = StrengthMedium
 	sig.Context.ContentSnippet = job.Change.Summary
+	sig.CommentID = job.Change.CommentID
 
 	proposer := "文档系统"
-	mut, _, err := wp.engine.ProcessSignalForDocJob(sig, proposer, job.Change.Summary, "comment", "")
+	mut, pendingMuts, err := wp.engine.ProcessSignalForDocJob(sig, proposer, job.Change.Summary, "comment", "")
 	if err != nil {
 		log.Printf("[Worker] Error processing doc comment signal: %v", err)
 		result.Err = err
 		return result
 	}
 	result.Mutation = mut
+	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
 
 	log.Println("========== WORKER PROCESS END ==========")
 	return result
@@ -410,16 +417,18 @@ func (wp *WorkerPool) processDocFallback(job *DetectionJob, result *DecisionResu
 	sig.PrimaryID = job.Change.EntityID // 即使内容获取失败，也要设置 docToken 用于去重
 	sig.Strength = StrengthStrong
 	sig.Context.ContentSnippet = job.Change.Summary
+	sig.CommentID = job.Change.CommentID
 
 	proposer := "文档系统"
 	// 使用 ProcessSignalForDocJob 确保 token 被保存到 FeishuLinks
-	mut, _, err := wp.engine.ProcessSignalForDocJob(sig, proposer, job.Change.Summary, "doc", "")
+	mut, pendingMuts, err := wp.engine.ProcessSignalForDocJob(sig, proposer, job.Change.Summary, "doc", "")
 	if err != nil {
 		log.Printf("[Worker] Error processing Docs fallback signal: %v", err)
 		result.Err = err
 		return result
 	}
 	result.Mutation = mut
+	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
 	return result
 }
 
@@ -467,13 +476,14 @@ func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) 
 	}
 
 	proposer := "知识库系统"
-	mut, _, err := wp.engine.ProcessSignalForDocJob(sig, proposer, analysisContent, string(docType), title)
+	mut, pendingMuts, err := wp.engine.ProcessSignalForDocJob(sig, proposer, analysisContent, string(docType), title)
 	if err != nil {
 		log.Printf("[Worker] Error processing Wiki signal: %v", err)
 		result.Err = err
 		return result
 	}
 	result.Mutation = mut
+	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
 
 	log.Println("========== WORKER PROCESS END ==========")
 	return result
@@ -488,13 +498,14 @@ func (wp *WorkerPool) processWikiFallback(job *DetectionJob, result *DecisionRes
 
 	proposer := "知识库系统"
 	// 使用 ProcessSignalForDocJob 确保 token 被保存到 FeishuLinks
-	mut, _, err := wp.engine.ProcessSignalForDocJob(sig, proposer, job.Change.Summary, "wiki", "")
+	mut, pendingMuts, err := wp.engine.ProcessSignalForDocJob(sig, proposer, job.Change.Summary, "wiki", "")
 	if err != nil {
 		log.Printf("[Worker] Error processing Wiki fallback signal: %v", err)
 		result.Err = err
 		return result
 	}
 	result.Mutation = mut
+	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
 	return result
 }
 

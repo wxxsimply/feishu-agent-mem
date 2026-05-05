@@ -74,6 +74,32 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 	allDecisions := e.Memory.GetAllDecisions()
 	var lastLLMResult *llm.ExtractionResult
 
+	// Step 0: 评论级别去重
+	if sig.CommentID != "" || strings.TrimSpace(content) != "" {
+		for _, existing := range allDecisions {
+			if sig.CommentID != "" {
+				for _, cid := range existing.FeishuLinks.RelatedCommentIDs {
+					if cid == sig.CommentID {
+						log.Printf("[SignalEngine] Comment %s already processed (ID match), skipping", sig.CommentID)
+						log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
+						return nil, nil, nil
+					}
+				}
+			}
+			if sig.PrimaryID != "" {
+				for _, docToken := range existing.FeishuLinks.RelatedDocTokens {
+					if docToken == sig.PrimaryID {
+						if strings.Contains(existing.Decision, content) {
+							log.Printf("[SignalEngine] Comment already processed (content+doc match with %s), skipping", existing.SDRID)
+							log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
+							return nil, nil, nil
+						}
+					}
+				}
+			}
+		}
+	}
+
 	if e.llmAgent.IsAvailable() {
 		log.Println("[SignalEngine] LLM is available, calling...")
 
@@ -141,6 +167,12 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 				if sig.PrimaryID != "" {
 					newNode.FeishuLinks.RelatedDocTokens = appendUniqueString(newNode.FeishuLinks.RelatedDocTokens, sig.PrimaryID)
 				}
+				if sig.CommentID != "" {
+					newNode.FeishuLinks.RelatedCommentIDs = appendUniqueString(newNode.FeishuLinks.RelatedCommentIDs, sig.CommentID)
+				}
+				if sig.CommentID != "" {
+					newNode.FeishuLinks.RelatedCommentIDs = appendUniqueString(newNode.FeishuLinks.RelatedCommentIDs, sig.CommentID)
+				}
 
 				log.Printf("[SignalEngine] Decision extracted from LLM: %s", result.Decision.Title)
 			} else if !result.HasDecision {
@@ -204,6 +236,13 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 		}
 	}
 
+	// 如果 newNode 为 nil（仅有反对意见无决策），只返回 pending
+	if newNode == nil {
+		if len(pending) > 0 {
+			log.Printf("[SignalEngine] No decision, returning %d objection mutations only", len(pending))
+		}
+		return nil, pending, nil
+	}
 	mut := e.StateMachine.CreateMutationForNewDecision(newNode, sig)
 	if len(pending) > 0 {
 		log.Printf("[SignalEngine] Also created %d objection mutations", len(pending))
@@ -226,6 +265,57 @@ func (e *SignalActivationEngine) ProcessSignalForDocJob(sig *StateChangeSignal, 
 	var newNode *decision.DecisionNode
 	allDecisions := e.Memory.GetAllDecisions()
 	var lastLLMResult *llm.ExtractionResult
+
+	// Step 0: 评论级别去重
+	if sig.CommentID != "" {
+		for _, existing := range allDecisions {
+			for _, cid := range existing.FeishuLinks.RelatedCommentIDs {
+				if cid == sig.CommentID {
+					log.Printf("[SignalEngine] Comment %s already processed (ID match), skipping", sig.CommentID)
+					log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
+					return nil, nil, nil
+				}
+			}
+			if sig.PrimaryID != "" {
+				for _, docToken := range existing.FeishuLinks.RelatedDocTokens {
+					if docToken == sig.PrimaryID {
+						if strings.Contains(existing.Decision, content) {
+							log.Printf("[SignalEngine] Comment already processed (content+doc match with %s), skipping", existing.SDRID)
+							log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
+							return nil, nil, nil
+						}
+					}
+				}
+			}
+		}
+	}
+
+
+	// Step 0: 评论级别去重
+	if sig.CommentID != "" || strings.TrimSpace(content) != "" {
+		for _, existing := range allDecisions {
+			if sig.CommentID != "" {
+				for _, cid := range existing.FeishuLinks.RelatedCommentIDs {
+					if cid == sig.CommentID {
+						log.Printf("[SignalEngine] Comment %s already processed (ID match), skipping", sig.CommentID)
+						log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
+						return nil, nil, nil
+					}
+				}
+			}
+			if sig.PrimaryID != "" {
+				for _, docToken := range existing.FeishuLinks.RelatedDocTokens {
+					if docToken == sig.PrimaryID {
+						if strings.Contains(existing.Decision, content) {
+							log.Printf("[SignalEngine] Comment already processed (content+doc match with %s), skipping", existing.SDRID)
+							log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
+							return nil, nil, nil
+						}
+					}
+				}
+			}
+		}
+	}
 
 	if e.llmAgent.IsAvailable() {
 		log.Println("[SignalEngine] LLM is available, calling...")
@@ -287,12 +377,21 @@ func (e *SignalActivationEngine) ProcessSignalForDocJob(sig *StateChangeSignal, 
 				if sig.PrimaryID != "" {
 					newNode.FeishuLinks.RelatedDocTokens = appendUniqueString(newNode.FeishuLinks.RelatedDocTokens, sig.PrimaryID)
 				}
+				if sig.CommentID != "" {
+					newNode.FeishuLinks.RelatedCommentIDs = appendUniqueString(newNode.FeishuLinks.RelatedCommentIDs, sig.CommentID)
+				}
+				if sig.CommentID != "" {
+					newNode.FeishuLinks.RelatedCommentIDs = appendUniqueString(newNode.FeishuLinks.RelatedCommentIDs, sig.CommentID)
+				}
 
 				log.Printf("[SignalEngine] Decision extracted from doc: %s", docResult.Decision.Title)
-			} else if !docResult.HasDecision {
-				log.Printf("[SignalEngine] LLM determined no decision in doc, skipping entirely")
+			} else if !docResult.HasDecision && !docResult.HasObjections {
+				log.Printf("[SignalEngine] LLM determined no decision and no objections, skipping entirely")
 				log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
 				return nil, nil, nil
+			} else if !docResult.HasDecision && docResult.HasObjections {
+				log.Printf("[SignalEngine] No decision but found %d objections, processing objections only",
+					len(docResult.Objections))
 			} else {
 				log.Printf("[SignalEngine] LLM confidence too low (%.2f < 0.6), skipping",
 					docResult.Confidence)
@@ -351,6 +450,13 @@ func (e *SignalActivationEngine) ProcessSignalForDocJob(sig *StateChangeSignal, 
 
 	}
 
+	// 如果 newNode 为 nil（仅有反对意见无决策），只返回 pending
+	if newNode == nil {
+		if len(pending) > 0 {
+			log.Printf("[SignalEngine] No decision, returning %d objection mutations only", len(pending))
+		}
+		return nil, pending, nil
+	}
 	mut := e.StateMachine.CreateMutationForNewDecision(newNode, sig)
 	if len(pending) > 0 {
 		log.Printf("[SignalEngine] Also created %d objection mutations", len(pending))
