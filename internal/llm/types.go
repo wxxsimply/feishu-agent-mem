@@ -27,14 +27,17 @@ type DeletedDecisionExtract struct {
 
 // ExtractionResult 决策提取结果
 type ExtractionResult struct {
-	HasDecision   bool                  `json:"has_decision"`
-	Confidence    float64               `json:"confidence"`
-	Decision      *DecisionExtract      `json:"decision,omitempty"`
-	HasObjections bool                  `json:"has_objections,omitempty"`
-	Objections    []ObjectionExtract    `json:"objections,omitempty"`
-	HasDeletions  bool                  `json:"has_deletions,omitempty"`
+	HasDecision   bool                     `json:"has_decision"`
+	ChangeType    string                   `json:"change_type,omitempty"`    // decision/discussion/status_update/clarification/administrative/mixed
+	Confidence    float64                  `json:"confidence"`
+	Decision      *DecisionExtract         `json:"decision,omitempty"`       // 单决策（兼容旧格式）
+	Decisions     []DecisionExtract        `json:"decisions,omitempty"`      // 多决策（新格式）
+	HasObjections bool                     `json:"has_objections,omitempty"`
+	Objections    []ObjectionExtract       `json:"objections,omitempty"`
+	HasDeletions  bool                     `json:"has_deletions,omitempty"`
 	Deletions     []DeletedDecisionExtract `json:"deletions,omitempty"`
-	ExtractedFrom string                `json:"extracted_from"`
+	Analysis      string                   `json:"analysis,omitempty"`       // 变更性质概括
+	ExtractedFrom string                   `json:"extracted_from"`
 }
 
 // DecisionExtract 提取的决策
@@ -49,6 +52,12 @@ type DecisionExtract struct {
 	Executor        string           `json:"executor"`
 	DecisionType    string           `json:"decision_type,omitempty"`
 	RelatedEntities RelatedEntities  `json:"related_entities"`
+
+	// 时间相关字段 — 用于项目阶段关联
+	DecisionTime  string `json:"decision_time,omitempty"`  // 决策时间点（从文档中提取，如 "2026-05-06"、"上周五"、"5月15日"）
+	EffectiveTime string `json:"effective_time,omitempty"` // 生效时间（决策开始执行的时间）
+	Deadline      string `json:"deadline,omitempty"`       // 截止时间（如果有）
+	ProjectPhase  string `json:"project_phase,omitempty"`  // 项目阶段标识（如 "Phase 1: 数据库迁移"）
 }
 
 // RelatedEntities 相关实体

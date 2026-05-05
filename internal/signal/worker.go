@@ -29,12 +29,13 @@ type DecisionResult struct {
 
 // WorkerPool 工作池
 type WorkerPool struct {
-	jobChan    chan *DetectionJob
-	resultChan chan *DecisionResult
-	wg         sync.WaitGroup
-	engine     *SignalActivationEngine
-	maxWorkers int
-	stats      *WorkerStats
+	jobChan         chan *DetectionJob
+	resultChan      chan *DecisionResult
+	wg              sync.WaitGroup
+	engine          *SignalActivationEngine
+	maxWorkers      int
+	stats           *WorkerStats
+	debounceTracker *larkadapter.DocDebounceTracker
 }
 
 // WorkerStats 工作统计
@@ -67,6 +68,11 @@ func (wp *WorkerPool) Start() {
 		wp.wg.Add(1)
 		go wp.worker(i)
 	}
+}
+
+// SetDebounceTracker 设置防抖追踪器
+func (wp *WorkerPool) SetDebounceTracker(tracker *larkadapter.DocDebounceTracker) {
+	wp.debounceTracker = tracker
 }
 
 // worker 工作协程
@@ -316,10 +322,10 @@ func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) 
 			content = content[:3000] + "\n...（diff已截断）"
 		}
 	} else {
-		// 首次检测（无缓存），取文档末尾部分
-		log.Printf("[Worker] No cached content, using document tail")
+		// 首次检测（无缓存），取文档开头部分（决策通常在开头）
+		log.Printf("[Worker] No cached content, using document head")
 		if len(content) > 3000 {
-			content = "...（文档前面已省略）\n" + content[len(content)-3000:]
+			content = content[:3000] + "\n...（文档后面已省略）"
 		}
 	}
 
@@ -352,10 +358,10 @@ func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) 
 	sig.Context.ContentSnippet = truncateForLog(content, 1000)
 	sig.Context.IsDecision = true
 
-	// 提取后 3000 字符送 LLM 分析（避免 token 超限，取末尾以捕获最新变更）
+	// 提取前 3000 字符送 LLM 分析（决策通常在文档开头）
 	analysisContent := content
 	if len(analysisContent) > 3000 {
-		analysisContent = "...（前面已截断）\n" + analysisContent[len(analysisContent)-3000:]
+		analysisContent = analysisContent[:3000] + "\n...（后面已截断）"
 	}
 
 	proposer := "文档系统"
@@ -367,6 +373,18 @@ func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) 
 	}
 	result.Mutation = mut
 	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
+
+	// 如果成功提取到决策（main 或 pending），标记文档已处理（防抖用）
+	if wp.debounceTracker != nil && (mut != nil || len(pendingMuts) > 0) {
+		actualDocToken := docToken
+		if tok, ok := job.Change.Meta["actual_doc_token"]; ok && tok != "" {
+			actualDocToken = tok
+		}
+		contentHash := larkadapter.ComputeContentHash(content)
+		wp.debounceTracker.MarkProcessed(actualDocToken, contentHash)
+		log.Printf("[Debounce] Marked doc %s as processed (hash: %s, main=%v, pending=%d)",
+			actualDocToken, contentHash[:16]+"...", mut != nil, len(pendingMuts))
+	}
 
 	log.Println("========== WORKER PROCESS END ==========")
 	return result
@@ -485,10 +503,10 @@ func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) 
 			content = content[:3000] + "\n...（diff已截断）"
 		}
 	} else {
-		// 首次检测（无缓存），取文档末尾部分
-		log.Printf("[Worker] No cached wiki content, using tail")
+		// 首次检测（无缓存），取文档开头部分（决策通常在开头）
+		log.Printf("[Worker] No cached wiki content, using head")
 		if len(content) > 3000 {
-			content = "...（前面已截断）\n" + content[len(content)-3000:]
+			content = content[:3000] + "\n...（文档后面已省略）"
 		}
 	}
 	if len(content) > 0 {
@@ -520,6 +538,14 @@ func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) 
 	}
 	result.Mutation = mut
 	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
+
+	// 如果成功提取到决策（main 或 pending），标记文档已处理（防抖用）
+	if wp.debounceTracker != nil && (mut != nil || len(pendingMuts) > 0) {
+		contentHash := larkadapter.ComputeContentHash(content)
+		wp.debounceTracker.MarkProcessed(nodeToken, contentHash)
+		log.Printf("[Debounce] Marked wiki node %s as processed (hash: %s, main=%v, pending=%d)",
+			nodeToken, contentHash[:16]+"...", mut != nil, len(pendingMuts))
+	}
 
 	log.Println("========== WORKER PROCESS END ==========")
 	return result

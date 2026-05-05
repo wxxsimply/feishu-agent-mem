@@ -22,20 +22,24 @@ detectors:
 
   lark_doc:
     enabled: true
-    interval: 10s
-    burst_interval: 5s
-    burst_timeout: 1m
+    interval: 60s
+    burst_interval: 10s
+    burst_timeout: 5m
     heartbeat_interval: 15s
-    comment_check_interval_seconds: 10
+    comment_check_interval_seconds: 30
+    debounce_window: 120s
+    enable_debounce: true
     doc_tokens:
-      - "QwtWdFlNPoURTpxUqSfcFAqJnX0"
+      - "L6u3wlmQbisSivkEOsWczAkXnrt"
 
   lark_wiki:
     enabled: false
-    interval: 30s
-    burst_interval: 5s
-    burst_timeout: 1m
+    interval: 60s
+    burst_interval: 10s
+    burst_timeout: 5m
     heartbeat_interval: 15s
+    debounce_window: 120s
+    enable_debounce: true
 
   lark_calendar:
     enabled: false

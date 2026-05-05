@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"feishu-mem/internal/decision"
 	"feishu-mem/internal/llm"
+	"feishu-mem/internal/recall"
 )
 
 // MemoryGraphInterface 内存图接口
@@ -20,16 +22,50 @@ type MemoryGraphInterface interface {
 	GetDecision(sdrID string) (*decision.DecisionNode, bool)
 	QueryByTopic(project, topic string) []*decision.DecisionNode
 	SearchByKeywords(query, topic string) []*decision.DecisionNode
+	ListAllTopics(project string) []string
+	GetRelations(sdrID string) []decision.Relation
+	GetRelatedDecisions(sdrID string) []*decision.DecisionNode
+	GetDecisionsByHotScore(minScore float64) []*decision.DecisionNode
+	GetRecentDecisions(since time.Time) []*decision.DecisionNode
+	Count() int
+	TopicCount(project string) int
 }
 
 // GitStorageInterface Git 存储接口
 type GitStorageInterface interface {
 	ReadDecision(project, topic, sdrID string) (*decision.DecisionNode, error)
+	ListTopics(project string) ([]string, error)
+	ListObjections(project, topic string) ([]*decision.Objection, error)
+	GetCommitLog(path string, limit int) ([]CommitLogEntry, error)
+	BlameDecision(project, topic, sdrID string) ([]BlameEntry, error)
+	SearchContent(project, query string) ([]SearchHit, error)
 }
 
 // BitableStoreInterface Bitable 存储接口
 type BitableStoreInterface interface {
 	QueryByTopic(topic, status string) ([]*decision.DecisionNode, error)
+}
+
+// CommitLogEntry 提交日志条目
+type CommitLogEntry struct {
+	Hash    string
+	Message string
+}
+
+// BlameEntry blame 条目
+type BlameEntry struct {
+	Commit  string
+	LineNum int
+	Content string
+	Author  string
+	Date    time.Time
+}
+
+// SearchHit 搜索命中条目
+type SearchHit struct {
+	File    string
+	LineNum int
+	Content string
 }
 
 // MCPServer MCP 服务器
@@ -38,6 +74,7 @@ type MCPServer struct {
 	gitStorage   GitStorageInterface
 	bitableStore BitableStoreInterface
 	llmAgent     *llm.MemoryAgent
+	recallEngine *recall.RecallEngine
 	in           io.Reader
 	out          io.Writer
 	mu           sync.Mutex
@@ -57,6 +94,7 @@ func NewMCPServer(
 	bs BitableStoreInterface,
 ) *MCPServer {
 	ctx, cancel := context.WithCancel(context.Background())
+
 	return &MCPServer{
 		memoryGraph:  mg,
 		gitStorage:   gs,
@@ -70,6 +108,11 @@ func NewMCPServer(
 	}
 }
 
+// SetRecallEngine 设置回忆引擎
+func (s *MCPServer) SetRecallEngine(re *recall.RecallEngine) {
+	s.recallEngine = re
+}
+
 // SetIO 设置输入输出
 func (s *MCPServer) SetIO(in io.Reader, out io.Writer) {
 	s.in = in
@@ -79,7 +122,7 @@ func (s *MCPServer) SetIO(in io.Reader, out io.Writer) {
 // Start 启动 MCP Server
 func (s *MCPServer) Start() error {
 	fmt.Fprintf(os.Stderr, "Feishu Memory MCP Server starting...\n")
-	fmt.Fprintf(os.Stderr, "Available tools: search, topic, decision, extract_decision, classify_topic, detect_crosstopic, check_conflict, timeline\n")
+	fmt.Fprintf(os.Stderr, "Available tools: search, topic, decision, extract_decision, classify_topic, detect_crosstopic, check_conflict, timeline, list_topics, get_relations, stats, hot_decisions, forgotten_decisions, related_decisions, recent_decisions, git_history, git_search, git_blame, evaluate_dedup, resolve_conflict_action, list_objections\n")
 	fmt.Fprintf(os.Stderr, "Available resources: docs://design, docs://prompts\n")
 
 	scanner := bufio.NewScanner(s.in)
@@ -181,7 +224,7 @@ func (s *MCPServer) handleInitialize(req Request) {
 			"name":    "Feishu Memory Agent",
 			"version": "1.0.0",
 		},
-		"instructions": "Feishu Memory Agent 提供决策记忆管理功能，包括搜索、分类、冲突检测等",
+		"instructions": "Feishu Memory Agent 提供决策记忆管理功能，包括搜索、分类、冲突检测、热点回忆等",
 	})
 }
 
@@ -278,6 +321,152 @@ func (s *MCPServer) handleListTools(req Request) {
 				"properties": map[string]any{},
 			},
 		},
+		{
+			Name:        "list_topics",
+			Description: "列出所有议题",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project": map[string]any{"type": "string", "description": "项目名称", "default": ""},
+				},
+			},
+		},
+		{
+			Name:        "get_relations",
+			Description: "获取决策的关系网络",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"sdr_id": map[string]any{"type": "string", "description": "决策ID"},
+				},
+				"required": []string{"sdr_id"},
+			},
+		},
+		{
+			Name:        "stats",
+			Description: "获取系统统计信息",
+			InputSchema: map[string]any{
+				"type":       "object",
+				"properties": map[string]any{},
+			},
+		},
+		{
+			Name:        "hot_decisions",
+			Description: "获取高热点值的决策（热点基于访问频率和时间）",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"min_score": map[string]any{"type": "number", "description": "最小热点值", "default": 50},
+					"limit":     map[string]any{"type": "number", "description": "结果限制", "default": 10},
+				},
+			},
+		},
+		{
+			Name:        "forgotten_decisions",
+			Description: "获取被遗忘的决策（低热点值）",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"threshold": map[string]any{"type": "number", "description": "阈值，低于此值被认为遗忘", "default": 20},
+				},
+			},
+		},
+		{
+			Name:        "related_decisions",
+			Description: "获取与指定决策相关的决策",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"sdr_id": map[string]any{"type": "string", "description": "决策ID"},
+				},
+				"required": []string{"sdr_id"},
+			},
+		},
+		{
+			Name:        "recent_decisions",
+			Description: "获取最近的决策",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"hours": map[string]any{"type": "number", "description": "最近多少小时内的决策", "default": 24},
+				},
+			},
+		},
+		{
+			Name:        "git_history",
+			Description: "获取Git提交历史",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path":  map[string]any{"type": "string", "description": "文件路径", "default": ""},
+					"limit": map[string]any{"type": "number", "description": "结果限制", "default": 10},
+				},
+			},
+		},
+		{
+			Name:        "git_search",
+			Description: "在Git历史中搜索内容",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"query":   map[string]any{"type": "string", "description": "搜索关键词"},
+					"project": map[string]any{"type": "string", "description": "项目名称", "default": ""},
+				},
+				"required": []string{"query"},
+			},
+		},
+		{
+			Name:        "git_blame",
+			Description: "追溯决策的Git修改历史",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"sdr_id":  map[string]any{"type": "string", "description": "决策ID"},
+					"project": map[string]any{"type": "string", "description": "项目名称", "default": ""},
+					"topic":   map[string]any{"type": "string", "description": "议题名称", "default": ""},
+				},
+				"required": []string{"sdr_id"},
+			},
+		},
+		{
+			Name:        "evaluate_dedup",
+			Description: "评估新决策是否与现有决策重复或冲突",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"new_title":         map[string]any{"type": "string", "description": "新决策标题"},
+					"new_decision":      map[string]any{"type": "string", "description": "新决策内容"},
+					"existing_title":    map[string]any{"type": "string", "description": "现有决策标题"},
+					"existing_decision": map[string]any{"type": "string", "description": "现有决策内容"},
+				},
+				"required": []string{"new_title", "new_decision", "existing_title", "existing_decision"},
+			},
+		},
+		{
+			Name:        "resolve_conflict_action",
+			Description: "获取冲突解决建议（合并或保留双方）",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"new_title":         map[string]any{"type": "string", "description": "新决策标题"},
+					"new_decision":      map[string]any{"type": "string", "description": "新决策内容"},
+					"existing_title":    map[string]any{"type": "string", "description": "现有决策标题"},
+					"existing_decision": map[string]any{"type": "string", "description": "现有决策内容"},
+				},
+				"required": []string{"new_title", "new_decision", "existing_title", "existing_decision"},
+			},
+		},
+		{
+			Name:        "list_objections",
+			Description: "列出反对意见",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project": map[string]any{"type": "string", "description": "项目名称", "default": ""},
+					"topic":   map[string]any{"type": "string", "description": "议题名称", "default": ""},
+				},
+			},
+		},
 	}
 
 	s.sendResponse(req.ID, map[string]any{"tools": tools})
@@ -327,6 +516,32 @@ func (s *MCPServer) handleCallTool(req Request) {
 		content = s.handleConflict(args)
 	case "timeline":
 		content = s.handleTimeline(args)
+	case "list_topics":
+		content = s.handleListTopics(args)
+	case "get_relations":
+		content = s.handleGetRelations(args)
+	case "stats":
+		content = s.handleStats(args)
+	case "hot_decisions":
+		content = s.handleHotDecisions(args)
+	case "forgotten_decisions":
+		content = s.handleForgottenDecisions(args)
+	case "related_decisions":
+		content = s.handleRelatedDecisions(args)
+	case "recent_decisions":
+		content = s.handleRecentDecisions(args)
+	case "git_history":
+		content = s.handleGitHistory(args)
+	case "git_search":
+		content = s.handleGitSearch(args)
+	case "git_blame":
+		content = s.handleGitBlame(args)
+	case "evaluate_dedup":
+		content = s.handleEvaluateDedup(args)
+	case "resolve_conflict_action":
+		content = s.handleResolveConflictAction(args)
+	case "list_objections":
+		content = s.handleListObjections(args)
 	default:
 		s.sendError(req.ID, ErrCodeToolNotFound, "unknown tool: "+name)
 		return
@@ -440,6 +655,26 @@ func (s *MCPServer) handleListPrompts(req Request) {
 				{"name": "decision_b", "description": "已有决策", "required": true},
 			},
 		},
+		{
+			"name":        "evaluate_dedup",
+			"description": "评估新决策是否与现有决策重复或冲突",
+			"arguments": []map[string]any{
+				{"name": "new_title", "description": "新决策标题", "required": true},
+				{"name": "new_decision", "description": "新决策内容", "required": true},
+				{"name": "existing_title", "description": "现有决策标题", "required": true},
+				{"name": "existing_decision", "description": "现有决策内容", "required": true},
+			},
+		},
+		{
+			"name":        "resolve_conflict_action",
+			"description": "获取冲突解决建议（合并或保留双方）",
+			"arguments": []map[string]any{
+				{"name": "new_title", "description": "新决策标题", "required": true},
+				{"name": "new_decision", "description": "新决策内容", "required": true},
+				{"name": "existing_title", "description": "现有决策标题", "required": true},
+				{"name": "existing_decision", "description": "现有决策内容", "required": true},
+			},
+		},
 	}
 	s.sendResponse(req.ID, map[string]any{"prompts": prompts})
 }
@@ -474,6 +709,16 @@ func (s *MCPServer) handleGetPrompt(req Request) {
 			"description": "评估决策冲突",
 			"prompt":      "评估两个决策之间是否存在语义矛盾，给出矛盾分数和类型。",
 		},
+		"evaluate_dedup": {
+			"name":        "evaluate_dedup",
+			"description": "评估重复或冲突",
+			"prompt":      "评估新决策是否与现有决策重复或冲突，返回动作（skip/update/conflict）和原因。",
+		},
+		"resolve_conflict_action": {
+			"name":        "resolve_conflict_action",
+			"description": "获取冲突解决建议",
+			"prompt":      "分析两个冲突决策，建议是合并还是保留双方。",
+		},
 	}
 
 	if prompt, ok := prompts[name]; ok {
@@ -482,6 +727,8 @@ func (s *MCPServer) handleGetPrompt(req Request) {
 		s.sendError(req.ID, ErrCodeInvalidParams, "unknown prompt: "+name)
 	}
 }
+
+// === 工具处理函数 ===
 
 func (s *MCPServer) handleSearch(args map[string]any) []Content {
 	query := getStringArg(args, "query", "")
@@ -602,6 +849,289 @@ func (s *MCPServer) handleTimeline(args map[string]any) []Content {
 	return []Content{{Type: "text", Text: text}}
 }
 
+// === 新增工具处理函数 ===
+
+func (s *MCPServer) handleListTopics(args map[string]any) []Content {
+	project := getStringArg(args, "project", "")
+
+	var topics []string
+	if s.memoryGraph != nil {
+		topics = s.memoryGraph.ListAllTopics(project)
+	}
+
+	text := "## 所有议题\n\n"
+	if len(topics) == 0 {
+		text += "暂无议题"
+	} else {
+		for _, t := range topics {
+			text += fmt.Sprintf("- %s\n", t)
+		}
+	}
+	return []Content{{Type: "text", Text: text}}
+}
+
+func (s *MCPServer) handleGetRelations(args map[string]any) []Content {
+	sdrID := getStringArg(args, "sdr_id", "")
+
+	var relations []decision.Relation
+	var relatedDecisions []*decision.DecisionNode
+	if s.memoryGraph != nil {
+		relations = s.memoryGraph.GetRelations(sdrID)
+		relatedDecisions = s.memoryGraph.GetRelatedDecisions(sdrID)
+	}
+
+	text := fmt.Sprintf("## 决策 %s 的关系网络\n\n", sdrID)
+	text += "### 直接关系\n\n"
+	if len(relations) == 0 {
+		text += "暂无关系\n"
+	} else {
+		for _, r := range relations {
+			text += fmt.Sprintf("- [%s] -> %s\n", r.Type, r.TargetSDRID)
+		}
+	}
+	text += "\n### 相关决策\n\n"
+	if len(relatedDecisions) == 0 {
+		text += "暂无相关决策\n"
+	} else {
+		for _, d := range relatedDecisions {
+			text += fmt.Sprintf("- [%s] %s\n", d.Status, d.Title)
+		}
+	}
+	return []Content{{Type: "text", Text: text}}
+}
+
+func (s *MCPServer) handleStats(args map[string]any) []Content {
+	var decisionCount, topicCount int
+	if s.memoryGraph != nil {
+		decisionCount = s.memoryGraph.Count()
+		topicCount = s.memoryGraph.TopicCount("")
+	}
+
+	text := "## 系统统计\n\n"
+	text += fmt.Sprintf("- **总决策数**: %d\n", decisionCount)
+	text += fmt.Sprintf("- **议题数**: %d\n", topicCount)
+	return []Content{{Type: "text", Text: text}}
+}
+
+func (s *MCPServer) handleHotDecisions(args map[string]any) []Content {
+	minScore := getNumberArg(args, "min_score", 50)
+	limit := int(getNumberArg(args, "limit", 10))
+
+	var decisions []*decision.DecisionNode
+	if s.memoryGraph != nil {
+		decisions = s.memoryGraph.GetDecisionsByHotScore(minScore)
+		if limit > 0 && len(decisions) > limit {
+			decisions = decisions[:limit]
+		}
+	}
+
+	text := "## 🔥 热点决策\n\n"
+	if len(decisions) == 0 {
+		text += "暂无热点决策"
+	} else {
+		for _, d := range decisions {
+			text += fmt.Sprintf("- [热点值: %.0f] %s (%s) - %s\n", d.AccessStats.HotScore, d.Title, d.SDRID, d.Topic)
+		}
+	}
+	return []Content{{Type: "text", Text: text}}
+}
+
+func (s *MCPServer) handleForgottenDecisions(args map[string]any) []Content {
+	threshold := getNumberArg(args, "threshold", 20)
+
+	var forgotten []*decision.DecisionNode
+	if s.memoryGraph != nil {
+		allDecisions := s.memoryGraph.GetAllDecisions()
+		for _, d := range allDecisions {
+			if d.AccessStats.HotScore < threshold {
+				forgotten = append(forgotten, d)
+			}
+		}
+	}
+
+	text := "## 💤 被遗忘的决策\n\n"
+	if len(forgotten) == 0 {
+		text += "暂无被遗忘的决策（或阈值设置过高）"
+	} else {
+		for _, d := range forgotten {
+			text += fmt.Sprintf("- [热点值: %.0f] %s (%s) - %s\n", d.AccessStats.HotScore, d.Title, d.SDRID, d.Topic)
+		}
+	}
+	return []Content{{Type: "text", Text: text}}
+}
+
+func (s *MCPServer) handleRelatedDecisions(args map[string]any) []Content {
+	sdrID := getStringArg(args, "sdr_id", "")
+
+	var related []*decision.DecisionNode
+	if s.memoryGraph != nil {
+		related = s.memoryGraph.GetRelatedDecisions(sdrID)
+	}
+
+	text := fmt.Sprintf("## 与 %s 相关的决策\n\n", sdrID)
+	if len(related) == 0 {
+		text += "暂无相关决策"
+	} else {
+		for _, d := range related {
+			text += fmt.Sprintf("- [%s] %s (%s)\n", d.Status, d.Title, d.SDRID)
+		}
+	}
+	return []Content{{Type: "text", Text: text}}
+}
+
+func (s *MCPServer) handleRecentDecisions(args map[string]any) []Content {
+	hours := getNumberArg(args, "hours", 24)
+	since := time.Now().Add(-time.Duration(hours) * time.Hour)
+
+	var decisions []*decision.DecisionNode
+	if s.memoryGraph != nil {
+		decisions = s.memoryGraph.GetRecentDecisions(since)
+	}
+
+	text := fmt.Sprintf("## 最近 %.0f 小时的决策\n\n", hours)
+	if len(decisions) == 0 {
+		text += "暂无最近决策"
+	} else {
+		for _, d := range decisions {
+			text += fmt.Sprintf("- %s [%s] %s (%s)\n", d.CreatedAt.Format("15:04"), d.Status, d.Title, d.SDRID)
+		}
+	}
+	return []Content{{Type: "text", Text: text}}
+}
+
+func (s *MCPServer) handleGitHistory(args map[string]any) []Content {
+	path := getStringArg(args, "path", "")
+	limit := int(getNumberArg(args, "limit", 10))
+
+	var history []CommitLogEntry
+	if s.gitStorage != nil {
+		var err error
+		history, err = s.gitStorage.GetCommitLog(path, limit)
+		if err != nil {
+			return []Content{{Type: "text", Text: fmt.Sprintf("获取Git历史失败: %v", err)}}
+		}
+	}
+
+	text := "## Git提交历史\n\n"
+	if len(history) == 0 {
+		text += "暂无提交记录"
+	} else {
+		for _, h := range history {
+			text += fmt.Sprintf("- %s: %s\n", h.Hash[:7], h.Message)
+		}
+	}
+	return []Content{{Type: "text", Text: text}}
+}
+
+func (s *MCPServer) handleGitSearch(args map[string]any) []Content {
+	query := getStringArg(args, "query", "")
+	project := getStringArg(args, "project", "")
+
+	var hits []SearchHit
+	if s.gitStorage != nil {
+		var err error
+		hits, err = s.gitStorage.SearchContent(project, query)
+		if err != nil {
+			return []Content{{Type: "text", Text: fmt.Sprintf("Git搜索失败: %v", err)}}
+		}
+	}
+
+	text := fmt.Sprintf("## Git搜索: \"%s\"\n\n", query)
+	if len(hits) == 0 {
+		text += "未找到匹配内容"
+	} else {
+		for _, h := range hits {
+			text += fmt.Sprintf("- %s:%d: %s\n", h.File, h.LineNum, h.Content)
+		}
+	}
+	return []Content{{Type: "text", Text: text}}
+}
+
+func (s *MCPServer) handleGitBlame(args map[string]any) []Content {
+	sdrID := getStringArg(args, "sdr_id", "")
+	project := getStringArg(args, "project", "")
+	topic := getStringArg(args, "topic", "")
+
+	var blame []BlameEntry
+	if s.gitStorage != nil {
+		var err error
+		blame, err = s.gitStorage.BlameDecision(project, topic, sdrID)
+		if err != nil {
+			return []Content{{Type: "text", Text: fmt.Sprintf("Git追溯失败: %v", err)}}
+		}
+	}
+
+	text := fmt.Sprintf("## Git追溯: %s\n\n", sdrID)
+	if len(blame) == 0 {
+		text += "暂无追溯信息"
+	} else {
+		for _, b := range blame {
+			text += fmt.Sprintf("- %s (%s) 行%d: %s\n", b.Commit[:7], b.Author, b.LineNum, b.Content)
+		}
+	}
+	return []Content{{Type: "text", Text: text}}
+}
+
+func (s *MCPServer) handleEvaluateDedup(args map[string]any) []Content {
+	newTitle := getStringArg(args, "new_title", "")
+	newDecision := getStringArg(args, "new_decision", "")
+	existingTitle := getStringArg(args, "existing_title", "")
+	existingDecision := getStringArg(args, "existing_decision", "")
+
+	result, err := s.llmAgent.EvaluateDedupAction(newTitle, newDecision, existingTitle, existingDecision)
+	if err != nil {
+		return []Content{{Type: "text", Text: fmt.Sprintf("评估失败: %v", err)}}
+	}
+
+	text := "## 去重评估结果\n\n"
+	text += fmt.Sprintf("- **动作**: %s\n", result.Action)
+	text += fmt.Sprintf("- **原因**: %s\n", result.Reason)
+	return []Content{{Type: "text", Text: text}}
+}
+
+func (s *MCPServer) handleResolveConflictAction(args map[string]any) []Content {
+	newTitle := getStringArg(args, "new_title", "")
+	newDecision := getStringArg(args, "new_decision", "")
+	existingTitle := getStringArg(args, "existing_title", "")
+	existingDecision := getStringArg(args, "existing_decision", "")
+
+	result, err := s.llmAgent.ResolveConflictAction(newTitle, newDecision, existingTitle, existingDecision)
+	if err != nil {
+		return []Content{{Type: "text", Text: fmt.Sprintf("获取建议失败: %v", err)}}
+	}
+
+	text := "## 冲突解决建议\n\n"
+	text += fmt.Sprintf("- **建议动作**: %s\n", result.Action)
+	text += fmt.Sprintf("- **原因**: %s\n", result.Reason)
+	return []Content{{Type: "text", Text: text}}
+}
+
+func (s *MCPServer) handleListObjections(args map[string]any) []Content {
+	project := getStringArg(args, "project", "")
+	topic := getStringArg(args, "topic", "")
+
+	var objections []*decision.Objection
+	if s.gitStorage != nil {
+		var err error
+		objections, err = s.gitStorage.ListObjections(project, topic)
+		if err != nil {
+			return []Content{{Type: "text", Text: fmt.Sprintf("获取反对意见失败: %v", err)}}
+		}
+	}
+
+	text := "## 反对意见\n\n"
+	if len(objections) == 0 {
+		text += "暂无反对意见"
+	} else {
+		for _, o := range objections {
+			text += fmt.Sprintf("- %s: %s (by %s)\n", o.OID, o.ObjectionContent, o.Objector)
+		}
+	}
+	return []Content{{Type: "text", Text: text}}
+}
+
+// === 辅助函数 ===
+
 func (s *MCPServer) sendResponse(id any, result any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -672,6 +1202,8 @@ func getStringArrayArg(args map[string]any, key string) []string {
 	}
 	return []string{}
 }
+
+// === 格式化函数 ===
 
 func formatSearchResults(results []SearchResult) string {
 	if len(results) == 0 {
@@ -798,6 +1330,48 @@ func (s *MCPServer) validateToolArgs(name string, args map[string]any) string {
 		}
 		if _, ok := args["decision_b"]; !ok {
 			return "missing required parameter: decision_b"
+		}
+	case "get_relations":
+		if _, ok := args["sdr_id"]; !ok {
+			return "missing required parameter: sdr_id"
+		}
+	case "related_decisions":
+		if _, ok := args["sdr_id"]; !ok {
+			return "missing required parameter: sdr_id"
+		}
+	case "git_search":
+		if _, ok := args["query"]; !ok {
+			return "missing required parameter: query"
+		}
+	case "git_blame":
+		if _, ok := args["sdr_id"]; !ok {
+			return "missing required parameter: sdr_id"
+		}
+	case "evaluate_dedup":
+		if _, ok := args["new_title"]; !ok {
+			return "missing required parameter: new_title"
+		}
+		if _, ok := args["new_decision"]; !ok {
+			return "missing required parameter: new_decision"
+		}
+		if _, ok := args["existing_title"]; !ok {
+			return "missing required parameter: existing_title"
+		}
+		if _, ok := args["existing_decision"]; !ok {
+			return "missing required parameter: existing_decision"
+		}
+	case "resolve_conflict_action":
+		if _, ok := args["new_title"]; !ok {
+			return "missing required parameter: new_title"
+		}
+		if _, ok := args["new_decision"]; !ok {
+			return "missing required parameter: new_decision"
+		}
+		if _, ok := args["existing_title"]; !ok {
+			return "missing required parameter: existing_title"
+		}
+		if _, ok := args["existing_decision"]; !ok {
+			return "missing required parameter: existing_decision"
 		}
 	}
 	return ""

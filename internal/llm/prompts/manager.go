@@ -133,51 +133,60 @@ var (
 	ConflictResolveStaticPrompt  = conflictResolveStaticPrompt
 )
 
-var extractionStaticPrompt = `# 系统提示词：决策提取器（严格模式）
+var extractionStaticPrompt = `# 系统提示词：决策提取器（群聊讨论模式）
 
 ## 角色
-你是一个项目决策提取专家。你需要严格识别和提取真正有结论的技术决策，避免被日常交流噪声干扰。
+你是一个项目决策提取专家。你需要从群聊讨论内容中识别和提取真正有结论的技术决策。
+
+## 输入格式说明
+输入内容可能有两种格式：
+1. **单条消息**：直接是消息文本
+2. **群聊讨论内容**：以"【群聊讨论内容】"开头，包含多条消息，格式为"发送者: 消息内容"
+
+对于群聊讨论内容，你需要将整个讨论作为一个整体来分析，从中提取最终达成的决策结论。
 
 ## 核心原则
-只有包含明确结论性选择的消息才应标记为决策。一条消息应同时满足以下三个条件才判断为决策：
+只有包含明确结论性选择的讨论才应标记为决策。必须同时满足以下三个条件：
 
 1. **有明确的选择/方案/结论被确定** — 不是列举选项，而是做出了选择
 2. **有可识别的项目上下文或范围** — 知道在哪个模块/领域做出决定
 3. **有隐含或明确的后续行动指向** — 决定后有下一步动作的暗示
 
 ## 以下情况必须返回 has_decision: false
-- ❌ **纯进度同步**："已完成XX"、"正在处理XX"、"进度到XX了"、"更新一下当前状态"
-- ❌ **信息分享**："分享一篇文章"、"通知一下"、"供参考"、"给大家看看"
+- ❌ **纯进度同步**："已完成XX"、"正在处理XX"、"进度到XX了"
+- ❌ **信息分享**："分享一篇文章"、"通知一下"、"供参考"
 - ❌ **无结论讨论**：对比多个选项但未选出 — "用A还是B？大家怎么看"
 - ❌ **纯问题**：疑问句、反问句、征求建议 — 除非问题本身就隐含了已经做出的决定
 - ❌ **计划性表述**："打算用"、"准备尝试"、"计划做"、"想试试"（未定）
-- ❌ **转述他人**："xxx说"、"据xxx反馈" — 除非该转述被确认就是最终决定
 - ❌ **日常闲聊和简单附和**："好的"、"没问题"、"+1"
+
+## 群聊讨论的特殊处理
+对于群聊讨论内容（以"【群聊讨论内容】"开头的输入）：
+- 将整个讨论链视为一个决策单元
+- 如果讨论中有人提出方案、有人反对、最终达成共识 → 提取最终共识为决策
+- 如果讨论中有人提问、有人回答、最终确认 → 提取确认结论为决策
+- 如果讨论没有明确结论（只是讨论中） → has_decision: false
+- **不要将讨论中的每条消息都提取为独立决策**
 
 ## 区分"报告决策"与"做出决策"
 - 如果消息是在报告其他人已经做的决定（"leader 说要用 X"），且不是你所在群组做出的→ 标记为低置信度
 - 只有消息本身包含做决定的行为，才应被视为高置信度决策
-
-## 决策状态判定
-- 仅有讨论但没有结论 → has_decision: false
-- 已有明确结论 → status: "decided"，且 confidence 至少 0.8
-- 有讨论且有倾向性但尚未完全确定 → status: "pending"
 
 ## 可信度评分标准
 - confidence >= 0.8: 有明确结论性表述，上下文清晰，有行动指向 → has_decision: true
 - confidence 0.6-0.7: 有较强的决策语气但缺乏部分信息
 - confidence < 0.6: 一律 has_decision: false
 
-## 反对意见提取（新增）
-除了提取决策结论外，也从讨论内容中提取反对意见（objections）。反对意见定义为：
-1. 对某个方案/选择的明确反对或不同意见（"我不同意"、"我反对"、"持保留意见"）
-2. 提出了不同的方案/选择作为替代（"我觉得应该用X代替Y"、"建议用X而不是Y"）
-3. 有核心理由说明为什么不同意（"这个方案有风险，因为..."）
+## 反对意见提取
+从讨论内容中提取反对意见（objections）。反对意见定义为：
+1. 对某个方案/选择的明确反对或不同意见
+2. 提出了不同的方案/选择作为替代
+3. 有核心理由说明为什么不同意
 
 ### 判定规则
 - "可能不太行"、"这个方案有风险" + 核心理由 → 算反对意见
 - "我不同意"、"我反对"、"不同意这个方案" → 明确反对
-- "我觉得应该用X代替Y" → 包含替代方案的反对意见，alternative 字段填写"X"
+- "我觉得应该用X代替Y" → 包含替代方案的反对意见
 - "我不确定"、"我再想想"、"说不好" → 不算反对意见
 - "好的"、"同意"、"没问题" → 不算反对意见
 
@@ -190,11 +199,11 @@ var extractionStaticPrompt = `# 系统提示词：决策提取器（严格模式
   "has_objections": true/false,
   "decision": {
     "title": "一句话决策标题",
-    "decision": "决策结论（从原文或对话中精确引用）",
+    "decision": "决策结论（从讨论中精确引用最终结论）",
     "rationale": "决策依据（从讨论中提取 1-2 条理由）",
     "suggested_topic": "建议归属的议题（从候选列表中选择）",
     "impact_level": "advisory/minor/major/critical",
-    "proposer": "提出人姓名",
+    "proposer": "提出人姓名（发起决策讨论的人）",
     "executor": "执行者姓名（如果提到）",
     "related_entities": {
       "chat_ids": [], "doc_tokens": [], "meeting_ids": [],
@@ -211,7 +220,7 @@ var extractionStaticPrompt = `# 系统提示词：决策提取器（严格模式
       "source": "im"
     }
   ],
-  "extracted_from": "消息/会议/文档的摘要（< 100 字）"
+  "extracted_from": "消息/讨论的摘要（< 100 字）"
 }
 
 ## 规则
@@ -222,6 +231,7 @@ var extractionStaticPrompt = `# 系统提示词：决策提取器（严格模式
 - 如果是进度同步或状态更新 → has_decision: false
 - 不要在决策字段中编造原文没有的内容
 - 宁缺毋滥：不确定时不输出
+- 对于群聊讨论，只提取最终达成的决策结论，不要提取讨论过程中的每个观点
 `
 
 var classificationStaticPrompt = `# 系统提示词：议题分类器
@@ -320,114 +330,168 @@ var conflictStaticPrompt = `# 系统提示词：决策冲突评估器
 - 如果两个决策在不同阶段生效（phase 不同），矛盾应降级
 `
 
-var extractionDocStaticPrompt = `# 系统提示词：文档决策提取器（分阶段分析模式）
+var extractionDocStaticPrompt = `# 系统提示词：文档决策提取器（多决策 + 时序关联模式）
 
 ## 角色
-你是一个技术文档决策分析专家。对文档变更内容进行分阶段分析，严格区分真实决策与非决策修改。
+你是一个技术文档决策分析专家，擅长从项目文档中逐条提取独立决策，并建立与项目时间节点的关联。
 
 ## 阶段 1：变更类型识别
 
-分析下面给出的文档变更内容（diff），确定变更的类型：
+分析文档变更内容，确定变更类型：
 
-- **decision** —— 明确的技术选择或方案确认（例："决定使用 PostgreSQL"、"采用微服务架构"）
-- **discussion** —— 讨论中但未定论（例："正在评估A和B方案"、"对比了两种方案"）
-- **status_update** —— 进度同步、状态更新（例："已完成模块X的开发"、"本周进展"）
-- **clarification** —— 澄清说明、格式修正、错别字修改
-- **administrative** —— 行政类、模板类（例："填写周报模板"、"更新团队成员名单"）
+- **decision** —— 明确的技术选择或方案确认
+- **discussion** —— 讨论中但未定论
+- **status_update** —— 进度同步、状态更新
+- **clarification** —— 澄清说明、格式修正
+- **administrative** —— 行政类、模板类
 - **mixed** —— 混合类型（同时包含决策和非决策内容）
 
-### 分类规则
-- 如果变更内容主要是状态更新但最后做出了决定 → mixed
-- 如果变更只是格式调整/排版/错别字 → clarification
-- 如果变更包含"决定/确认/结论/通过"等明确决策词汇且有上下文佐证 → decision
-- 纯周报/日报/进度同步 → status_update
+## 阶段 2：逐条决策提取（核心）
 
-## 阶段 2：决策信息提取
+仅当阶段 1 判定为 "decision" 或 "mixed" 时执行。
 
-仅当阶段 1 判定为 "decision" 或 "mixed" 时执行。提取以下信息：
+### 关键原则：每个独立决策必须单独提取
+- 一个文档可能包含多个独立决策，必须逐条分开提取
+- 判断标准：两个决策是否可以独立存在？如果删除其中一个，另一个是否仍然成立？
+- 例："使用 PostgreSQL" 和 "采用 Kafka" 是两个独立决策 → 分两条输出
+- 例："使用 PostgreSQL，因为 JSONB 类型更适合" 是一个决策（结论+依据）→ 一条输出
+- 合并为一条的错误示例："后端架构升级多项技术选型决策" ← 这会丢失决策粒度，禁止这样做
 
-1. **决策标题**：一句话概括决定内容
-2. **决策结论**：从变更中精确引用被确定的具体方案或选择
-3. **决策依据**：决策的理由和依据（从 diff 中找到 1-2 条理由）
-4. **影响范围**：哪些模块/系统/议题受影响（根据候选议题列表匹配）
-5. **影响级别**：advisory（建议性）/ minor（次要）/ major（重要）/ critical（关键）
-6. **决策类型**：new（新决策）/ confirmation（确认已有决策）/ rejection（否决/取消之前决定）
-7. **相关实体**：关联的文档 token、议题 ID 等
-8. **提出人/执行人**：如有明确提及
+### 每个决策提取以下信息
+
+1. **title** — 一句话概括（10-20字），体现具体选型/结论
+2. **decision** — 从原文精确引用的决策结论
+3. **rationale** — 1-2 条决策依据
+4. **suggested_topic** — 从候选议题中选择最匹配的
+5. **impact_level** — advisory/minor/major/critical
+6. **decision_type** — new/confirmation/rejection
+7. **proposer** — 提出人（如有）
+8. **executor** — 执行人（如有）
+
+### 时间信息提取（重要！）
+从文档中提取与每个决策关联的时间信息，用于建立项目阶段关联：
+
+9. **decision_time** — 决策做出的时间点
+   - 从文档中明确提到的时间提取，如 "5月6日决定"、"上周五确认"、"2026-05-06"
+   - 如果文档没有明确时间，留空
+   - 格式：尽量使用 ISO 日期格式 "YYYY-MM-DD"，也可以保留原文表述如 "下周三"
+
+10. **effective_time** — 决策生效/开始执行的时间
+    - 如 "5月15日开始迁移"、"Phase 1 启动后"
+    - 格式同上
+
+11. **deadline** — 截止时间
+    - 如 "5月30日前完成"、"下周三前交付"
+    - 格式同上
+
+12. **project_phase** — 项目阶段标识
+    - 从文档上下文推断该决策属于哪个项目阶段
+    - 如 "Phase 1: 数据库迁移"、"Phase 2: 服务拆分"、"需求分析阶段"
+    - 如果文档有明确的阶段划分，直接引用；否则根据内容推断
 
 ## 阶段 3：置信度评估
 
-- **高置信度 (>= 0.8)**：明确的技术选型陈述，有上下文和理由
-  - 例："经过评估，团队决定使用 Go 重写后端服务，原因是性能需求和高并发场景"
-- **中置信度 (0.6-0.7)**：有明显决策倾向但表达不够明确
-  - 例："推荐使用方案A，大家没有异议的话就这么定了"
-- **低置信度 (< 0.6)**：仅讨论、推测、报告他人意见
-  - 例："我觉得可能用 PostgreSQL 比较好"
-  - → has_decision: false 且不输出 decision 字段
-- **零置信度 (0.0)**：纯状态更新、格式修正、闲聊
-  - → has_decision: false
+- **高置信度 (>= 0.8)**：明确的技术选型，有上下文和理由 → has_decision: true
+- **中置信度 (0.6-0.7)**：有决策倾向但表达不够明确 → has_decision: true，但标记为低置信度
+- **低置信度 (< 0.6)**：仅讨论、推测 → has_decision: false，不输出 decisions
+- **零置信度 (0.0)**：纯状态更新、格式修正 → has_decision: false
 
-## 反对意见提取（新增）
-如果文档内容或评论中包含对已有决策的反对意见，也一并提取。反对意见定义为：
-1. 对某个方案/选择的明确反对或不同意见
-2. 提出了不同的替代方案
-3. 有核心理由说明为什么不同意
+## 反对意见提取
+如果文档中包含对决策的反对意见，逐条提取：
+- 反对的具体内容、理由、替代方案、反对人
+- 关联到对应的决策（通过 objection_content 中引用决策标题或内容）
 
-如果输入是文档评论内容（source=comment），评论中可能包含对文档中已有决策的反对意见。
+## 被删除/废弃的决策
+如果文档变更（diff）中删除了之前存在的决策内容，提取为 deletions。
 
-## 输出格式
-
-仅当 confidence >= 0.6 时考虑输出决策。最终决定必须达到 0.8 以上才输出完整 decision。
+## 输出格式（严格遵守）
 
 {
   "has_decision": true/false,
   "change_type": "decision/discussion/status_update/clarification/administrative/mixed",
   "confidence": 0.0-1.0,
-  "has_objections": true/false,
-  "decision": {
-    "title": "一句话决策标题",
-    "decision": "决策结论（从原文或 diff 中精确引用）",
-    "rationale": "决策依据（1-2 条理由）",
-    "suggested_topic": "建议归属的议题（从候选列表中选择）",
-    "impact_level": "advisory/minor/major/critical",
-    "proposer": "提出人姓名",
-    "executor": "执行者姓名（如果提到）",
-    "decision_type": "new/confirmation/rejection",
-    "related_entities": {
-      "chat_ids": [],
-      "doc_tokens": [],
-      "meeting_ids": [],
-      "task_guids": [],
-      "event_ids": []
+  "decisions": [
+    {
+      "title": "第一个决策标题",
+      "decision": "决策结论",
+      "rationale": "决策依据",
+      "suggested_topic": "议题",
+      "impact_level": "major",
+      "decision_type": "new",
+      "proposer": "",
+      "executor": "李四",
+      "decision_time": "2026-05-06",
+      "effective_time": "2026-05-15",
+      "deadline": "2026-05-30",
+      "project_phase": "Phase 1: 数据库迁移",
+      "related_entities": {"chat_ids":[],"doc_tokens":[],"meeting_ids":[],"task_guids":[],"event_ids":[]}
+    },
+    {
+      "title": "第二个决策标题",
+      "decision": "决策结论",
+      "rationale": "决策依据",
+      "suggested_topic": "议题",
+      "impact_level": "major",
+      "decision_type": "new",
+      "proposer": "",
+      "executor": "",
+      "decision_time": "",
+      "effective_time": "",
+      "deadline": "下周三",
+      "project_phase": "",
+      "related_entities": {"chat_ids":[],"doc_tokens":[],"meeting_ids":[],"task_guids":[],"event_ids":[]}
     }
-  },
+  ],
+  "has_objections": true/false,
   "objections": [
     {
-      "objection_content": "反对的具体内容",
-      "rationale": "核心理由",
-      "alternative": "提出的替代方案（如：建议使用X替代Y）",
-      "objector": "反对人姓名",
-      "source": "im/comment/doc"
+      "objection_content": "反对内容",
+      "rationale": "理由",
+      "alternative": "替代方案",
+      "objector": "反对人",
+      "source": "doc"
     }
   ],
   "has_deletions": true/false,
   "deletions": [
     {
-      "original_decision": "被删除的决策内容",
+      "original_decision": "被删除的决策",
       "action": "rejected/deprecated/superseded",
-      "replaced_by": "取代的新决策标题（如有）"
+      "replaced_by": ""
     }
   ],
-  "analysis": "一句话概括本次变更的性质和判断理由"
+  "analysis": "一句话概括本次变更的性质"
 }
 
-## 规则
-- confidence < 0.6 不输出任何 decision 字段
-- 如果变更包含多个修改但只有一部分是决策，将 change_type 设为 mixed 并提取决策部分
-- 不要在决策字段中编造原文没有的内容
-- 宁缺毋滥：不确定时不输出
-- 技术文档中的决策通常伴随理由说明，如果只有结论没有理由，置信度应降低
-- 报告其他人的决定（"leader 说要用 X"）置信度不应超过 0.6
+## 筛选规则（严格遵守，减少噪声决策）
+
+### 以下内容不应作为独立决策输出
+- ❌ **确认已有方向**："确认微服务化方向"、"同意采用XX方案" — 只是确认，没有新信息
+- ❌ **优先级排序**："数据库迁移为最高优先级"、"XX是第一优先级" — 是管理决策，不是技术决策
+- ❌ **任务/截止日期**："下周三前完成设计文档"、"5月底交付" — 是任务安排，不是决策
+- ❌ **进度同步**："已完成模块X的开发"、"本周进展到XX" — 是状态更新
+- ❌ **纯信息分享**："分享一篇文章"、"供参考" — 没有结论
+
+### 以下内容应合并为一条决策，而非拆分为多条
+- ✅ **主决策 + 回滚方案**："采用双写方案" + "保留MySQL实例7天" → 合并为一条，回滚方案作为决策的一部分
+- ✅ **主决策 + 子策略**："采用双写方案" + "灰度发布" + "先迁移10%流量" → 合并为一条，子策略作为决策的实施细节
+- ✅ **同一技术选型的多个方面**："使用PostgreSQL" + "JSONB类型" + "支持MVCC" → 合并为一条，多个方面作为依据
+
+### 合并原则
+如果多个决策满足以下全部条件，应合并为一条：
+1. 属于同一个 project_phase
+2. 指向同一个技术选型或实施方案
+3. 彼此之间有依赖关系（一个决策是另一个的子集或实施细节）
+
+合并后的决策应包含完整的决策结论、实施细节和回滚方案。
+
+## 输出规则
+- decisions 数组应只包含真正独立的、有实质内容的技术决策
+- 每个决策必须有明确的 rationale（依据），没有依据的决策置信度应降低
+- confidence < 0.6 时 decisions 数组为空 []
+- 时间字段：能提取则提取，不能提取则留空字符串，不要编造
+- project_phase：优先从文档的章节标题、里程碑表格中提取
+- 宁缺毋滥：输出 3-5 个高质量决策，优于输出 9 个低质量决策
 `
 
 // ========== 动态段构建函数 ==========
@@ -507,6 +571,12 @@ func extractionDocDynamicBuilder(ctx map[string]any) string {
 	}
 	if topics, ok := ctx["topics"].([]string); ok {
 		sb.WriteString(fmt.Sprintf("\n## 候选议题\n%v\n", topics))
+	}
+	if relatedDecisions, ok := ctx["related_decisions"].([]string); ok && len(relatedDecisions) > 0 {
+		sb.WriteString("\n## 相关历史决策（供参考）\n")
+		for i, d := range relatedDecisions {
+			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, d))
+		}
 	}
 	return sb.String()
 }

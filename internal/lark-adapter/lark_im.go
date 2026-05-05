@@ -103,10 +103,13 @@ func (e *IMExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 
 		e.batcher.UpdateCache(chatID, records)
 
-		for i, record := range records {
-			ctxMsg := e.batcher.BuildContext(record, i, records)
-			ctxMsg.Change.ContextText = ctxMsg.BuildLLMInput()
-			changes = append(changes, ctxMsg.Change)
+		// 使用消息聚合：将相关消息分组，每个组作为一个整体送 LLM
+		groups := e.batcher.GroupMessages(records)
+		for _, group := range groups {
+			ctxMsg := e.batcher.BuildGroupContext(group)
+			if ctxMsg != nil {
+				changes = append(changes, ctxMsg.Change)
+			}
 		}
 	}
 
