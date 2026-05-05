@@ -41,6 +41,9 @@ type DecisionNode struct {
 	// === 飞书关联 ===
 	FeishuLinks FeishuLinks `json:"feishu_links" yaml:"feishu_links"`
 
+	// === 反对意见 ===
+	ObjectionIDs []string `json:"objection_ids,omitempty" yaml:"objection_ids,omitempty"`
+
 	// === 状态 ===
 	Status    DecisionStatus `json:"status" yaml:"status"`
 	CreatedAt time.Time      `json:"created_at" yaml:"created_at"`

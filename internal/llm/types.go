@@ -9,11 +9,22 @@ import (
 
 // ========== 请求/响应类型 ==========
 
+// ObjectionExtract 提取的反对意见
+type ObjectionExtract struct {
+	ObjectionContent string `json:"objection_content"`
+	Rationale        string `json:"rationale,omitempty"`
+	Alternative      string `json:"alternative,omitempty"`
+	Objector         string `json:"objector"`
+	Source           string `json:"source"` // "im" | "comment" | "doc" | "meeting"
+}
+
 // ExtractionResult 决策提取结果
 type ExtractionResult struct {
 	HasDecision   bool             `json:"has_decision"`
 	Confidence    float64          `json:"confidence"`
 	Decision      *DecisionExtract `json:"decision,omitempty"`
+	HasObjections bool             `json:"has_objections,omitempty"`
+	Objections    []ObjectionExtract `json:"objections,omitempty"`
 	ExtractedFrom string           `json:"extracted_from"`
 }
 
@@ -64,6 +75,19 @@ type ConflictResult struct {
 	Suggestion         string  `json:"suggestion,omitempty"`
 	Action             string  `json:"action"`
 	NeedsUser          bool    `json:"needs_user"`
+}
+
+// DedupActionType LLM 去重+冲突联合判断结果（用于 EvaluateDedupAction 的 JSON Schema）
+type DedupActionType struct {
+	Action string `json:"action" jsonschema_description:"skip/update/conflict — 三选一"`
+	Reason string `json:"reason" jsonschema_description:"判断理由"`
+}
+
+// ConflictResolveResult LLM 冲突解决结果（用于 ResolveConflict 的 JSON Schema）
+type ConflictResolveResult struct {
+	Action         string `json:"action" jsonschema_description:"merge 或 keep_both"`
+	MergedDecision string `json:"merged_decision" jsonschema_description:"合并后的决策内容，仅 action=merge 时需要"`
+	Reason         string `json:"reason" jsonschema_description:"判断理由"`
 }
 
 // DecisionResult 决策处理结果

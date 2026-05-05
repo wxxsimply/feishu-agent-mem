@@ -2,7 +2,6 @@ package hooks
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"time"
@@ -12,6 +11,13 @@ import (
 	"feishu-mem/internal/storage/git"
 )
 
+// RunScheduledTask (deprecated - use RunScheduledTaskWithType)
+func RunScheduledTask() {
+	// Keep for compatibility
+	fmt.Println("RunScheduledTask deprecated")
+	os.Exit(1)
+}
+
 type TaskType string
 
 const (
@@ -20,16 +26,7 @@ const (
 	TaskLarkDetector TaskType = "lark-detector"
 )
 
-func RunScheduledTask() {
-	var taskType string
-	flag.StringVar(&taskType, "task", "", "Task type: sync, consistency, lark-detector")
-	flag.Parse()
-
-	if taskType == "" {
-		fmt.Println("Usage: --task=task-type")
-		os.Exit(1)
-	}
-
+func RunScheduledTaskWithType(taskType string) {
 	fmt.Printf("Running task: %s\n", taskType)
 
 	switch TaskType(taskType) {
@@ -58,7 +55,9 @@ func runSyncTask() {
 	}
 
 	fmt.Printf("Using project: %s\n", settings.Project.Name)
-	fmt.Println("Sync task completed (placeholder implementation)")
+	fmt.Println("⚠️  Full sync requires mem-service running with full pipeline")
+	fmt.Println("For now, this is a placeholder - sync is handled by main pipeline")
+	fmt.Println("✅ Sync task completed (standalone mode)")
 }
 
 func runConsistencyCheck() {

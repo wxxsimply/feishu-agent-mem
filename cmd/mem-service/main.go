@@ -2,19 +2,19 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	gosignal "os/signal"
 	"path/filepath"
 	"runtime"
-	gosignal "os/signal"
 	"syscall"
 	"time"
 
 	"feishu-mem/internal/config"
 	"feishu-mem/internal/core"
 	larkadapter "feishu-mem/internal/lark-adapter"
-	"feishu-mem/internal/mcp"
+	"feishu-mem/internal/mcp/server"
 	"feishu-mem/internal/signal"
 	"feishu-mem/internal/storage/bitable"
 	"feishu-mem/internal/storage/git"
@@ -32,33 +32,22 @@ type detectorState struct {
 }
 
 func main() {
-	larkadapter.LoadEnv()
+	var mode string
+	flag.StringVar(&mode, "mode", "service", "运行模式: service (后台服务), mcp (MCP stdio模式)")
+	flag.Parse()
 
-	log.Println("========================================")
-	log.Println("Starting feishu-agent-mem service... (v2)")
-	log.Println("========================================")
-	log.Printf("[System] NumGoroutine: %d", runtime.NumGoroutine())
-	log.Printf("[System] NumCPU: %d", runtime.NumCPU())
+	larkadapter.LoadEnv()
 
 	settings := config.DefaultSettings()
 	if cfgPath := os.Getenv("CONFIG_PATH"); cfgPath != "" {
 		if s, err := config.LoadSettings(cfgPath); err == nil {
 			settings = s
-			log.Printf("[Config] Loaded from: %s", cfgPath)
 		}
 	} else if s, err := config.LoadSettings("config/openclaw.yaml"); err == nil {
 		settings = s
-		log.Printf("[Config] Loaded from: config/openclaw.yaml")
 	} else if s, err := config.LoadSettings("openclaw.yaml"); err == nil {
 		settings = s
-		log.Printf("[Config] Loaded from: openclaw.yaml")
 	}
-
-	larkCfg := larkadapter.LoadConfig()
-
-	log.Printf("[Config] Project: %s", settings.Project.Name)
-	log.Printf("[Config] ChatIDs: %v", larkCfg.ChatIDs)
-	log.Printf("[Config] MCP Port: %d", settings.MCP.Port)
 
 	gitStorage, err := git.NewGitStorage(git.Config{
 		WorkDir:  settings.Git.WorkDir,
@@ -72,13 +61,38 @@ func main() {
 
 	memoryGraph := core.NewMemoryGraph()
 	if settings.Memory.PreloadOnStart {
-		log.Println("[Memory] Loading decisions from Git...")
 		if err := memoryGraph.LoadFromGit(gitStorage, settings.Project.Name); err != nil {
 			log.Printf("[Memory] Warning: Failed to load from Git: %v", err)
-		} else {
-			log.Printf("[Memory] Loaded %d decisions into memory", memoryGraph.Count())
 		}
 	}
+
+	if mode == "mcp" {
+		// MCP 模式（使用官方 SDK）
+		log.Println("[MCP] Starting in MCP stdio mode (using official SDK)...")
+		srv, err := server.NewMemoryMCPServer(memoryGraph, gitStorage)
+		if err != nil {
+			log.Fatalf("[MCP] Failed to create server: %v", err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		if err := srv.Run(ctx); err != nil {
+			log.Fatalf("[MCP] Server error: %v", err)
+		}
+		return
+	}
+
+	// Service 模式
+	log.Println("========================================")
+	log.Println("Starting feishu-agent-mem service... (v2)")
+	log.Println("========================================")
+	log.Printf("[System] NumGoroutine: %d", runtime.NumGoroutine())
+	log.Printf("[System] NumCPU: %d", runtime.NumCPU())
+
+	larkCfg := larkadapter.LoadConfig()
+
+	log.Printf("[Config] Project: %s", settings.Project.Name)
+	log.Printf("[Config] ChatIDs: %v", larkCfg.ChatIDs)
+	log.Printf("[Config] MCP Port: %d", settings.MCP.Port)
 
 	larkCLI := larkadapter.NewLarkCLI()
 	bitableStore := bitable.NewBitableStore(bitable.Config{
@@ -150,16 +164,6 @@ func main() {
 	maxWorkers := max(runtime.NumCPU(), 2)
 	workerPool := signal.NewWorkerPool(signalEngine, maxWorkers)
 
-	mcpServer := mcp.NewMCPServer(memoryGraph, gitStorage, bitableStore)
-
-	if os.Getenv("MCP_SERVER_MODE") == "stdio" {
-		log.Println("[MCP] Starting in stdio mode...")
-		if err := mcpServer.Start(); err != nil {
-			log.Fatalf("[MCP] Server error: %v", err)
-		}
-		return
-	}
-
 	log.Println("[Service] Running in service mode (v2 with burst mode)")
 	log.Printf("[Service] Decisions loaded: %d", memoryGraph.Count())
 	log.Printf("[Service] Topics: %d", memoryGraph.TopicCount(settings.Project.Name))
@@ -225,10 +229,6 @@ func main() {
 	log.Printf("[System] Received signal: %v, shutting down...", sig)
 
 	workerPool.Stop()
-
-	if err := mcpServer.Stop(); err != nil {
-		log.Printf("[MCP] Error stopping server: %v", err)
-	}
 
 	log.Println("[System] feishu-agent-mem service stopped successfully")
 }
@@ -367,6 +367,17 @@ func resultProcessor(
 					log.Printf("[ResultProcessor] Failed to apply mutation: %v", err)
 				} else {
 					log.Printf("[ResultProcessor] Mutation applied successfully")
+				}
+			}
+
+			// 处理附加变更（如反对意见）
+			for _, pendingMut := range result.PendingMutations {
+				log.Printf("[ResultProcessor] Applying pending mutation: %s (type=%s)",
+					pendingMut.SDRID, pendingMut.Type)
+				if err := pipeline.ApplyMutation(pendingMut); err != nil {
+					log.Printf("[ResultProcessor] Failed to apply pending mutation: %v", err)
+				} else {
+					log.Printf("[ResultProcessor] Pending mutation applied successfully")
 				}
 			}
 

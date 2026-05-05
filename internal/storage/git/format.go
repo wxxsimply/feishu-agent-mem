@@ -94,3 +94,30 @@ func FormatDecisionNode(node *decision.DecisionNode) string {
 
 	return buf.String()
 }
+
+// RenderObjectionFile 渲染反对意见文件为 YAML frontmatter + Markdown
+func RenderObjectionFile(obj *decision.Objection) string {
+	var buf bytes.Buffer
+
+	buf.WriteString("---\n")
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	_ = enc.Encode(obj)
+	buf.WriteString("---\n\n")
+
+	buf.WriteString(fmt.Sprintf("# Objection: %s\n\n", obj.ObjectionContent))
+	if obj.Rationale != "" {
+		buf.WriteString(fmt.Sprintf("## 理由\n\n%s\n\n", obj.Rationale))
+	}
+	if obj.Alternative != "" {
+		buf.WriteString(fmt.Sprintf("## 替代方案\n\n%s\n\n", obj.Alternative))
+	}
+	buf.WriteString(fmt.Sprintf("- **反对人**: %s\n", obj.Objector))
+	buf.WriteString(fmt.Sprintf("- **状态**: %s\n", obj.Status))
+	if obj.ReferencesDecision != "" {
+		buf.WriteString(fmt.Sprintf("- **关联决策**: %s\n", obj.ReferencesDecision))
+	}
+	buf.WriteString(fmt.Sprintf("- **来源**: %s\n", obj.SourceType))
+
+	return buf.String()
+}

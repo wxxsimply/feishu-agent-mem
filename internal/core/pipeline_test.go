@@ -46,6 +46,13 @@ func (m *mockGitStorage) ListDecisions(project, topic string) ([]*decision.Decis
 	return result, nil
 }
 
+func (m *mockGitStorage) WriteObjection(obj *decision.Objection) (string, error) {
+	if m.writeErr != nil {
+		return "", m.writeErr
+	}
+	return "obj-hash-123", nil
+}
+
 // mockBitableStore implements BitableStoreInterface for testing
 type mockBitableStore struct {
 	upsertCount int
@@ -66,6 +73,19 @@ func (m *mockBitableStore) QueryByTopic(topic, status string) ([]*decision.Decis
 
 func (m *mockBitableStore) QueryCrossTopic(topic string) ([]*decision.DecisionNode, error) {
 	return nil, nil
+}
+
+func (m *mockBitableStore) UpsertDecisionWithConflict(node *decision.DecisionNode, conflictSDRID string) error {
+	m.upsertCount++
+	return nil
+}
+
+func (m *mockBitableStore) UpdateConflictFields(sdrID, newConflictSDRID string) error {
+	return nil
+}
+
+func (m *mockBitableStore) ClearConflictFields(sdrID string) error {
+	return nil
 }
 
 func TestNewPipelineEngine(t *testing.T) {

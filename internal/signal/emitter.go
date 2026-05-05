@@ -161,6 +161,9 @@ func (e *DocsEmitter) EmitSignal(result *larkadapter.DetectResult) (*StateChange
 		case "doc_decision":
 			strength = maxStrength(strength, StrengthStrong)
 			signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "decision_doc")
+		case "doc_comment_added":
+			strength = maxStrength(strength, StrengthMedium)
+			signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "doc_comment")
 		case "doc_comment_approval":
 			strength = maxStrength(strength, StrengthStrong)
 			signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "approval_comment")

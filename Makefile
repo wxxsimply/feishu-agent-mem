@@ -1,16 +1,26 @@
-.PHONY: build build-mcp test run clean docker-build docker-run
+.PHONY: all build build-mcp build-hooks test run clean docker-build docker-run
 
 BINARY := bin/mem-service
 MCP_BINARY := bin/mcp-server
+HOOKS_BINARY := bin/openclaw-hooks
 DOCKER_IMAGE := feishu-agent-mem:latest
 
+all: build
+
 build:
-	@echo "Building feishu-agent-mem..."
+	@echo "Building feishu-agent-mem services..."
 	@go build -o $(BINARY) ./cmd/mem-service/
+	@go build -o $(MCP_BINARY) ./cmd/mcp-server/
+	@go build -o $(HOOKS_BINARY) ./cmd/openclaw-hooks/
+	@echo "Build complete!"
 
 build-mcp:
 	@echo "Building MCP server..."
 	@go build -o $(MCP_BINARY) ./cmd/mcp-server/
+
+build-hooks:
+	@echo "Building OpenClaw hooks..."
+	@go build -o $(HOOKS_BINARY) ./cmd/openclaw-hooks/
 
 test:
 	@go test ./test/p1 ./test/p2 ./test/p3 ./test/p4 -v
@@ -23,7 +33,7 @@ run: build
 
 clean:
 	@echo "Cleaning up..."
-	@rm -f $(BINARY)
+	@rm -f $(BINARY) $(MCP_BINARY) $(HOOKS_BINARY)
 	@rm -rf data/
 
 docker-build:

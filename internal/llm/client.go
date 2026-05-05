@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/invopop/jsonschema"
 	"github.com/joho/godotenv"
 	"github.com/volcengine/volcengine-go-sdk/service/arkruntime"
 	"github.com/volcengine/volcengine-go-sdk/service/arkruntime/model"
@@ -16,6 +17,15 @@ import (
 
 	"feishu-mem/internal/llm/tools"
 )
+
+// GenerateSchema 泛型生成 JSON Schema（供结构化输出使用）
+func GenerateSchema[T any]() *jsonschema.Schema {
+	reflector := jsonschema.Reflector{
+		AllowAdditionalProperties: false,
+		DoNotReference:            true,
+	}
+	return reflector.Reflect(new(T))
+}
 
 // Config LLM 配置
 type Config struct {
@@ -134,6 +144,69 @@ func (c *Client) Call(ctx context.Context, systemPrompt, userPrompt string) (str
 	return result, nil
 }
 
+// CallWithJSONSchema 调用 LLM 并强制结构化输出（JSON Schema）
+func (c *Client) CallWithJSONSchema(ctx context.Context, systemPrompt, userPrompt string, schema *jsonschema.Schema, schemaName, schemaDesc string) (string, error) {
+	log.Println("========== LLM JSON SCHEMA CALL START ==========")
+	log.Printf("[LLM] Schema: %s", schemaName)
+	log.Printf("[LLM] System prompt length: %d chars", len(systemPrompt))
+
+	if c.config.APIKey == "" {
+		return "", fmt.Errorf("ARK_API_KEY is not set")
+	}
+
+	baseURL := c.config.BaseURL
+	if baseURL == "" {
+		baseURL = "https://ark.cn-beijing.volces.com/api/v3"
+	}
+	modelName := c.config.Model
+	if modelName == "" {
+		modelName = "doubao-1-5-pro-32k-250115"
+	}
+
+	client := arkruntime.NewClientWithApiKey(c.config.APIKey, arkruntime.WithBaseUrl(baseURL))
+
+	req := model.CreateChatCompletionRequest{
+		Model: modelName,
+		Messages: []*model.ChatCompletionMessage{
+			{
+				Role: model.ChatMessageRoleSystem,
+				Content: &model.ChatCompletionMessageContent{
+					StringValue: volcengine.String(systemPrompt),
+				},
+			},
+			{
+				Role: model.ChatMessageRoleUser,
+				Content: &model.ChatCompletionMessageContent{
+					StringValue: volcengine.String(userPrompt),
+				},
+			},
+		},
+		ResponseFormat: &model.ResponseFormat{
+			Type: model.ResponseFormatJSONSchema,
+			JSONSchema: &model.ResponseFormatJSONSchemaJSONSchemaParam{
+				Name:        schemaName,
+				Description: schemaDesc,
+				Schema:      schema,
+				Strict:      true,
+			},
+		},
+	}
+
+	resp, err := client.CreateChatCompletion(ctx, req)
+	if err != nil {
+		log.Printf("[LLM] JSON Schema call failed: %v", err)
+		return "", fmt.Errorf("llm json schema call failed: %w", err)
+	}
+
+	if len(resp.Choices) == 0 || resp.Choices[0].Message.Content == nil {
+		return "", fmt.Errorf("no response from llm")
+	}
+
+	result := *resp.Choices[0].Message.Content.StringValue
+	log.Printf("[LLM] JSON Schema response: %s", truncateForLog(result, 300))
+	return result, nil
+}
+
 // ExtractJSON 从 LLM 响应中提取 JSON
 func ExtractJSON(content string) string {
 	cleaned := content
@@ -217,6 +290,30 @@ func ParseCrossTopicResult(content string) (*CrossTopicResult, error) {
 		return nil, fmt.Errorf("json parse failed: %w", err)
 	}
 
+	return &result, nil
+}
+
+// ParseDedupResult 解析去重+冲突联合判断结果
+func ParseDedupResult(content string) (*DedupResult, error) {
+	log.Printf("[LLM] ParseDedupResult called")
+	jsonStr := ExtractJSON(content)
+
+	var result DedupResult
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		log.Printf("[LLM] ERROR: Dedup JSON parse failed: %v, raw=%s", err, truncateForLog(content, 200))
+		return nil, fmt.Errorf("dedup json parse failed: %w", err)
+	}
+
+	// 验证 action 值
+	switch result.Action {
+	case "skip", "update", "conflict":
+		// valid
+	default:
+		log.Printf("[LLM] WARNING: unknown dedup action '%s', defaulting to conflict", result.Action)
+		result.Action = "conflict"
+	}
+
+	log.Printf("[LLM] Dedup parse result: action=%s, reason=%s", result.Action, result.Reason)
 	return &result, nil
 }
 

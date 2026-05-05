@@ -20,11 +20,15 @@ type GitStorageInterface interface {
 	WriteDecision(node *decision.DecisionNode) (string, error)
 	ReadDecision(project, topic, sdrID string) (*decision.DecisionNode, error)
 	ListDecisions(project, topic string) ([]*decision.DecisionNode, error)
+	WriteObjection(obj *decision.Objection) (string, error)
 }
 
 // BitableStoreInterface Bitable 存储接口
 type BitableStoreInterface interface {
 	UpsertDecision(node *decision.DecisionNode) error
+	UpsertDecisionWithConflict(node *decision.DecisionNode, conflictSDRID string) error
+	UpdateConflictFields(sdrID, newConflictSDRID string) error
+	ClearConflictFields(sdrID string) error
 	QueryByTopic(topic, status string) ([]*decision.DecisionNode, error)
 	QueryCrossTopic(topic string) ([]*decision.DecisionNode, error)
 }
@@ -52,7 +56,15 @@ func (pe *PipelineEngine) ApplyMutation(mut *signal.DecisionMutation) error {
 	case signal.MutationStatusChange:
 		return pe.applyStatusChange(mut)
 	case signal.MutationConflict:
-		return pe.applyConflict(mut)
+		// 根据 ConflictAction 分发
+		switch mut.ConflictAction {
+		case "merge":
+			return pe.applyConflictMerge(mut)
+		default:
+			return pe.applyConflictKeepBoth(mut)
+		}
+	case signal.MutationObjection:
+		return pe.applyCreateObjection(mut)
 	default:
 		return fmt.Errorf("unknown mutation type: %s", mut.Type)
 	}
@@ -88,15 +100,20 @@ func (pe *PipelineEngine) applyCreate(mut *signal.DecisionMutation) error {
 }
 
 func (pe *PipelineEngine) applyUpdate(mut *signal.DecisionMutation) error {
-	// 读取现有决策
-	existing, err := pe.GitStorage.ReadDecision("", "", mut.SDRID)
+	project := mut.Node.Project
+	topic := mut.Node.Topic
+	if project == "" {
+		project = "feishu-mem"
+	}
+	if topic == "" {
+		topic = "general"
+	}
+	existing, err := pe.GitStorage.ReadDecision(project, topic, mut.SDRID)
 	if err != nil {
-		return err
+		return fmt.Errorf("read existing decision failed: %w", err)
 	}
 
-	// 应用字段变更
 	for k, v := range mut.FieldChanges {
-		// 简化的字段更新
 		switch k {
 		case "title":
 			existing.Title = v.(string)
@@ -104,24 +121,53 @@ func (pe *PipelineEngine) applyUpdate(mut *signal.DecisionMutation) error {
 			existing.Decision = v.(string)
 		case "rationale":
 			existing.Rationale = v.(string)
+		case "impact_level":
+			existing.ImpactLevel = decision.ImpactLevel(v.(string))
+		case "executor":
+			existing.Executor = v.(string)
+		case "proposer":
+			existing.Proposer = v.(string)
+		case "status":
+			existing.Status = decision.DecisionStatus(v.(string))
 		}
 	}
 
-	// 写回
+	// 合并新节点的 FeishuLinks（保留已有 token 并追加新的）
+	if mut.Node != nil {
+		for _, token := range mut.Node.FeishuLinks.RelatedDocTokens {
+			existing.FeishuLinks.RelatedDocTokens = appendUnique(
+				existing.FeishuLinks.RelatedDocTokens, token)
+		}
+	}
+
 	hash, err := pe.GitStorage.WriteDecision(existing)
 	if err != nil {
-		return err
+		return fmt.Errorf("git write update failed: %w", err)
 	}
 	existing.GitCommitHash = hash
 
-	// 更新内存图
-	pe.MemoryGraph.UpsertDecision(existing, existing.Project)
+	if pe.BitableStore != nil {
+		if err := pe.BitableStore.UpsertDecision(existing); err != nil {
+			log.Printf("[Bitable] UpsertDecision update failed: %v", err)
+		} else {
+			log.Printf("[Bitable] UpsertDecision update OK: %s", mut.SDRID)
+		}
+	}
 
+	pe.MemoryGraph.UpsertDecision(existing, existing.Project)
+	log.Printf("[Pipeline] Updated decision %s", mut.SDRID)
 	return nil
 }
 
 func (pe *PipelineEngine) applyStatusChange(mut *signal.DecisionMutation) error {
-	existing, err := pe.GitStorage.ReadDecision("", "", mut.SDRID)
+	// 从内存图获取 project/topic
+	project := "feishu-mem"
+	topic := "general"
+	if existingNode, ok := pe.MemoryGraph.GetDecision(mut.SDRID); ok {
+		project = existingNode.Project
+		topic = existingNode.Topic
+	}
+	existing, err := pe.GitStorage.ReadDecision(project, topic, mut.SDRID)
 	if err != nil {
 		return err
 	}
@@ -138,8 +184,102 @@ func (pe *PipelineEngine) applyStatusChange(mut *signal.DecisionMutation) error 
 	return nil
 }
 
-func (pe *PipelineEngine) applyConflict(mut *signal.DecisionMutation) error {
-	// 冲突处理，记录冲突关系
+// applyConflictMerge — LLM 自动合并冲突
+// Git: 覆盖更新已有决策文件
+// Bitable: 更新已有记录 + 清除 conflict_status
+func (pe *PipelineEngine) applyConflictMerge(mut *signal.DecisionMutation) error {
+	if mut.Node == nil {
+		return fmt.Errorf("node is required for conflict merge mutation")
+	}
+
+	// 读取已有决策
+	project := mut.Node.Project
+	topic := mut.Node.Topic
+	if project == "" {
+		project = "feishu-mem"
+	}
+	if topic == "" {
+		topic = "general"
+	}
+	existing, err := pe.GitStorage.ReadDecision(project, topic, mut.SDRID)
+	if err != nil {
+		return fmt.Errorf("read existing decision for merge failed: %w", err)
+	}
+
+	// 用新决策内容覆盖
+	existing.Title = mut.Node.Title
+	existing.Decision = mut.Node.Decision
+	existing.Rationale = mut.Node.Rationale
+	existing.ImpactLevel = mut.Node.ImpactLevel
+	existing.Executor = mut.Node.Executor
+
+	hash, err := pe.GitStorage.WriteDecision(existing)
+	if err != nil {
+		return fmt.Errorf("git write merge failed: %w", err)
+	}
+	existing.GitCommitHash = hash
+
+	log.Printf("[Pipeline] ✅ Conflict auto-merged into %s: %s", mut.SDRID, mut.ConflictReason)
+
+	if pe.BitableStore != nil {
+		// 更新 Bitable（清除冲突状态）
+		if err := pe.BitableStore.UpsertDecision(existing); err != nil {
+			log.Printf("[Bitable] UpsertDecision merge failed: %v", err)
+		} else {
+			log.Printf("[Bitable] Merged decision OK: %s", mut.SDRID)
+		}
+		// 清除冲突标记
+		if err := pe.BitableStore.ClearConflictFields(mut.SDRID); err != nil {
+			log.Printf("[Bitable] ClearConflictFields failed: %v", err)
+		}
+	}
+
+	pe.MemoryGraph.UpsertDecision(existing, existing.Project)
+	return nil
+}
+
+// applyConflictKeepBoth — LLM 无法解决冲突，保留双方
+func (pe *PipelineEngine) applyConflictKeepBoth(mut *signal.DecisionMutation) error {
+	if mut.Node == nil {
+		return fmt.Errorf("node is required for keep_both mutation")
+	}
+
+	hash, err := pe.GitStorage.WriteDecision(mut.Node)
+	if err != nil {
+		return fmt.Errorf("git write conflict failed: %w", err)
+	}
+	mut.Node.GitCommitHash = hash
+
+	log.Printf("[Pipeline] ⚠️ CONFLICT %s vs %s: %s", mut.SDRID, mut.ConflictSDRID, mut.ConflictReason)
+
+	if pe.BitableStore != nil {
+		if err := pe.BitableStore.UpsertDecisionWithConflict(mut.Node, mut.ConflictSDRID); err != nil {
+			log.Printf("[Bitable] UpsertDecision conflict failed: %v", err)
+		}
+		if mut.ConflictSDRID != "" {
+			if err := pe.BitableStore.UpdateConflictFields(mut.ConflictSDRID, mut.SDRID); err != nil {
+				log.Printf("[Bitable] UpdateConflictFields failed: %v", err)
+			}
+		}
+	}
+
+	pe.MemoryGraph.UpsertDecision(mut.Node, mut.Node.Project)
+
+	// MCP 通知占位
+	NotifyConflictViaMCP(mut.SDRID, mut.ConflictSDRID, mut.ConflictReason)
+	return nil
+}
+
+// applyCreateObjection 创建反对意见
+func (pe *PipelineEngine) applyCreateObjection(mut *signal.DecisionMutation) error {
+	if mut.Objection == nil {
+		return fmt.Errorf("objection is required for objection mutation")
+	}
+	hash, err := pe.GitStorage.WriteObjection(mut.Objection)
+	if err != nil {
+		return fmt.Errorf("git write objection failed: %w", err)
+	}
+	log.Printf("[Pipeline] Created objection: %s (git: %s)", mut.Objection.OID, hash)
 	return nil
 }
 

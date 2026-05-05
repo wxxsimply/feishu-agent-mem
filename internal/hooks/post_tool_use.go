@@ -35,7 +35,6 @@ func RunPostToolUse() {
 		return
 	}
 
-	// 加载配置
 	settings := config.DefaultSettings()
 	if cfgPath := os.Getenv("CONFIG_PATH"); cfgPath != "" {
 		if s, err := config.LoadSettings(cfgPath); err == nil {
@@ -45,14 +44,12 @@ func RunPostToolUse() {
 		settings = s
 	}
 
-	// 初始化存储
 	var gitStorage *git.GitStorage
 	if settings.Git.WorkDir != "" {
 		var err error
 		gitStorage, err = git.NewGitStorage(git.Config{
-			WorkDir:  settings.Git.WorkDir,
-			Branch:   settings.Git.Branch,
-			AutoPush: false,
+			WorkDir: settings.Git.WorkDir,
+			Branch:  settings.Git.Branch,
 		})
 		if err != nil {
 			resp := PostToolUseResponse{
@@ -63,23 +60,19 @@ func RunPostToolUse() {
 		}
 	}
 
-	// 加载记忆图
 	memoryGraph := core.NewMemoryGraph()
 	if gitStorage != nil && settings.Memory.PreloadOnStart {
-		if err := memoryGraph.LoadFromGit(gitStorage, settings.Project.Name); err != nil {
-			// 继续，但可能没有历史数据
-		}
+		memoryGraph.LoadFromGit(gitStorage, settings.Project.Name)
 	}
 
 	resp := PostToolUseResponse{}
 
-	// 判断是否需要记录决策
 	if shouldRecordDecision(req) {
 		d := extractDecisionFromToolUse(req)
 		if d != nil {
 			memoryGraph.UpsertDecision(d, settings.Project.Name)
 			if gitStorage != nil {
-				if err := gitStorage.SaveDecision(settings.Project.Name, d.Topic, d); err != nil {
+				if _, err := gitStorage.WriteDecision(d); err != nil {
 					resp.Error = fmt.Sprintf("无法保存到 Git: %v", err)
 					json.NewEncoder(os.Stdout).Encode(resp)
 					return
@@ -94,23 +87,19 @@ func RunPostToolUse() {
 }
 
 func shouldRecordDecision(req PostToolUseRequest) bool {
-	// 这些工具调用后自动记录决策
 	recordableTools := map[string]bool{
 		"create_decision": true,
 		"update_decision": true,
-		"search":          true, // 即使搜索也可能触发智能提取
+		"search":          true,
 		"topic":           true,
 		"decision":        true,
 	}
-
 	if recordableTools[req.ToolName] {
 		return true
 	}
 
-	// 检查结果中是否有决策相关内容
 	resultStr := fmt.Sprintf("%v", req.Result)
 	if len(resultStr) > 50 {
-		// 如果结果有足够内容，可能值得记录
 		return true
 	}
 
@@ -120,7 +109,6 @@ func shouldRecordDecision(req PostToolUseRequest) bool {
 func extractDecisionFromToolUse(req PostToolUseRequest) *decision.DecisionNode {
 	var title, dec, rationale, topic string
 
-	// 从参数中提取
 	if argsTitle, ok := req.Args["title"].(string); ok {
 		title = argsTitle
 	}
@@ -134,7 +122,6 @@ func extractDecisionFromToolUse(req PostToolUseRequest) *decision.DecisionNode {
 		topic = argsTopic
 	}
 
-	// 如果没有从参数中提取到，从工具名称生成默认标题
 	if title == "" {
 		switch req.ToolName {
 		case "search":
@@ -148,12 +135,10 @@ func extractDecisionFromToolUse(req PostToolUseRequest) *decision.DecisionNode {
 		}
 	}
 
-	// 如果决策内容为空，使用结果作为决策内容
 	if dec == "" {
 		dec = fmt.Sprintf("工具 %s 执行结果: %v", req.ToolName, req.Result)
 	}
 
-	// 如果议题为空，使用默认
 	if topic == "" {
 		topic = "general"
 	}
@@ -162,7 +147,7 @@ func extractDecisionFromToolUse(req PostToolUseRequest) *decision.DecisionNode {
 	d.Decision = dec
 	d.Rationale = rationale
 	d.Status = decision.StatusDecided
-	d.ImpactLevel = decision.ImpactLevelMinor
+	d.ImpactLevel = decision.ImpactMinor
 	d.CreatedAt = time.Now()
 	d.DecidedAt = &d.CreatedAt
 
