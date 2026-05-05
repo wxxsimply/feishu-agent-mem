@@ -47,9 +47,9 @@ type BitableResponse struct {
 
 // BitableData Bitable 数据
 type BitableData struct {
-	Data       [][]interface{} `json:"data"`
-	Fields     []string        `json:"fields"`
-	RecordIDList []string      `json:"record_id_list"`
+	Data           [][]interface{} `json:"data"`
+	Fields         []string        `json:"fields"`
+	RecordIDList   []string        `json:"record_id_list"`
 }
 
 // RecordWithID 带 record_id 的记录
@@ -61,57 +61,30 @@ type RecordWithID struct {
 // UpsertDecision 插入或更新决策记录
 func (bs *BitableStore) UpsertDecision(node *decision.DecisionNode) error {
 	if bs.config.BaseToken == "" || bs.config.Tables.Decision == "" {
-		return fmt.Errorf("bitable config not set: base_token or decision table missing")
+		log.Printf("[Bitable] 配置不完整，跳过写入")
+		return nil
 	}
 
 	log.Printf("[Bitable] 写入决策: %s", node.SDRID)
 
-	// 先查找是否存在该 sdr_id 的记录
 	existingRecordID, err := bs.findRecordIDBySDRID(node.SDRID)
 	if err != nil {
 		log.Printf("[Bitable] 查找记录失败: %v", err)
 	}
 
-	fields := map[string]interface{}{
-		"sdr_id":          node.SDRID,
-		"title":           node.Title,
-		"topic":           node.Topic,
-		"status":          string(node.Status),
-		"impact_level":    string(node.ImpactLevel),
-		"decision":        node.Decision,
-		"proposer":        node.Proposer,
-		"executor":        node.Executor,
-		"git_commit_hash": node.GitCommitHash,
-		"created_at":      node.CreatedAt.Format("2006-01-02 15:04:05"),
-	}
+	fields := buildDecisionFields(node)
+	fields["conflict_status"] = "none"
+	fields["conflict_sdr_ids"] = ""
 
-	payload, err := json.Marshal(fields)
-	if err != nil {
-		return err
-	}
-	log.Printf("[Bitable] Upsert payload: %s", string(payload))
-
-	args := []string{
-		"base", "+record-upsert",
-		"--base-token", bs.config.BaseToken,
-		"--table-id", bs.config.Tables.Decision,
-		"--json", string(payload),
-	}
-
-	// 如果找到已有记录，用 record_id 来更新
-	if existingRecordID != "" {
-		log.Printf("[Bitable] 更新已有记录: %s", existingRecordID)
-		args = append(args, "--record-id", existingRecordID)
-	} else {
-		log.Printf("[Bitable] 创建新记录")
-	}
-
-	_, err = bs.cli.RunCommand(args...)
-	return err
+	return bs.upsertRecord(fields, existingRecordID)
 }
 
 // findRecordIDBySDRID 根据 sdr_id 查找 record_id
 func (bs *BitableStore) findRecordIDBySDRID(sdrID string) (string, error) {
+	if bs.config.BaseToken == "" || bs.config.Tables.Decision == "" {
+		return "", nil
+	}
+
 	log.Printf("[Bitable] 查找 sdr_id: %s", sdrID)
 
 	output, err := bs.cli.RunCommand(
@@ -120,12 +93,19 @@ func (bs *BitableStore) findRecordIDBySDRID(sdrID string) (string, error) {
 		"--table-id", bs.config.Tables.Decision,
 	)
 	if err != nil {
+		log.Printf("[Bitable] 调用 record-list 失败: %v", err)
 		return "", err
+	}
+
+	if len(output) > 0 && output[0] == '`' {
+		log.Printf("[Bitable] 收到 Markdown 格式响应，跳过查找")
+		return "", nil
 	}
 
 	var resp BitableResponse
 	if err := json.Unmarshal(output, &resp); err != nil {
-		return "", fmt.Errorf("解析响应失败: %w", err)
+		log.Printf("[Bitable] JSON 解析失败: %v (前200字符: %s)", err, string(output[:min(200, len(output))]))
+		return "", nil
 	}
 
 	fieldIndex := make(map[string]int)
@@ -135,7 +115,8 @@ func (bs *BitableStore) findRecordIDBySDRID(sdrID string) (string, error) {
 
 	sdrIDIndex, hasSDRID := fieldIndex["sdr_id"]
 	if !hasSDRID {
-		return "", fmt.Errorf("找不到 sdr_id 字段")
+		log.Printf("[Bitable] 找不到 sdr_id 字段")
+		return "", nil
 	}
 
 	for i, row := range resp.Data.Data {
@@ -172,7 +153,8 @@ func (bs *BitableStore) ListAllDecisions() ([]*decision.DecisionNode, error) {
 
 	var resp BitableResponse
 	if err := json.Unmarshal(output, &resp); err != nil {
-		return []*decision.DecisionNode{}, fmt.Errorf("解析响应失败: %w", err)
+		log.Printf("[Bitable] 解析响应失败: %v", err)
+		return []*decision.DecisionNode{}, nil
 	}
 
 	log.Printf("[Bitable] 字段列表: %v", resp.Data.Fields)
@@ -240,17 +222,209 @@ func (bs *BitableStore) parseDecisionsFromResponse(data *BitableData) []*decisio
 			if s, ok := row[idx].(string); ok {
 				if t, err := time.Parse("2006-01-02 15:04:05", s); err == nil {
 					d.CreatedAt = t
+				} else if t, err := time.Parse("2006/01/02", s); err == nil {
+					d.CreatedAt = t
 				}
 			}
 		}
 
+		if idx, ok := fieldIndex["hot_score"]; ok && idx < len(row) {
+			if val, ok := row[idx].(float64); ok {
+				d.AccessStats.HotScore = val
+			}
+		}
+		if idx, ok := fieldIndex["access_count"]; ok && idx < len(row) {
+			if val, ok := row[idx].(float64); ok {
+				d.AccessStats.AccessCount = int(val)
+			}
+		}
+		if idx, ok := fieldIndex["reference_count"]; ok && idx < len(row) {
+			if val, ok := row[idx].(float64); ok {
+				d.AccessStats.ReferenceCount = int(val)
+			}
+		}
+
 		if d.SDRID != "" {
-			log.Printf("[Bitable] 解析到决策: %s (hash: %q)", d.SDRID, d.GitCommitHash)
+			log.Printf("[Bitable] 解析到决策: %s", d.SDRID)
 			decisions = append(decisions, d)
 		}
 	}
 
 	return decisions
+}
+
+// UpsertDecisionWithConflict 插入决策并标记冲突状态
+func (bs *BitableStore) UpsertDecisionWithConflict(node *decision.DecisionNode, conflictSDRID string) error {
+	if bs.config.BaseToken == "" || bs.config.Tables.Decision == "" {
+		log.Printf("[Bitable] 配置不完整，跳过写入")
+		return nil
+	}
+
+	log.Printf("[Bitable] 写入冲突决策: %s (冲突: %s)", node.SDRID, conflictSDRID)
+
+	existingRecordID, err := bs.findRecordIDBySDRID(node.SDRID)
+	if err != nil {
+		log.Printf("[Bitable] 查找记录失败: %v", err)
+	}
+
+	fields := buildDecisionFields(node)
+	fields["conflict_status"] = "active_conflict"
+	fields["conflict_sdr_ids"] = conflictSDRID
+
+	return bs.upsertRecord(fields, existingRecordID)
+}
+
+// UpdateConflictFields 更新已有决策的冲突字段
+func (bs *BitableStore) UpdateConflictFields(sdrID, newConflictSDRID string) error {
+	if bs.config.BaseToken == "" || bs.config.Tables.Decision == "" {
+		return fmt.Errorf("bitable config not set")
+	}
+
+	log.Printf("[Bitable] 更新冲突字段: %s <- %s", sdrID, newConflictSDRID)
+
+	existingRecordID, err := bs.findRecordIDBySDRID(sdrID)
+	if err != nil || existingRecordID == "" {
+		log.Printf("[Bitable] 找不到记录: %s", sdrID)
+		return nil
+	}
+
+	existingSDRIDs := bs.getConflictSDRIDs(sdrID)
+	found := false
+	for _, id := range existingSDRIDs {
+		if id == newConflictSDRID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		existingSDRIDs = append(existingSDRIDs, newConflictSDRID)
+	}
+
+	fields := map[string]interface{}{
+		"conflict_status":  "active_conflict",
+		"conflict_sdr_ids": strings.Join(existingSDRIDs, ","),
+	}
+
+	return bs.upsertRecord(fields, existingRecordID)
+}
+
+// getConflictSDRIDs 获取指定决策当前的冲突 SDRID 列表
+func (bs *BitableStore) getConflictSDRIDs(sdrID string) []string {
+	output, err := bs.cli.RunCommand(
+		"base", "+record-list",
+		"--base-token", bs.config.BaseToken,
+		"--table-id", bs.config.Tables.Decision,
+	)
+	if err != nil {
+		return nil
+	}
+
+	var resp BitableResponse
+	if err := json.Unmarshal(output, &resp); err != nil {
+		return nil
+	}
+
+	fieldIndex := make(map[string]int)
+	for i, field := range resp.Data.Fields {
+		fieldIndex[field] = i
+	}
+
+	sdrIDIndex, hasSDRID := fieldIndex["sdr_id"]
+	conflictIndex, hasConflict := fieldIndex["conflict_sdr_ids"]
+	if !hasSDRID || !hasConflict {
+		return nil
+	}
+
+	for _, row := range resp.Data.Data {
+		if sdrIDIndex < len(row) {
+			if s, ok := row[sdrIDIndex].(string); ok && s == sdrID {
+				if conflictIndex < len(row) {
+					if s, ok := row[conflictIndex].(string); ok && s != "" {
+						return strings.Split(s, ",")
+					}
+				}
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
+// buildDecisionFields 构建决策字段 map
+func buildDecisionFields(node *decision.DecisionNode) map[string]interface{} {
+	fields := map[string]interface{}{
+		"sdr_id":          node.SDRID,
+		"title":           node.Title,
+		"topic":           node.Topic,
+		"status":          string(node.Status),
+		"impact_level":    string(node.ImpactLevel),
+		"decision":        node.Decision,
+		"proposer":        node.Proposer,
+		"executor":        node.Executor,
+		"git_commit_hash": node.GitCommitHash,
+		"created_at":      node.CreatedAt.Format("2006-01-02 15:04:05"),
+		"hot_score":       node.AccessStats.HotScore,
+		"access_count":    node.AccessStats.AccessCount,
+		"reference_count": node.AccessStats.ReferenceCount,
+	}
+	if node.AccessStats.LastAccessedAt != nil {
+		fields["last_accessed_at"] = node.AccessStats.LastAccessedAt.Format("2006-01-02 15:04:05")
+	}
+	if node.AccessStats.LastCalculated != nil {
+		fields["last_calculated"] = node.AccessStats.LastCalculated.Format("2006-01-02 15:04:05")
+	}
+	return fields
+}
+
+// upsertRecord 通用记录 upsert
+func (bs *BitableStore) upsertRecord(fields map[string]interface{}, recordID string) error {
+	if bs.config.BaseToken == "" || bs.config.Tables.Decision == "" {
+		return nil
+	}
+
+	payload, err := json.Marshal(fields)
+	if err != nil {
+		return err
+	}
+	log.Printf("[Bitable] 写入 payload: %s", string(payload))
+
+	args := []string{
+		"base", "+record-upsert",
+		"--base-token", bs.config.BaseToken,
+		"--table-id", bs.config.Tables.Decision,
+		"--json", string(payload),
+	}
+	if recordID != "" {
+		args = append(args, "--record-id", recordID)
+	}
+
+	output, err := bs.cli.RunCommand(args...)
+	if err != nil {
+		log.Printf("[Bitable] Upsert 失败: %v", err)
+		log.Printf("[Bitable] 输出: %s", string(output))
+	}
+	return err
+}
+
+// ClearConflictFields 清除决策的冲突标记
+func (bs *BitableStore) ClearConflictFields(sdrID string) error {
+	if bs.config.BaseToken == "" || bs.config.Tables.Decision == "" {
+		return fmt.Errorf("bitable config not set")
+	}
+
+	log.Printf("[Bitable] 清除冲突标记: %s", sdrID)
+
+	existingRecordID, err := bs.findRecordIDBySDRID(sdrID)
+	if err != nil || existingRecordID == "" {
+		log.Printf("[Bitable] 找不到记录: %s", sdrID)
+		return nil
+	}
+
+	fields := map[string]interface{}{
+		"conflict_status":  "none",
+		"conflict_sdr_ids": "",
+	}
+	return bs.upsertRecord(fields, existingRecordID)
 }
 
 // QueryByTopic 按主题查询
@@ -316,3 +490,11 @@ type TopicDef struct {
 	Description string    `json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
 }
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+

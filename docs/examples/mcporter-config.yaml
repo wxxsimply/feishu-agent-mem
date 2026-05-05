@@ -1,0 +1,11 @@
+# mcporter 配置示例
+# 将此文件放置在 ~/.mcporter/config.yaml 或类似位置
+
+mcpServers:
+  - name: feishu-memory-agent
+    description: 飞书记忆代理 - 管理项目决策记忆
+    command:
+      path: /root/openclaw-workspace/feishu-agent-mem/bin/mcp-server
+      args: []
+    env:
+      CONFIG_PATH: /root/openclaw-workspace/feishu-agent-mem/config/openclaw.yaml

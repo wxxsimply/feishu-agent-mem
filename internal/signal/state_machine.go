@@ -1,11 +1,9 @@
 package signal
 
 import (
-	"fmt"
+	"feishu-mem/internal/decision"
 	"sync"
 	"time"
-
-	"feishu-mem/internal/decision"
 )
 
 var idCounter int64
@@ -13,10 +11,10 @@ var idMutex sync.Mutex
 
 // StateTransition 状态转换
 type StateTransition struct {
-	SDRID         string
-	FromStatus    decision.DecisionStatus
-	ToStatus      decision.DecisionStatus
-	Reason        string
+	SDRID        string
+	FromStatus   decision.DecisionStatus
+	ToStatus     decision.DecisionStatus
+	Reason       string
 	TriggerSignal string
 }
 
@@ -68,10 +66,10 @@ func (sm *DecisionStateMachine) EvaluateTransition(
 		switch current.Status {
 		case decision.StatusPending:
 			transitions = append(transitions, &StateTransition{
-				SDRID:         current.SDRID,
-				FromStatus:    current.Status,
-				ToStatus:      decision.StatusInDiscussion,
-				Reason:        "Strong signal detected",
+				SDRID:        current.SDRID,
+				FromStatus:   current.Status,
+				ToStatus:     decision.StatusInDiscussion,
+				Reason:       "Strong signal detected",
 				TriggerSignal: signal.SignalID,
 			})
 		}
@@ -107,13 +105,11 @@ func (sm *DecisionStateMachine) CreateMutationForStatusChange(
 	}
 }
 
-// GenerateSDRID 生成决策 ID（进程内唯一）
+// GenerateSDRID 生成决策 ID
 func GenerateSDRID() string {
 	idMutex.Lock()
-	defer idMutex.Unlock()
 	idCounter++
+	idMutex.Unlock()
 
-	return fmt.Sprintf("DEC-%s-%06d",
-		time.Now().Format("20060102150405"),
-		idCounter%1000000)
+	return "DEC-" + time.Now().Format("20060102150405") + "-" + string([]byte{byte('0' + idCounter%10)})
 }

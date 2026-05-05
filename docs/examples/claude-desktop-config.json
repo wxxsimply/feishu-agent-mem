@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "feishu-memory-agent": {
+      "command": "/root/openclaw-workspace/feishu-agent-mem/bin/mcp-server",
+      "env": {
+        "CONFIG_PATH": "/root/openclaw-workspace/feishu-agent-mem/config/openclaw.yaml"
+      }
+    }
+  }
+}

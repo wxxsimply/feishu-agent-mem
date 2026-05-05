@@ -42,6 +42,15 @@ func (pm *PromptManager) registerAllTemplates() {
 		Temperature: 0.3,
 	}
 
+	// 场景 1b: 文档决策提取（分阶段分析模式）
+	pm.templates["extraction_doc"] = &PromptTemplate{
+		Name:        "extraction_doc",
+		Static:      extractionDocStaticPrompt,
+		Dynamic:     extractionDocDynamicBuilder,
+		MaxTokens:   4000,
+		Temperature: 0.3,
+	}
+
 	// 场景 2: 议题分类
 	pm.templates["classification"] = &PromptTemplate{
 		Name:        "classification",
@@ -67,6 +76,24 @@ func (pm *PromptManager) registerAllTemplates() {
 		Dynamic:     conflictDynamicBuilder,
 		MaxTokens:   3000,
 		Temperature: 0.2,
+	}
+
+	// 场景 5: 决策去重+冲突联合判断
+	pm.templates["dedup"] = &PromptTemplate{
+		Name:        "dedup",
+		Static:      dedupStaticPrompt,
+		Dynamic:     dedupDynamicBuilder,
+		MaxTokens:   2000,
+		Temperature: 0.1,
+	}
+
+	// 场景 6: 冲突解决判断（占位提示词，后续补充更多逻辑）
+	pm.templates["conflict_resolve"] = &PromptTemplate{
+		Name:        "conflict_resolve",
+		Static:      conflictResolveStaticPrompt,
+		Dynamic:     conflictResolveDynamicBuilder,
+		MaxTokens:   2000,
+		Temperature: 0.1,
 	}
 }
 
@@ -98,231 +125,104 @@ func (pm *PromptManager) GetTemplate(name string) (*PromptTemplate, bool) {
 
 var (
 	ExtractionStaticPrompt     = extractionStaticPrompt
+	ExtractionDocStaticPrompt  = extractionDocStaticPrompt
 	ClassificationStaticPrompt = classificationStaticPrompt
 	CrossTopicStaticPrompt     = crosstopicStaticPrompt
-	ConflictStaticPrompt       = conflictStaticPrompt
+	ConflictStaticPrompt         = conflictStaticPrompt
+	DedupStaticPrompt            = dedupStaticPrompt
+	ConflictResolveStaticPrompt  = conflictResolveStaticPrompt
 )
 
-var extractionStaticPrompt = `# 角色
-你是一个专业的项目决策提取专家。你的工作是从飞书群聊消息、会议纪要、文档内容、任务评论中精确识别和提取决策信息。
+var extractionStaticPrompt = `# 系统提示词：决策提取器（严格模式）
 
-你的输出直接影响项目决策数据库的质量。**宁可漏判，不可误判。** 不确定时，has_decision 设为 false。
+## 角色
+你是一个项目决策提取专家。你需要严格识别和提取真正有结论的技术决策，避免被日常交流噪声干扰。
 
----
+## 核心原则
+只有包含明确结论性选择的消息才应标记为决策。一条消息应同时满足以下三个条件才判断为决策：
 
-# 任务
-给定一段输入内容，判断是否包含**明确的决策信息**。如果包含，提取为指定的 JSON 格式；如果不包含，返回 {"has_decision": false}。
+1. **有明确的选择/方案/结论被确定** — 不是列举选项，而是做出了选择
+2. **有可识别的项目上下文或范围** — 知道在哪个模块/领域做出决定
+3. **有隐含或明确的后续行动指向** — 决定后有下一步动作的暗示
 
----
+## 以下情况必须返回 has_decision: false
+- ❌ **纯进度同步**："已完成XX"、"正在处理XX"、"进度到XX了"、"更新一下当前状态"
+- ❌ **信息分享**："分享一篇文章"、"通知一下"、"供参考"、"给大家看看"
+- ❌ **无结论讨论**：对比多个选项但未选出 — "用A还是B？大家怎么看"
+- ❌ **纯问题**：疑问句、反问句、征求建议 — 除非问题本身就隐含了已经做出的决定
+- ❌ **计划性表述**："打算用"、"准备尝试"、"计划做"、"想试试"（未定）
+- ❌ **转述他人**："xxx说"、"据xxx反馈" — 除非该转述被确认就是最终决定
+- ❌ **日常闲聊和简单附和**："好的"、"没问题"、"+1"
 
-# 什么是决策？
-决策是**团队或项目中就某个问题、方案、行动方向做出的最终确定或明确选择**。决策的关键特征是：
-1. **确定性** — 不是讨论、不是提问、不是探索
-2. **结论性** — 有明显的结论或拍板动作
-3. **可执行性** — 决策后通常会伴随后续行动
+## 区分"报告决策"与"做出决策"
+- 如果消息是在报告其他人已经做的决定（"leader 说要用 X"），且不是你所在群组做出的→ 标记为低置信度
+- 只有消息本身包含做决定的行为，才应被视为高置信度决策
 
----
+## 决策状态判定
+- 仅有讨论但没有结论 → has_decision: false
+- 已有明确结论 → status: "decided"，且 confidence 至少 0.8
+- 有讨论且有倾向性但尚未完全确定 → status: "pending"
 
-# 决策判定标准（三级体系）
+## 可信度评分标准
+- confidence >= 0.8: 有明确结论性表述，上下文清晰，有行动指向 → has_decision: true
+- confidence 0.6-0.7: 有较强的决策语气但缺乏部分信息
+- confidence < 0.6: 一律 has_decision: false
 
-## 第一级：单独出现即判定为决策（高置信度）
+## 反对意见提取（新增）
+除了提取决策结论外，也从讨论内容中提取反对意见（objections）。反对意见定义为：
+1. 对某个方案/选择的明确反对或不同意见（"我不同意"、"我反对"、"持保留意见"）
+2. 提出了不同的方案/选择作为替代（"我觉得应该用X代替Y"、"建议用X而不是Y"）
+3. 有核心理由说明为什么不同意（"这个方案有风险，因为..."）
 
-以下关键词或信号**单独出现**即可判定为决策，除非被反信号覆盖：
+### 判定规则
+- "可能不太行"、"这个方案有风险" + 核心理由 → 算反对意见
+- "我不同意"、"我反对"、"不同意这个方案" → 明确反对
+- "我觉得应该用X代替Y" → 包含替代方案的反对意见，alternative 字段填写"X"
+- "我不确定"、"我再想想"、"说不好" → 不算反对意见
+- "好的"、"同意"、"没问题" → 不算反对意见
 
-### 中文决策词
-| 关键词 | 判定规则 |
-|--------|----------|
-| 决定、已决定、决定了 | 明确决策动作，最高优先级 |
-| 确认、已确认、确认了 | 确认即决策 |
-| 结论、最终结论、结论是 | 结论性用语 |
-| 通过、已通过、审批通过 | 审批通过 |
-| 定下来、就这样、就这么办 | 最终拍板 |
-| 不再讨论、到此为止、不讨论了 | 讨论终结 |
-| 最终方案、终极方案 | 最终选择 |
+## 输出格式
+仅当 confidence >= 0.6 时考虑输出决策。最终决定必须达到 0.8 以上才输出完整 decision。
 
-### 英文决策词
-| 关键词 | 判定规则 |
-|--------|----------|
-| approve / approved | 批准 |
-| LGTM / lgtm | 代码审查通过（技术决策） |
-| decided / decision made | 已决定 |
-| confirmed / agreed | 已确认 |
-| ship it / merge it | 发布/合并决策 |
-
-### 审批与正式信号
-| 关键词 | 判定规则 |
-|--------|----------|
-| 审批通过、批准、驳回、否决 | 审批结果本身就是决策 |
-| 投票决定、表决通过、多数通过 | 集体决策 |
-| 评审通过、CR通过、review通过 | 技术评审决策 |
-
-## 第二级：需多个信号组合才判定为决策（中等置信度）
-
-以下场景需要**至少两个信号同时出现**才判定为决策：
-
-| 场景 | 信号1 | 信号2 | 示例 |
-|------|-------|-------|------|
-| 建议采纳 | 建议/推荐/提议 | 具体方案/技术/工具 | "我建议用Go重写" |
-| 选型结论 | 对比/比较/A vs B | 最终选择/决定 | "A比B性能好30%，就用A" |
-| 任务分配 | 来负责/由你做/assign | 具体人名/角色 | "张三来负责这个模块" |
-| 讨论收敛 | 多轮讨论/不同意见 | 结论词/收尾 | "讨论了很久，那就定A方案吧" |
-| 时间决策 | 截止时间/deadline | 具体日期/时间 | "下周五之前必须完成" |
-| 方案选择 | 方案/选项/方案A/B | 选择/采用/用 | "方案B更适合我们当前的架构" |
-| 问题修复决定 | 问题/bug/issue | 修复方式/方案 | "这个bug需要重构缓存层" |
-
-## 第三级：即使有关键词也不判定为决策（反信号覆盖）
-
-以下场景即使包含上述关键词，也**不应**判定为决策：
-
-| 场景 | 原因 | 反例 |
-|------|------|------|
-| 转述历史决策 | 不是在当前对话中做的决策 | "上次我们决定了用Go"（只是转述） |
-| 征求意见 | 没有拍板 | "大家确认一下这个方案可以吗？" |
-| 假设性讨论 | 不是真实决策 | "如果用微服务会怎么样？" |
-| 引用外部信息 | 不是团队决策 | "我看XX公司决定用K8s" |
-| 复述他人观点 | 不是自己的决策 | "张三建议用React"（只是转述他人建议） |
-
----
-
-# 不得判定为决策的场景清单
-
-此清单中的场景**即使包含模糊的关键词**也不应判定为决策：
-
-## 问候与社交
-- ❌ 纯问候：大家好、早上好、下午好、辛苦了、谢谢大家
-- ❌ 告别：拜拜、明天见、周末愉快、回头聊
-- ❌ 致谢：谢谢、感谢、麻烦你了、辛苦了
-- ❌ 纯社交：吃了吗、最近怎么样、天气真好
-
-## 提问与求助
-- ❌ 纯提问无回答：今天下午开会吗？/这个怎么看？/有人知道吗？
-- ❌ 技术求助不含解决方案：这个报错怎么解决？/有人遇到过吗？
-- ❌ 寻求确认未拍板：大家确认一下？/这样可以吗？
-- ❌ 需求描述不含方案：用户希望增加一个导出功能
-
-## 协商与模糊
-- ❌ 不确定性：可能、也许、大概、或许、不一定
-- ❌ 延期：再看、再想想、考虑一下、讨论一下、以后再说
-- ❌ 泛泛而谈：我们需要提高质量/我们需要更好的性能
-- ❌ 纯征求意见：大家有什么建议？/你怎么看？
-
-## 信息同步
-- ❌ 纯进度汇报：已完成XX模块、今天做了A明天做B
-- ❌ 纯通知：XX已发布、代码已提交、PR已创建
-- ❌ 纯信息分享：分享一篇文章/发个文档给大家参考
-- ❌ 纯提问回答：没有，还没开始/是的，已经完成了
-
-## 其他
-- ❌ 纯表情/贴纸：👍😂❤️🎉
-- ❌ 纯文件分享：发送了一个文件
-- ❌ 自动消息：CI构建通知/Bot自动消息
-- ❌ 闲聊：聊八卦、聊生活
-
----
-
-# 置信度评分规则
-
-置信度反映你对"这是一条决策"的确定程度：
-
-| 置信度范围 | 判定标准 | 示例场景 |
-|-----------|---------|---------|
-| 0.95-1.0 | 绝对确定：明确的决策词+具体方案+无歧义 | "决定用PostgreSQL作为主数据库" |
-| 0.85-0.95 | 很确定：明确决策词但方案不够具体 | "决定采用微服务架构" |
-| 0.70-0.85 | 确定：有结论性表达 | "建议用Go重写，大家没意见的话就这么定了" |
-| 0.60-0.70 | 基本确定：需要组合信号判断 | "A方案比B好，我觉得就用A吧" |
-| 0.40-0.60 | 不确定：**应设 has_decision=false** | "倾向于用Python"（太模糊） |
-| 0.00-0.40 | 不是决策：设 has_decision=false | 问好、闲聊、纯问题 |
-
-**规则：confidence < 0.6 时必须将 has_decision 设为 false。**
-
----
-
-# 输出格式（严格遵循）
-
-## 当 has_decision = true 时：
-{"has_decision":true,"confidence":0.92,"decision":{"title":"使用PostgreSQL作为主数据库","decision":"决定用PostgreSQL作为主数据库","rationale":"PostgreSQL支持更复杂的事务和查询，且团队的运维经验更丰富"}}
-
-## 当 has_decision = false 时：
-{"has_decision":false}
-
-## 字段约束
-| 字段 | 类型 | 必填 | 约束 |
-|------|------|------|------|
-| has_decision | boolean | 是 | true 或 false |
-| confidence | number | 是 | 0.0-1.0 浮点数 |
-| decision.title | string | 条件必填 | ≤30字符，一句话概括决策内容 |
-| decision.decision | string | 条件必填 | **精确引用原文**，不要改写、不要总结 |
-| decision.rationale | string | 条件必填 | 决策理由，1-2条分号分隔，**必须是字符串** |
+{
+  "has_decision": true/false,
+  "confidence": 0.0-1.0,
+  "has_objections": true/false,
+  "decision": {
+    "title": "一句话决策标题",
+    "decision": "决策结论（从原文或对话中精确引用）",
+    "rationale": "决策依据（从讨论中提取 1-2 条理由）",
+    "suggested_topic": "建议归属的议题（从候选列表中选择）",
+    "impact_level": "advisory/minor/major/critical",
+    "proposer": "提出人姓名",
+    "executor": "执行者姓名（如果提到）",
+    "related_entities": {
+      "chat_ids": [], "doc_tokens": [], "meeting_ids": [],
+      "task_guids": [], "event_ids": []
+    },
+    "decision_type": "new/confirmation/rejection"
+  },
+  "objections": [
+    {
+      "objection_content": "反对的具体内容",
+      "rationale": "核心理由",
+      "alternative": "提出的替代方案（如：建议使用X替代Y）",
+      "objector": "反对人姓名",
+      "source": "im"
+    }
+  ],
+  "extracted_from": "消息/会议/文档的摘要（< 100 字）"
+}
 
 ## 规则
-1. **精确引用** — decision 字段必须使用原文中的表述，不要用自己的话总结
-2. **不编造** — 如果原文没有提到理由，rationale 写 "原文未提及"
-3. **单层JSON** — 不要嵌套多余的层级，严格按照上面的格式
-4. **无注释** — JSON 中不要包含注释
-5. **无Markdown** — 直接输出 JSON，不要用代码块包裹
-6. **无额外字段** — 不要输出 title/decision/rationale 之外的字段
-
----
-
-# 思考链（内部推理过程，不要输出）
-
-在输出最终结果前，按以下步骤推理：
-1. 这段内容是在讨论、提问还是拍板？
-2. 是否包含明确的决策信号？
-3. 是否有反信号覆盖决策信号？
-4. 如果有多个信号，它们的组合是否足够强？
-5. 结论是否清晰明确？
-6. 确定置信度分数
-
----
-
-# 示例
-
-## 正例1：明确决策
-输入："我们决定用PostgreSQL作为主数据库"
-输出：{"has_decision":true,"confidence":0.95,"decision":{"title":"使用PostgreSQL做主数据库","decision":"决定用PostgreSQL作为主数据库","rationale":"原文直接给出了明确决策"}}
-
-## 正例2：审批结论
-输入："这个方案我已经确认通过了，下周开始执行"
-输出：{"has_decision":true,"confidence":0.92,"decision":{"title":"方案已确认通过","decision":"这个方案我已经确认通过了","rationale":"原文未提及理由"}}
-
-## 正例3：讨论收敛为决策
-输入："讨论了这么多，最终结论是用React"
-输出：{"has_decision":true,"confidence":0.88,"decision":{"title":"最终决定使用React","decision":"最终结论是用React","rationale":"原文未提及理由"}}
-
-## 正例4：含理由的决策
-输入："我建议用Go重写后端，因为性能更好且部署方便，大家没意见就定了"
-输出：{"has_decision":true,"confidence":0.85,"decision":{"title":"用Go重写后端","decision":"用Go重写后端","rationale":"性能更好且部署方便"}}
-
-## 反例1：纯问候
-输入："大家好，早上好"
-输出：{"has_decision":false}
-
-## 反例2：纯问题
-输入："这个方案大家觉得怎么样？"
-输出：{"has_decision":false}
-
-## 反例3：不确定性
-输入："这个方案可能不太行，需要再想想"
-输出：{"has_decision":false}
-
-## 反例4：信息同步
-输入："今天完成了模块A的开发，明天开始测试"
-输出：{"has_decision":false}
-
-## 反例5：寻求确认
-输入："大家确认一下这个方案可以吗？没问题的话我就去做了"
-输出：{"has_decision":false}（这是在征求意见，不是拍板）
-
----
-
-# 重要规则总结
-1. confidence < 0.6 → has_decision = false
-2. decision 字段必须引用原文，不要改写
-3. rationale 必须是字符串，不要输出数组
-4. 转述历史决策不算当前决策
-5. 征求意见未拍板不算决策
-6. 宁可漏判，不可误判`
+- confidence < 0.6 不输出任何 decision 字段
+- 如果讨论中提到多个方案但未选出一个 → has_decision: false
+- 如果是日常闲聊（"今天吃什么"）→ confidence: 0.0
+- 如果是技术讨论但无决策结论 → has_decision: false
+- 如果是进度同步或状态更新 → has_decision: false
+- 不要在决策字段中编造原文没有的内容
+- 宁缺毋滥：不确定时不输出
+`
 
 var classificationStaticPrompt = `# 系统提示词：议题分类器
 
@@ -420,6 +320,108 @@ var conflictStaticPrompt = `# 系统提示词：决策冲突评估器
 - 如果两个决策在不同阶段生效（phase 不同），矛盾应降级
 `
 
+var extractionDocStaticPrompt = `# 系统提示词：文档决策提取器（分阶段分析模式）
+
+## 角色
+你是一个技术文档决策分析专家。对文档变更内容进行分阶段分析，严格区分真实决策与非决策修改。
+
+## 阶段 1：变更类型识别
+
+分析下面给出的文档变更内容（diff），确定变更的类型：
+
+- **decision** —— 明确的技术选择或方案确认（例："决定使用 PostgreSQL"、"采用微服务架构"）
+- **discussion** —— 讨论中但未定论（例："正在评估A和B方案"、"对比了两种方案"）
+- **status_update** —— 进度同步、状态更新（例："已完成模块X的开发"、"本周进展"）
+- **clarification** —— 澄清说明、格式修正、错别字修改
+- **administrative** —— 行政类、模板类（例："填写周报模板"、"更新团队成员名单"）
+- **mixed** —— 混合类型（同时包含决策和非决策内容）
+
+### 分类规则
+- 如果变更内容主要是状态更新但最后做出了决定 → mixed
+- 如果变更只是格式调整/排版/错别字 → clarification
+- 如果变更包含"决定/确认/结论/通过"等明确决策词汇且有上下文佐证 → decision
+- 纯周报/日报/进度同步 → status_update
+
+## 阶段 2：决策信息提取
+
+仅当阶段 1 判定为 "decision" 或 "mixed" 时执行。提取以下信息：
+
+1. **决策标题**：一句话概括决定内容
+2. **决策结论**：从变更中精确引用被确定的具体方案或选择
+3. **决策依据**：决策的理由和依据（从 diff 中找到 1-2 条理由）
+4. **影响范围**：哪些模块/系统/议题受影响（根据候选议题列表匹配）
+5. **影响级别**：advisory（建议性）/ minor（次要）/ major（重要）/ critical（关键）
+6. **决策类型**：new（新决策）/ confirmation（确认已有决策）/ rejection（否决/取消之前决定）
+7. **相关实体**：关联的文档 token、议题 ID 等
+8. **提出人/执行人**：如有明确提及
+
+## 阶段 3：置信度评估
+
+- **高置信度 (>= 0.8)**：明确的技术选型陈述，有上下文和理由
+  - 例："经过评估，团队决定使用 Go 重写后端服务，原因是性能需求和高并发场景"
+- **中置信度 (0.6-0.7)**：有明显决策倾向但表达不够明确
+  - 例："推荐使用方案A，大家没有异议的话就这么定了"
+- **低置信度 (< 0.6)**：仅讨论、推测、报告他人意见
+  - 例："我觉得可能用 PostgreSQL 比较好"
+  - → has_decision: false 且不输出 decision 字段
+- **零置信度 (0.0)**：纯状态更新、格式修正、闲聊
+  - → has_decision: false
+
+## 反对意见提取（新增）
+如果文档内容或评论中包含对已有决策的反对意见，也一并提取。反对意见定义为：
+1. 对某个方案/选择的明确反对或不同意见
+2. 提出了不同的替代方案
+3. 有核心理由说明为什么不同意
+
+如果输入是文档评论内容（source=comment），评论中可能包含对文档中已有决策的反对意见。
+
+## 输出格式
+
+仅当 confidence >= 0.6 时考虑输出决策。最终决定必须达到 0.8 以上才输出完整 decision。
+
+{
+  "has_decision": true/false,
+  "change_type": "decision/discussion/status_update/clarification/administrative/mixed",
+  "confidence": 0.0-1.0,
+  "has_objections": true/false,
+  "decision": {
+    "title": "一句话决策标题",
+    "decision": "决策结论（从原文或 diff 中精确引用）",
+    "rationale": "决策依据（1-2 条理由）",
+    "suggested_topic": "建议归属的议题（从候选列表中选择）",
+    "impact_level": "advisory/minor/major/critical",
+    "proposer": "提出人姓名",
+    "executor": "执行者姓名（如果提到）",
+    "decision_type": "new/confirmation/rejection",
+    "related_entities": {
+      "chat_ids": [],
+      "doc_tokens": [],
+      "meeting_ids": [],
+      "task_guids": [],
+      "event_ids": []
+    }
+  },
+  "objections": [
+    {
+      "objection_content": "反对的具体内容",
+      "rationale": "核心理由",
+      "alternative": "提出的替代方案（如：建议使用X替代Y）",
+      "objector": "反对人姓名",
+      "source": "im/comment/doc"
+    }
+  ],
+  "analysis": "一句话概括本次变更的性质和判断理由"
+}
+
+## 规则
+- confidence < 0.6 不输出任何 decision 字段
+- 如果变更包含多个修改但只有一部分是决策，将 change_type 设为 mixed 并提取决策部分
+- 不要在决策字段中编造原文没有的内容
+- 宁缺毋滥：不确定时不输出
+- 技术文档中的决策通常伴随理由说明，如果只有结论没有理由，置信度应降低
+- 报告其他人的决定（"leader 说要用 X"）置信度不应超过 0.6
+`
+
 // ========== 动态段构建函数 ==========
 
 func extractionDynamicBuilder(ctx map[string]any) string {
@@ -429,6 +431,12 @@ func extractionDynamicBuilder(ctx map[string]any) string {
 	}
 	if topics, ok := ctx["topics"].([]string); ok {
 		sb.WriteString(fmt.Sprintf("\n## 候选议题\n%v\n", topics))
+	}
+	if relatedDecisions, ok := ctx["related_decisions"].([]string); ok && len(relatedDecisions) > 0 {
+		sb.WriteString("\n## 相关历史决策（供参考）\n")
+		for i, d := range relatedDecisions {
+			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, d))
+		}
 	}
 	return sb.String()
 }
@@ -474,6 +482,125 @@ func conflictDynamicBuilder(ctx map[string]any) string {
 	}
 	if decisionB, ok := ctx["decisionB"].(string); ok {
 		sb.WriteString(fmt.Sprintf("## 决策 B（已有决策）\n%s\n", decisionB))
+	}
+	return sb.String()
+}
+
+func extractionDocDynamicBuilder(ctx map[string]any) string {
+	var sb strings.Builder
+	if content, ok := ctx["content"].(string); ok {
+		sb.WriteString(fmt.Sprintf("\n## 文档变更内容（diff）\n%s\n", content))
+	}
+	if docType, ok := ctx["doc_type"].(string); ok {
+		sb.WriteString(fmt.Sprintf("\n## 文档类型\n%s\n", docType))
+	}
+	if title, ok := ctx["title"].(string); ok {
+		sb.WriteString(fmt.Sprintf("\n## 文档标题\n%s\n", title))
+	}
+	if topics, ok := ctx["topics"].([]string); ok {
+		sb.WriteString(fmt.Sprintf("\n## 候选议题\n%v\n", topics))
+	}
+	return sb.String()
+}
+
+// ========== 场景 5: 决策去重+冲突联合判断 ==========
+
+var dedupStaticPrompt = `# 系统提示词：决策去重与冲突联合判断
+
+## 角色
+你是项目决策一致性检查专家。比较新旧两个决策，同时判断是否存在重复（需要去重）以及是否存在冲突。
+
+## 判断标准
+
+你需要输出一个动作（action），三选一：
+
+### skip — 跳过，不创建新决策
+- 新旧决策说的是同一件事，仅有措辞、标点、空格差异
+- 例："后端语言：Python" → "后端开发语言为 Python"（只是表述方式不同，事实不变）
+- 例："使用 PostgreSQL" → "使用 PostgreSQL 数据库"（补充了"数据库"三个字，无实质变化）
+
+### update — 更新现有决策
+- 同一议题下的信息补充或细化，不矛盾
+- 例："后端语言：Python" → "后端语言：Python，框架：Django"（补充了框架信息）
+- 例："使用缓存" → "使用 Redis 作为缓存方案"（从模糊到具体）
+
+### conflict — 标记冲突
+- 新旧决策对同一事项给出了不同甚至矛盾的结论
+- 例："后端语言：Python" → "后端语言：Golang"（语言变了）
+- 例："使用 MySQL" → "使用 PostgreSQL"（数据库变了）
+- 例："token 长度 256" → "token 长度 512"（参数变了）
+- 即使只是细微差异，只要是**不同的事实陈述**就是冲突
+
+## 输出格式（严格遵守）
+{
+  "action": "skip|update|conflict",
+  "reason": "一句话说明判断理由"
+}
+
+## 规则
+- 只看事实是否一致，不评价"哪个更好"
+- 值变更（即使是同义词）≠ skip，而是 conflict
+- 补充新信息但不动原有内容 = update
+- 只输出 JSON，不要任何额外文字
+`
+
+func dedupDynamicBuilder(ctx map[string]any) string {
+	var sb strings.Builder
+	if title, ok := ctx["new_title"].(string); ok {
+		sb.WriteString(fmt.Sprintf("\n## 新决策标题\n%s\n", title))
+	}
+	if decision, ok := ctx["new_decision"].(string); ok {
+		sb.WriteString(fmt.Sprintf("## 新决策内容\n%s\n", decision))
+	}
+	if title, ok := ctx["existing_title"].(string); ok {
+		sb.WriteString(fmt.Sprintf("## 已有决策标题\n%s\n", title))
+	}
+	if decision, ok := ctx["existing_decision"].(string); ok {
+		sb.WriteString(fmt.Sprintf("## 已有决策内容\n%s\n", decision))
+	}
+	return sb.String()
+}
+
+// ========== 场景 6: 冲突解决判断 ==========
+
+var conflictResolveStaticPrompt = `# 系统提示词：冲突自动解决判断器
+
+## 角色
+你是项目决策冲突解决专家。判断新旧决策之间的冲突能否自动合并。
+
+## 判断标准
+
+### merge — 可自动合并
+- 两个决策说的是同一件事，但措辞不同 → 合并为更清晰的版本
+- 新决策是对旧决策的合理更新/细化 → 用新决策覆盖
+- 例: "后端语言: Python" vs "后端开发语言为 Python" → 可合并
+- 例: "使用缓存" vs "使用 Redis 缓存" → 可合并为 "使用 Redis 缓存"
+
+### keep_both — 无法自动合并，需人工介入
+- 两个决策对同一事项给出矛盾结论
+- 例: "后端语言: Python" vs "后端语言: Golang" → 需人工
+- 例: "使用 MySQL" vs "使用 PostgreSQL" → 需人工
+- 无法判断哪个版本更正确
+
+## 规则
+- 只看事实是否一致，不评价"哪个更好"
+- 如果难以判断是否矛盾，优先 keep_both
+- 结构化输出由 JSON Schema 强制约束
+`
+
+func conflictResolveDynamicBuilder(ctx map[string]any) string {
+	var sb strings.Builder
+	if title, ok := ctx["new_title"].(string); ok {
+		sb.WriteString(fmt.Sprintf("\n## 新决策标题\n%s\n", title))
+	}
+	if decision, ok := ctx["new_decision"].(string); ok {
+		sb.WriteString(fmt.Sprintf("## 新决策内容\n%s\n", decision))
+	}
+	if title, ok := ctx["existing_title"].(string); ok {
+		sb.WriteString(fmt.Sprintf("## 已有决策标题\n%s\n", title))
+	}
+	if decision, ok := ctx["existing_decision"].(string); ok {
+		sb.WriteString(fmt.Sprintf("## 已有决策内容\n%s\n", decision))
 	}
 	return sb.String()
 }

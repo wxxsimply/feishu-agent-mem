@@ -187,6 +187,30 @@ func (gs *GitStorage) ListDecisions(project, topic string) ([]*decision.Decision
 	return decisions, nil
 }
 
+// WriteObjection 写入反对意见文件 + commit
+func (gs *GitStorage) WriteObjection(obj *decision.Objection) (string, error) {
+	dir := filepath.Join(gs.workDir, "objections", obj.Project, obj.Topic)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+
+	path := filepath.Join(dir, obj.OID+".md")
+
+	content := RenderObjectionFile(obj)
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		return "", err
+	}
+
+	relPath, _ := filepath.Rel(gs.workDir, path)
+	msg := fmt.Sprintf("objection(%s): %s - %s", obj.Topic, obj.OID, obj.ObjectionContent)
+	hash, err := gs.cli.Commit(relPath, msg)
+	if err != nil {
+		return "", err
+	}
+
+	return hash, nil
+}
+
 // ListTopics 列出项目下所有议题
 func (gs *GitStorage) ListTopics(project string) ([]string, error) {
 	dir := filepath.Join(gs.workDir, "decisions", project)

@@ -851,6 +851,11 @@ func (s *MCPServer) validateToolArgs(name string, args map[string]any) string {
 	return ""
 }
 
+// NotifyConflictViaMCP 记录冲突通知
+func NotifyConflictViaMCP(sdrID1, sdrID2, reason string) {
+	fmt.Fprintf(os.Stderr, "[MCP-Notify] ⚠️ Conflict: %s vs %s - %s\n", sdrID1, sdrID2, reason)
+}
+
 // ===== 类型定义 =====
 
 // MCP 标准错误码

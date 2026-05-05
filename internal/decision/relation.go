@@ -9,6 +9,7 @@ const (
 	RelationRefines       RelationType = "REFINES"
 	RelationConflictsWith RelationType = "CONFLICTS_WITH"
 	RelationRelatesTo     RelationType = "RELATES_TO"
+	RelationObjection     RelationType = "OBJECTION"
 )
 
 // Relation 关系边
@@ -30,7 +31,7 @@ func NewRelation(relType RelationType, targetSDRID, description string) Relation
 // IsValid 验证关系类型是否有效
 func (r RelationType) IsValid() bool {
 	switch r {
-	case RelationDependsOn, RelationSupersedes, RelationRefines, RelationConflictsWith, RelationRelatesTo:
+	case RelationDependsOn, RelationSupersedes, RelationRefines, RelationConflictsWith, RelationRelatesTo, RelationObjection:
 		return true
 	default:
 		return false

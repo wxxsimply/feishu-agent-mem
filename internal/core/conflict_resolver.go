@@ -151,3 +151,9 @@ func AddRelationToDecision(
 		Description: desc,
 	})
 }
+
+// NotifyConflictViaMCP 记录冲突通知（被 pipeline 调用）
+// mcp 包中也定义了同名函数供跨包使用
+func NotifyConflictViaMCP(sdrID1, sdrID2, reason string) {
+	fmt.Printf("[Conflict] ⚠️ Unresolved: %s vs %s - %s\n", sdrID1, sdrID2, reason)
+}

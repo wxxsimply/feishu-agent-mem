@@ -1,7 +1,6 @@
 package signal
 
 import (
-	"fmt"
 	"log"
 	"runtime"
 	"sync"
@@ -332,17 +331,15 @@ func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) 
 	return result
 }
 
-// SubmitJob 提交任务（非阻塞），队列满时返回错误
-func (wp *WorkerPool) SubmitJob(job *DetectionJob) error {
+// SubmitJob 提交任务（非阻塞）
+func (wp *WorkerPool) SubmitJob(job *DetectionJob) {
 	log.Printf("[WorkerPool] Submitting job (queue size: %d)", len(wp.jobChan))
 
 	select {
 	case wp.jobChan <- job:
 		log.Printf("[WorkerPool] Job submitted successfully")
-		return nil
 	default:
-		log.Printf("[WorkerPool] ERROR: Job queue full, dropping job: %s", job.Change.Summary)
-		return fmt.Errorf("job queue full, dropped: %s", job.Change.Summary)
+		log.Printf("[WorkerPool] Job queue full, dropping job: %s", job.Change.Summary)
 	}
 }
 

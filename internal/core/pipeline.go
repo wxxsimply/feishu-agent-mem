@@ -74,9 +74,9 @@ func (pe *PipelineEngine) applyCreate(mut *signal.DecisionMutation) error {
 	if pe.BitableStore != nil {
 		if err := pe.BitableStore.UpsertDecision(mut.Node); err != nil {
 			log.Printf("[Bitable] UpsertDecision failed: %v", err)
-			return fmt.Errorf("bitable sync failed: %w", err)
+		} else {
+			log.Printf("[Bitable] UpsertDecision OK: %s", mut.Node.SDRID)
 		}
-		log.Printf("[Bitable] UpsertDecision OK: %s", mut.Node.SDRID)
 	} else {
 		log.Printf("[Bitable] store is nil, skipping sync")
 	}
@@ -96,18 +96,14 @@ func (pe *PipelineEngine) applyUpdate(mut *signal.DecisionMutation) error {
 
 	// 应用字段变更
 	for k, v := range mut.FieldChanges {
-		strVal, ok := v.(string)
-		if !ok {
-			log.Printf("[Pipeline] Warning: field %q has type %T, expected string, skipping", k, v)
-			continue
-		}
+		// 简化的字段更新
 		switch k {
 		case "title":
-			existing.Title = strVal
+			existing.Title = v.(string)
 		case "decision":
-			existing.Decision = strVal
+			existing.Decision = v.(string)
 		case "rationale":
-			existing.Rationale = strVal
+			existing.Rationale = v.(string)
 		}
 	}
 

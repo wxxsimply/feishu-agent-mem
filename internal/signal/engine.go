@@ -1,8 +1,10 @@
 package signal
 
 import (
+	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"feishu-mem/internal/decision"
 	larkadapter "feishu-mem/internal/lark-adapter"
@@ -18,28 +20,40 @@ type PipelineInterface interface {
 	ApplyMutation(mut *DecisionMutation) error
 }
 
+// DedupAction 去重动作
+type DedupAction string
+
+const (
+	DedupNew      DedupAction = "new"      // 无匹配，创建新决策
+	DedupSkip     DedupAction = "skip"     // 微小变更，跳过
+	DedupUpdate   DedupAction = "update"   // 有意义变更，更新现有决策
+	DedupConflict DedupAction = "conflict" // 重大变更，创建冲突/替代关系
+)
+
 type SignalActivationEngine struct {
-	Emitters     map[AdapterType]StateChangeEmitter
-	Router       *ActivationRouter
-	Assembler    *ContextAssembler
-	StateMachine *DecisionStateMachine
-	Patterns     *PatternMatcher
-	detector     *EnhancedDetector // 增强型多因子检测器
-	Pipeline     PipelineInterface
-	Memory       MemoryGraphInterface
-	llmAgent     *llm.MemoryAgent
+	Emitters               map[AdapterType]StateChangeEmitter
+	Router                 *ActivationRouter
+	Assembler              *ContextAssembler
+	StateMachine           *DecisionStateMachine
+	Patterns               *PatternMatcher
+	detector               *EnhancedDetector // 增强型多因子检测器
+	Pipeline               PipelineInterface
+	Memory                 MemoryGraphInterface
+	llmAgent               *llm.MemoryAgent
+	contextProviderFactory *ContextProviderFactory // 上下文提供者工厂
 }
 
 func NewSignalActivationEngine(pipeline PipelineInterface, memory MemoryGraphInterface) *SignalActivationEngine {
 	return &SignalActivationEngine{
-		Emitters:     NewEmitters(),
-		Router:       NewActivationRouter(),
-		Assembler:    NewContextAssembler(),
-		StateMachine: NewDecisionStateMachine(),
-		Patterns:     NewPatternMatcher(),
-		Pipeline:     pipeline,
-		Memory:       memory,
-		llmAgent:     llm.NewMemoryAgent(),
+		Emitters:               NewEmitters(),
+		Router:                 NewActivationRouter(),
+		Assembler:              NewContextAssembler(),
+		StateMachine:           NewDecisionStateMachine(),
+		Patterns:               NewPatternMatcher(),
+		Pipeline:               pipeline,
+		Memory:                 memory,
+		llmAgent:               llm.NewMemoryAgent(),
+		contextProviderFactory: NewContextProviderFactory(),
 	}
 }
 
@@ -49,7 +63,7 @@ func (e *SignalActivationEngine) OnDetectResult(adapter AdapterType, result *lar
 	return nil, nil
 }
 
-func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, proposer, content string) (*DecisionMutation, error) {
+func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, proposer, content string) (*DecisionMutation, []*DecisionMutation, error) {
 	log.Println("========== SIGNAL ENGINE PROCESS ==========")
 	log.Printf("[SignalEngine] ProcessSignalForJob called")
 	log.Printf("[SignalEngine] Proposer: %s", proposer)
@@ -57,15 +71,43 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 	log.Printf("[SignalEngine] LLM available: %v", e.llmAgent.IsAvailable())
 
 	var newNode *decision.DecisionNode
+	allDecisions := e.Memory.GetAllDecisions()
+	var lastLLMResult *llm.ExtractionResult
 
 	if e.llmAgent.IsAvailable() {
 		log.Println("[SignalEngine] LLM is available, calling...")
 
+		// Step 1: 使用对应的 ContextProvider 获取相关上下文
+		var relatedDecisionSummaries []string
+		if e.contextProviderFactory != nil {
+			provider := e.contextProviderFactory.GetProvider(sig.Adapter)
+			log.Printf("[SignalEngine] Using context provider: %s", provider.Name())
+			var err error
+			relatedDecisionSummaries, err = provider.GetRelevantContext(sig, allDecisions)
+			if err != nil {
+				log.Printf("[SignalEngine] Context provider error: %v", err)
+			}
+		}
+
+		// 如果没有拿到上下文，使用简单的方式补充
+		if len(relatedDecisionSummaries) == 0 {
+			for _, d := range allDecisions {
+				if len(relatedDecisionSummaries) >= 5 {
+					break
+				}
+				summary := fmt.Sprintf("[%s] %s: %s", d.Status, d.Title, d.Decision)
+				relatedDecisionSummaries = append(relatedDecisionSummaries, summary)
+			}
+		}
+		log.Printf("[SignalEngine] Context summaries: %d items", len(relatedDecisionSummaries))
+
 		topics := e.getAllTopics()
 		log.Printf("[SignalEngine] Available topics: %v", topics)
 
-		log.Println("[SignalEngine] Calling ExtractDecision...")
-		result, err := e.llmAgent.ExtractDecision(content, topics)
+		log.Println("[SignalEngine] Calling ExtractDecisionWithContext...")
+		result, err := e.llmAgent.ExtractDecisionWithContext(
+			content, topics, relatedDecisionSummaries)
+			lastLLMResult = result
 		if err != nil {
 			log.Printf("[SignalEngine] LLM extraction failed: %v, falling back to heuristic", err)
 			newNode = e.createDecisionFallback(proposer, content)
@@ -78,7 +120,8 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 					result.Decision.Title, result.Decision.SuggestedTopic)
 			}
 
-			if result.HasDecision && result.Confidence > 0.5 && result.Decision != nil {
+			if result.HasDecision && result.Confidence >= 0.6 && result.Decision != nil {
+				lastLLMResult = result
 				newNode = decision.NewDecisionNode(
 					GenerateSDRID(),
 					result.Decision.Title,
@@ -92,11 +135,23 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 				newNode.ImpactLevel = decision.ImpactLevel(result.Decision.ImpactLevel)
 				newNode.Status = decision.StatusPending
 
+				// 记录来源信息到 FeishuLinks
+				newNode.FeishuLinks.RelatedChatIDs = appendRelatedIDs(newNode.FeishuLinks.RelatedChatIDs, sig)
+				newNode.FeishuLinks.RelatedDocTokens = appendRelatedTokens(newNode.FeishuLinks.RelatedDocTokens, sig)
+				if sig.PrimaryID != "" {
+					newNode.FeishuLinks.RelatedDocTokens = appendUniqueString(newNode.FeishuLinks.RelatedDocTokens, sig.PrimaryID)
+				}
+
 				log.Printf("[SignalEngine] Decision extracted from LLM: %s", result.Decision.Title)
+			} else if !result.HasDecision {
+				log.Printf("[SignalEngine] LLM determined no decision, skipping entirely")
+				log.Println("========== SIGNAL ENGINE END ==========")
+				return nil, nil, nil
 			} else {
-				log.Printf("[SignalEngine] LLM didn't find a confident decision, using fallback (HasDecision=%v, Confidence=%.2f)",
-					result.HasDecision, result.Confidence)
-				newNode = e.createDecisionFallback(proposer, content)
+				log.Printf("[SignalEngine] LLM confidence too low (%.2f < 0.6), skipping",
+					result.Confidence)
+				log.Println("========== SIGNAL ENGINE END ==========")
+				return nil, nil, nil
 			}
 		}
 	} else {
@@ -104,11 +159,541 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 		newNode = e.createDecisionFallback(proposer, content)
 	}
 
+		// 收集反对意见（在 dedup 之前执行）
+	var pending []*DecisionMutation
+	if lastLLMResult != nil && lastLLMResult.HasObjections && len(lastLLMResult.Objections) > 0 {
+		pending = e.ProcessObjections(lastLLMResult, sig, allDecisions, proposer, "")
+	}
+
+// Step 2: 检查重复
+	if newNode != nil {
+		// Step 2a: 同文档匹配 → 直接 update，不做冲突判断
+		if existing := e.findSameDocument(sig, allDecisions); existing != nil {
+			log.Printf("[SignalEngine] Same document match, updating existing decision %s", existing.SDRID)
+			mut := e.StateMachine.CreateMutationForUpdate(existing.SDRID, newNode, sig)
+			log.Printf("[SignalEngine] Created update mutation: Type=%s, SDRID=%s", mut.Type, mut.SDRID)
+			log.Println("========== SIGNAL ENGINE END ==========")
+			return mut, nil, nil
+		}
+
+		// Step 2b: 跨文档匹配 → evaluateDedupAction（可能检测到冲突）
+		if existing := e.findSimilarDecision(newNode, sig, allDecisions); existing != nil {
+			log.Printf("[SignalEngine] Found similar/related decision: %s (%s)", existing.Title, existing.SDRID)
+
+			action := e.evaluateDedupAction(newNode, existing)
+			switch action {
+			case DedupSkip:
+				log.Printf("[SignalEngine] Minor change, skipping")
+				log.Println("========== SIGNAL ENGINE END ==========")
+				return nil, pending, nil
+			case DedupUpdate:
+				log.Printf("[SignalEngine] Updating existing decision %s", existing.SDRID)
+				mut := e.StateMachine.CreateMutationForUpdate(existing.SDRID, newNode, sig)
+				log.Printf("[SignalEngine] Created update mutation: Type=%s, SDRID=%s", mut.Type, mut.SDRID)
+				log.Println("========== SIGNAL ENGINE END ==========")
+				return mut, pending, nil
+			case DedupConflict:
+				log.Printf("[SignalEngine] Conflict with %s, attempting LLM resolution...", existing.SDRID)
+				mut := e.resolveConflict(newNode, existing, sig)
+				if mut != nil {
+					return mut, pending, nil
+				}
+				log.Println("========== SIGNAL ENGINE END ==========")
+				return nil, pending, nil
+			}
+		}
+	}
+
 	mut := e.StateMachine.CreateMutationForNewDecision(newNode, sig)
+	if len(pending) > 0 {
+		log.Printf("[SignalEngine] Also created %d objection mutations", len(pending))
+	}
 
 	log.Printf("[SignalEngine] Created mutation: Type=%s, SDRID=%s", mut.Type, mut.SDRID)
 	log.Println("========== SIGNAL ENGINE END ==========")
-	return mut, nil
+	return mut, pending, nil
+}
+
+// ProcessSignalForDocJob 处理文档类型信号的决策提取（使用分阶段分析 prompt）
+func (e *SignalActivationEngine) ProcessSignalForDocJob(sig *StateChangeSignal, proposer, content, docType, title string) (*DecisionMutation, []*DecisionMutation, error) {
+	log.Println("========== SIGNAL ENGINE DOC PROCESS ==========")
+	log.Printf("[SignalEngine] ProcessSignalForDocJob called")
+	log.Printf("[SignalEngine] Proposer: %s", proposer)
+	log.Printf("[SignalEngine] DocType: %s, Title: %s", docType, title)
+	log.Printf("[SignalEngine] Content length: %d", len(content))
+	log.Printf("[SignalEngine] LLM available: %v", e.llmAgent.IsAvailable())
+
+	var newNode *decision.DecisionNode
+	allDecisions := e.Memory.GetAllDecisions()
+	var lastLLMResult *llm.ExtractionResult
+
+	if e.llmAgent.IsAvailable() {
+		log.Println("[SignalEngine] LLM is available, calling...")
+
+		// Step 1: 使用对应的 ContextProvider 获取相关上下文
+		var relatedDecisionSummaries []string
+		if e.contextProviderFactory != nil {
+			provider := e.contextProviderFactory.GetProvider(sig.Adapter)
+			var err error
+			relatedDecisionSummaries, err = provider.GetRelevantContext(sig, allDecisions)
+			if err != nil {
+				log.Printf("[SignalEngine] Context provider error: %v", err)
+			}
+		}
+
+		if len(relatedDecisionSummaries) == 0 {
+			for _, d := range allDecisions {
+				if len(relatedDecisionSummaries) >= 5 {
+					break
+				}
+				summary := fmt.Sprintf("[%s] %s: %s", d.Status, d.Title, d.Decision)
+				relatedDecisionSummaries = append(relatedDecisionSummaries, summary)
+			}
+		}
+		log.Printf("[SignalEngine] Context summaries: %d items", len(relatedDecisionSummaries))
+
+		topics := e.getAllTopics()
+		log.Printf("[SignalEngine] Available topics: %v", topics)
+
+		docResult, err := e.llmAgent.ExtractDecisionFromDocWithContext(content, topics, docType, title, relatedDecisionSummaries)
+		lastLLMResult = docResult
+		if err != nil {
+			log.Printf("[SignalEngine] LLM doc extraction failed: %v, falling back to heuristic", err)
+			newNode = e.createDecisionFallback(proposer, content)
+		} else {
+			log.Printf("[SignalEngine] LLM doc extraction result: HasDecision=%v, Confidence=%.2f",
+				docResult.HasDecision, docResult.Confidence)
+
+			if docResult.Decision != nil {
+				log.Printf("[SignalEngine] Doc decision details: Title=%s, Topic=%s",
+					docResult.Decision.Title, docResult.Decision.SuggestedTopic)
+			}
+
+			if docResult.HasDecision && docResult.Confidence >= 0.6 && docResult.Decision != nil {
+				newNode = decision.NewDecisionNode(
+					GenerateSDRID(),
+					docResult.Decision.Title,
+					"feishu-mem",
+					docResult.Decision.SuggestedTopic,
+				)
+				newNode.Decision = docResult.Decision.Decision
+				newNode.Rationale = docResult.Decision.Rationale
+				newNode.Proposer = proposer
+				newNode.Executor = docResult.Decision.Executor
+				newNode.ImpactLevel = decision.ImpactLevel(docResult.Decision.ImpactLevel)
+				newNode.Status = decision.StatusPending
+
+				newNode.FeishuLinks.RelatedDocTokens = appendRelatedTokens(newNode.FeishuLinks.RelatedDocTokens, sig)
+				if sig.PrimaryID != "" {
+					newNode.FeishuLinks.RelatedDocTokens = appendUniqueString(newNode.FeishuLinks.RelatedDocTokens, sig.PrimaryID)
+				}
+
+				log.Printf("[SignalEngine] Decision extracted from doc: %s", docResult.Decision.Title)
+			} else if !docResult.HasDecision {
+				log.Printf("[SignalEngine] LLM determined no decision in doc, skipping entirely")
+				log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
+				return nil, nil, nil
+			} else {
+				log.Printf("[SignalEngine] LLM confidence too low (%.2f < 0.6), skipping",
+					docResult.Confidence)
+				log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
+				return nil, nil, nil
+			}
+		}
+	} else {
+		log.Println("[SignalEngine] LLM not available, using heuristic fallback")
+		newNode = e.createDecisionFallback(proposer, content)
+	}
+
+		// 收集反对意见（在 dedup 之前执行）
+	var pending []*DecisionMutation
+	if lastLLMResult != nil && lastLLMResult.HasObjections && len(lastLLMResult.Objections) > 0 {
+		pending = e.ProcessObjections(lastLLMResult, sig, allDecisions, proposer, "")
+	}
+
+// Step 2: 检查重复
+	if newNode != nil {
+		// Step 2a: 同文档匹配 → 直接 update，不做冲突判断
+		if existing := e.findSameDocument(sig, allDecisions); existing != nil {
+			log.Printf("[SignalEngine] Same document match, updating existing decision %s", existing.SDRID)
+			mut := e.StateMachine.CreateMutationForUpdate(existing.SDRID, newNode, sig)
+			log.Printf("[SignalEngine] Created update mutation: Type=%s, SDRID=%s", mut.Type, mut.SDRID)
+			log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
+				return mut, nil, nil
+			}
+
+		// Step 2b: 跨文档匹配 → evaluateDedupAction（可能检测到冲突）
+		if existing := e.findSimilarDecision(newNode, sig, allDecisions); existing != nil {
+			log.Printf("[SignalEngine] Found similar/related decision: %s (%s)", existing.Title, existing.SDRID)
+
+			action := e.evaluateDedupAction(newNode, existing)
+			switch action {
+			case DedupSkip:
+				log.Printf("[SignalEngine] Minor change, skipping")
+				log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
+				return nil, pending, nil
+			case DedupUpdate:
+				log.Printf("[SignalEngine] Updating existing decision %s", existing.SDRID)
+				mut := e.StateMachine.CreateMutationForUpdate(existing.SDRID, newNode, sig)
+				log.Printf("[SignalEngine] Created update mutation: Type=%s, SDRID=%s", mut.Type, mut.SDRID)
+				log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
+				return mut, pending, nil
+			case DedupConflict:
+				log.Printf("[SignalEngine] Conflict with %s, attempting LLM resolution...", existing.SDRID)
+				mut := e.resolveConflict(newNode, existing, sig)
+				if mut != nil {
+					return mut, pending, nil
+				}
+				log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
+				return nil, pending, nil
+			}
+		}
+
+	}
+
+	mut := e.StateMachine.CreateMutationForNewDecision(newNode, sig)
+	if len(pending) > 0 {
+		log.Printf("[SignalEngine] Also created %d objection mutations", len(pending))
+	}
+
+	log.Printf("[SignalEngine] Created mutation: Type=%s, SDRID=%s", mut.Type, mut.SDRID)
+	log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
+	return mut, pending, nil
+}
+
+// ProcessObjections 处理提取结果中的反对意见，创建 Objection 列表
+// 在 worker 调用 ProcessSignalForJob/DocJob 之后调用，结果追加至 result.PendingMutations
+func (e *SignalActivationEngine) ProcessObjections(
+	result *llm.ExtractionResult,
+	sig *StateChangeSignal,
+	allDecisions []*decision.DecisionNode,
+	_ string, // proposer
+	docToken string,
+) []*DecisionMutation {
+	if result == nil || !result.HasObjections || len(result.Objections) == 0 {
+		return nil
+	}
+
+	log.Printf("[SignalEngine] Processing %d objections from extraction result", len(result.Objections))
+	var muts []*DecisionMutation
+
+	for _, objExtract := range result.Objections {
+		obj := &decision.Objection{
+			OID:              GenerateObjectionID(),
+			ObjectionContent: objExtract.ObjectionContent,
+			Rationale:        objExtract.Rationale,
+			Alternative:      objExtract.Alternative,
+			Objector:         objExtract.Objector,
+			Status:           decision.ObjectionActive,
+			SourceType:       objExtract.Source,
+			SourceDocToken:   docToken,
+			Topic:            "general",
+			Project:          "feishu-mem",
+			CreatedAt:        time.Now(),
+		}
+		if sig != nil {
+			obj.SourceChatID = extractChatID(sig)
+			obj.SourceMessageID = sig.SignalID
+		}
+
+		// 尝试匹配到已有决策
+		if matched := e.findMatchingDecisionForObjection(obj, allDecisions); matched != nil {
+			obj.ReferencesDecision = matched.SDRID
+			log.Printf("[SignalEngine] Objection %s linked to decision %s", obj.OID, matched.SDRID)
+		}
+
+		muts = append(muts, e.StateMachine.CreateMutationForNewObjection(obj, sig))
+		log.Printf("[SignalEngine] Created objection mutation: %s", obj.OID)
+	}
+
+	return muts
+}
+
+// findMatchingDecisionForObjection 将反对意见匹配到相关决策
+func (e *SignalActivationEngine) findMatchingDecisionForObjection(
+	obj *decision.Objection,
+	allDecisions []*decision.DecisionNode,
+) *decision.DecisionNode {
+	// 优先级1: 同一文档 token
+	if obj.SourceDocToken != "" {
+		for _, d := range allDecisions {
+			for _, tok := range d.FeishuLinks.RelatedDocTokens {
+				if tok == obj.SourceDocToken {
+					log.Printf("[SignalEngine] Objection matched by doc token: %s", tok)
+					return d
+				}
+			}
+		}
+	}
+
+	// 优先级2: 同一群聊
+	if obj.SourceChatID != "" {
+		for _, d := range allDecisions {
+			for _, chatID := range d.FeishuLinks.RelatedChatIDs {
+				if chatID == obj.SourceChatID {
+					log.Printf("[SignalEngine] Objection matched by chat ID: %s", chatID)
+					return d
+				}
+			}
+		}
+	}
+
+	// 优先级3: 活跃决策中内容包含反对意见关键词
+	for _, d := range allDecisions {
+		if !d.IsActive() {
+			continue
+		}
+		// 如果决策的标题或内容与反对意见的主题相关
+		if stringsContainsIgnoreCase(d.Title, obj.ObjectionContent) ||
+			stringsContainsIgnoreCase(d.Decision, obj.ObjectionContent) {
+			log.Printf("[SignalEngine] Objection matched by content overlap with: %s", d.SDRID)
+			return d
+		}
+	}
+
+	return nil
+}
+
+// extractChatID 从信号中提取群聊 ID
+func extractChatID(sig *StateChangeSignal) string {
+	if sig == nil {
+		return ""
+	}
+	if len(sig.RelatedIDs) > 0 {
+		return sig.RelatedIDs[0]
+	}
+	return ""
+}
+
+// === 决策去重和辅助函数 ===
+
+// findSimilarDecision 查找相似决策
+func (e *SignalActivationEngine) findSimilarDecision(
+	newNode *decision.DecisionNode,
+	sig *StateChangeSignal,
+	allDecisions []*decision.DecisionNode,
+) *decision.DecisionNode {
+	log.Printf("[SignalEngine] Checking %d existing decisions for duplicates...", len(allDecisions))
+
+	for _, existing := range allDecisions {
+		log.Printf("[SignalEngine] Comparing with: SDRID=%s, Title=%s, DocTokens=%v",
+			existing.SDRID, existing.Title, existing.FeishuLinks.RelatedDocTokens)
+
+		// 规则1（已移至 findSameDocument）：同文档匹配由 caller 提前处理，不在此处做冲突判断
+
+		// 规则2：Doc/Wiki 降级匹配 — 标题相似（跨文档匹配，可能触发冲突检测）
+		if sig.Adapter == AdapterDocs || sig.Adapter == AdapterWiki {
+			if e.hasSimilarTitle(newNode, existing) {
+				log.Printf("[SignalEngine] Found decision with SIMILAR TITLE (cross-document)!")
+				return existing
+			}
+		}
+
+		// 规则3：Wiki 同主题匹配（跨文档匹配，可能触发冲突检测）
+		if sig.Adapter == AdapterWiki {
+			if e.isSameTopicWikiDocument(newNode, existing) {
+				log.Printf("[SignalEngine] Found decision from SAME TOPIC (Wiki)!")
+				return existing
+			}
+		}
+
+		// 规则4：不同文档 → 不去重
+	}
+	log.Printf("[SignalEngine] No similar decision found.")
+	return nil
+}
+
+// findSameDocument 仅通过文档 token 匹配已有决策（同文档编辑）
+// 与 findSimilarDecision 不同：此函数不做冲突判断，由 caller 直接走 update 路径
+func (e *SignalActivationEngine) findSameDocument(
+	sig *StateChangeSignal,
+	allDecisions []*decision.DecisionNode,
+) *decision.DecisionNode {
+	for _, existing := range allDecisions {
+		if e.isSameDocument(existing, sig) {
+			log.Printf("[SignalEngine] Found decision from SAME DOCUMENT: %s", existing.SDRID)
+			return existing
+		}
+	}
+	return nil
+}
+
+// isSameDocument 检查是否是同一文档的决策
+func (e *SignalActivationEngine) isSameDocument(existing *decision.DecisionNode, sig *StateChangeSignal) bool {
+	// 检查 PrimaryID
+	if sig.PrimaryID != "" {
+		for _, existingDocToken := range existing.FeishuLinks.RelatedDocTokens {
+			if sig.PrimaryID == existingDocToken {
+				log.Printf("[SignalEngine] DocToken match: PrimaryID=%s", sig.PrimaryID)
+				return true
+			}
+		}
+	}
+
+	// 检查 EmbeddedURLs
+	for _, url := range sig.Context.EmbeddedURLs {
+		if url.ExtractedToken != "" {
+			for _, existingDocToken := range existing.FeishuLinks.RelatedDocTokens {
+				if url.ExtractedToken == existingDocToken {
+					log.Printf("[SignalEngine] DocToken match: EmbeddedURL=%s", url.ExtractedToken)
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+// hasSimilarTitle 检查标题是否相似（降级匹配，覆盖 DocTokens 为空的遗留数据）
+func (e *SignalActivationEngine) hasSimilarTitle(newNode, existing *decision.DecisionNode) bool {
+	return stringsContainsIgnoreCase(existing.Title, newNode.Title) ||
+		stringsContainsIgnoreCase(newNode.Title, existing.Title)
+}
+
+// isSameTopicWikiDocument 判断两个 Wiki 文档是否属于同一主题
+// 目前简化实现：通过标题和内容相似性判断
+// 后续可以根据知识库节点层级关系精确判断
+func (e *SignalActivationEngine) isSameTopicWikiDocument(newNode, existing *decision.DecisionNode) bool {
+	// 检查标题相似性（比如都包含"后端方案"）
+	titleSimilar := stringsContainsIgnoreCase(existing.Title, newNode.Title) ||
+		stringsContainsIgnoreCase(newNode.Title, existing.Title)
+	if titleSimilar {
+		log.Printf("[SignalEngine] Wiki decisions have similar titles - consider same topic")
+		return true
+	}
+
+	// 检查主题是否相同（newNode.Topic 和 existing.Topic）
+	if newNode.Topic != "" && existing.Topic != "" && newNode.Topic == existing.Topic {
+		log.Printf("[SignalEngine] Wiki decisions have same topic: %s", newNode.Topic)
+		return true
+	}
+
+	return false
+}
+
+// hasOverlappingEntities 检查是否有重叠的实体关联
+func (e *SignalActivationEngine) hasOverlappingEntities(existing *decision.DecisionNode, sig *StateChangeSignal) bool {
+	for _, chatID := range sig.RelatedIDs {
+		for _, existingChatID := range existing.FeishuLinks.RelatedChatIDs {
+			if chatID == existingChatID {
+				return true
+			}
+		}
+	}
+
+	for _, url := range sig.Context.EmbeddedURLs {
+		if url.ExtractedToken != "" {
+			for _, existingDocToken := range existing.FeishuLinks.RelatedDocTokens {
+				if url.ExtractedToken == existingDocToken {
+					return true
+				}
+			}
+		}
+	}
+
+	if sig.PrimaryID != "" {
+		for _, existingDocToken := range existing.FeishuLinks.RelatedDocTokens {
+			if sig.PrimaryID == existingDocToken {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// evaluateDedupAction 使用 LLM 同时判断去重和冲突
+func (e *SignalActivationEngine) evaluateDedupAction(
+	newNode *decision.DecisionNode,
+	existing *decision.DecisionNode,
+) DedupAction {
+	log.Printf("[SignalEngine] Evaluating dedup action via LLM:")
+	log.Printf("[SignalEngine]  - New: Title='%s', Decision='%s'",
+		newNode.Title, truncateForLog(newNode.Decision, 100))
+	log.Printf("[SignalEngine]  - Old: Title='%s', Decision='%s'",
+		existing.Title, truncateForLog(existing.Decision, 100))
+
+	// 优先使用 LLM 判断
+	if e.llmAgent.IsAvailable() {
+		result, err := e.llmAgent.EvaluateDedupAction(
+			newNode.Title, newNode.Decision,
+			existing.Title, existing.Decision,
+		)
+		if err == nil && result != nil {
+			log.Printf("[SignalEngine] LLM dedup result: action=%s, reason=%s", result.Action, result.Reason)
+			switch result.Action {
+			case "skip":
+				return DedupSkip
+			case "update":
+				return DedupUpdate
+			case "conflict":
+				return DedupConflict
+			}
+		}
+		log.Printf("[SignalEngine] LLM dedup failed or returned nil, defaulting to update: %v", err)
+	} else {
+		log.Printf("[SignalEngine] LLM not available, defaulting to update")
+	}
+
+	// LLM 不可用时默认行为：更新（不丢弃任何决策，保留人工判断空间）
+	return DedupUpdate
+}
+
+// resolveConflict 冲突解决 — 先由 LLM 判断能否自动合并
+func (e *SignalActivationEngine) resolveConflict(
+	newNode, existing *decision.DecisionNode,
+	sig *StateChangeSignal,
+) *DecisionMutation {
+	if e.llmAgent.IsAvailable() {
+		result, err := e.llmAgent.ResolveConflictAction(
+			newNode.Title, newNode.Decision,
+			existing.Title, existing.Decision,
+		)
+		if err == nil && result != nil {
+			switch result.Action {
+			case "merge":
+				log.Printf("[SignalEngine] ✅ LLM auto-resolved conflict: %s", result.Reason)
+				newNode.Decision = result.MergedDecision
+				mut := e.StateMachine.CreateMutationForConflictMerge(
+					existing.SDRID, newNode, sig, "merge", result.Reason, result.MergedDecision)
+				log.Printf("[SignalEngine] Created merge mutation for %s", existing.SDRID)
+				return mut
+			default: // keep_both
+				log.Printf("[SignalEngine] ⚠️ CONFLICT needs manual resolution: %s", result.Reason)
+				mut := e.StateMachine.CreateMutationForConflictKeepBoth(
+					newNode, existing.SDRID, sig, result.Reason)
+				log.Printf("[SignalEngine] Created keep_both mutation, conflict: %s vs %s",
+					mut.SDRID, mut.ConflictSDRID)
+				return mut
+			}
+		}
+	}
+
+	// LLM 不可用或调用失败 → 默认 keep_both，不丢失决策
+	log.Printf("[SignalEngine] LLM conflict resolve unavailable, defaulting to keep_both")
+	mut := e.StateMachine.CreateMutationForConflictKeepBoth(
+		newNode, existing.SDRID, sig, "LLM unavailable, manual resolution needed")
+	return mut
+}
+
+// appendUniqueString 添加唯一字符串
+func appendUniqueString(slice []string, item string) []string {
+	for _, s := range slice {
+		if s == item {
+			return slice
+		}
+	}
+	return append(slice, item)
+}
+
+func stringsContainsIgnoreCase(s, substr string) bool {
+	return len(s) >= len(substr) &&
+		(len(substr) == 0 || strings.Contains(stringsToLower(s), stringsToLower(substr)))
+}
+
+func stringsToLower(s string) string {
+	return strings.ToLower(s)
 }
 
 func (e *SignalActivationEngine) getAllTopics() []string {
@@ -195,6 +780,44 @@ func extractImpactFromSummary(text string) decision.ImpactLevel {
 		return decision.ImpactMinor
 	}
 	return decision.ImpactAdvisory
+}
+
+// appendRelatedIDs 添加相关的聊天 ID（去重）
+func appendRelatedIDs(existing []string, sig *StateChangeSignal) []string {
+	result := append([]string{}, existing...)
+	for _, id := range sig.RelatedIDs {
+		found := false
+		for _, e := range result {
+			if e == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			result = append(result, id)
+		}
+	}
+	return result
+}
+
+// appendRelatedTokens 添加相关的文档 token（去重）
+func appendRelatedTokens(existing []string, sig *StateChangeSignal) []string {
+	result := append([]string{}, existing...)
+	for _, url := range sig.Context.EmbeddedURLs {
+		if url.ExtractedToken != "" {
+			found := false
+			for _, e := range result {
+				if e == url.ExtractedToken {
+					found = true
+					break
+				}
+			}
+			if !found {
+				result = append(result, url.ExtractedToken)
+			}
+		}
+	}
+	return result
 }
 
 type PatternMatcher struct{}
