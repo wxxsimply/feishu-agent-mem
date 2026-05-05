@@ -1,0 +1,11 @@
+# MCPorter 配置文件
+# Feishu Memory Agent MCP 服务器配置
+
+mcpServers:
+  - name: feishu-memory-agent
+    description: 飞书记忆代理 - 管理项目决策记忆
+    command:
+      path: /root/openclaw-workspace/feishu-agent-mem/bin/mcp-server
+      args: []
+    env:
+      CONFIG_PATH: /root/openclaw-workspace/feishu-agent-mem/config/openclaw.yaml
