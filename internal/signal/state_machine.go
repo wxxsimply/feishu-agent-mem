@@ -41,6 +41,7 @@ const (
 	MutationStatusChange MutationType = "status_change"
 	MutationConflict     MutationType = "conflict"
 	MutationObjection    MutationType = "objection"
+	MutationDeprecate    MutationType = "deprecate"
 )
 
 // DecisionStateMachine 决策状态机
@@ -206,6 +207,19 @@ func (sm *DecisionStateMachine) CreateMutationForNewObjection(
 		SDRID:         obj.OID,
 		Objection:     obj,
 		CommitMessage: "Create objection from signal: " + signal.SignalID,
+	}
+}
+// CreateMutationForDeprecation 创建废弃/取代决策的变更
+func (sm *DecisionStateMachine) CreateMutationForDeprecation(
+	sdrID string,
+	newStatus decision.DecisionStatus,
+	reason string,
+) *DecisionMutation {
+	return &DecisionMutation{
+		Type:          MutationDeprecate,
+		SDRID:         sdrID,
+		NewStatus:     newStatus,
+		CommitMessage: "Deprecation: " + reason,
 	}
 }
 

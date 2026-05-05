@@ -18,14 +18,23 @@ type ObjectionExtract struct {
 	Source           string `json:"source"` // "im" | "comment" | "doc" | "meeting"
 }
 
+// DeletedDecisionExtract 被删除的决策（文档 diff 中删除的内容可能涉及决策撤销）
+type DeletedDecisionExtract struct {
+	OriginalDecision string `json:"original_decision"`
+	Action           string `json:"action"`
+	ReplacedBy       string `json:"replaced_by,omitempty"`
+}
+
 // ExtractionResult 决策提取结果
 type ExtractionResult struct {
-	HasDecision   bool             `json:"has_decision"`
-	Confidence    float64          `json:"confidence"`
-	Decision      *DecisionExtract `json:"decision,omitempty"`
-	HasObjections bool             `json:"has_objections,omitempty"`
-	Objections    []ObjectionExtract `json:"objections,omitempty"`
-	ExtractedFrom string           `json:"extracted_from"`
+	HasDecision   bool                  `json:"has_decision"`
+	Confidence    float64               `json:"confidence"`
+	Decision      *DecisionExtract      `json:"decision,omitempty"`
+	HasObjections bool                  `json:"has_objections,omitempty"`
+	Objections    []ObjectionExtract    `json:"objections,omitempty"`
+	HasDeletions  bool                  `json:"has_deletions,omitempty"`
+	Deletions     []DeletedDecisionExtract `json:"deletions,omitempty"`
+	ExtractedFrom string                `json:"extracted_from"`
 }
 
 // DecisionExtract 提取的决策

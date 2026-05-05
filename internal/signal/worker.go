@@ -307,6 +307,22 @@ func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) 
 	title := extractDocTitleFromSummary(job.Change.Summary)
 	log.Printf("[Worker] Doc content fetched: title=%s, content_len=%d", title, len(content))
 
+	// 使用 go-diff 比较内容变化，只提取变更部分
+	diffContent, diffs, _ := docExt.GetDocumentContentDiff(docToken)
+	if diffContent != "" {
+		log.Printf("[Worker] Content diff found: %d changes", len(diffs))
+		content = diffContent
+		if len(content) > 3000 {
+			content = content[:3000] + "\n...（diff已截断）"
+		}
+	} else {
+		// 首次检测（无缓存），取文档末尾部分
+		log.Printf("[Worker] No cached content, using document tail")
+		if len(content) > 3000 {
+			content = "...（文档前面已省略）\n" + content[len(content)-3000:]
+		}
+	}
+
 	// 获取文档评论（用于反对意见提取）
 	actualDocToken := docToken
 	if tok, ok := job.Change.Meta["actual_doc_token"]; ok && tok != "" {
@@ -336,10 +352,10 @@ func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) 
 	sig.Context.ContentSnippet = truncateForLog(content, 1000)
 	sig.Context.IsDecision = true
 
-	// 提取前 3000 字符送 LLM 分析（避免 token 超限）
+	// 提取后 3000 字符送 LLM 分析（避免 token 超限，取末尾以捕获最新变更）
 	analysisContent := content
 	if len(analysisContent) > 3000 {
-		analysisContent = analysisContent[:3000] + "\n\n...（内容已截断）"
+		analysisContent = "...（前面已截断）\n" + analysisContent[len(analysisContent)-3000:]
 	}
 
 	proposer := "文档系统"
@@ -460,6 +476,29 @@ func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) 
 	title := extractDocTitleFromSummary(job.Change.Summary)
 	log.Printf("[Worker] Wiki content fetched: title=%s, content_len=%d", title, len(content))
 
+	// 使用 go-diff 比较内容变化，只提取变更部分
+	diffContent, diffs, _ := wikiExt.GetWikiNodeContentDiff(nodeToken)
+	if diffContent != "" {
+		log.Printf("[Worker] Wiki content diff found: %d changes", len(diffs))
+		content = diffContent
+		if len(content) > 3000 {
+			content = content[:3000] + "\n...（diff已截断）"
+		}
+	} else {
+		// 首次检测（无缓存），取文档末尾部分
+		log.Printf("[Worker] No cached wiki content, using tail")
+		if len(content) > 3000 {
+			content = "...（前面已截断）\n" + content[len(content)-3000:]
+		}
+	}
+	if len(content) > 0 {
+		preview := content
+		if len(preview) > 800 {
+			preview = preview[:800] + "\n...（截断）"
+		}
+		log.Printf("[Worker] Wiki analysis content preview:\n%s", preview)
+	}
+
 	// 直接送 LLM 判断，不经过本地 pattern 过滤
 	docType := classifyDocType(title, content)
 
@@ -471,9 +510,6 @@ func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) 
 	sig.Context.IsDecision = true
 
 	analysisContent := content
-	if len(analysisContent) > 3000 {
-		analysisContent = analysisContent[:3000] + "\n\n...（内容已截断）"
-	}
 
 	proposer := "知识库系统"
 	mut, pendingMuts, err := wp.engine.ProcessSignalForDocJob(sig, proposer, analysisContent, string(docType), title)

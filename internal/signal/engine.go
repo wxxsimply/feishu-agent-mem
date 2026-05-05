@@ -195,6 +195,8 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 	var pending []*DecisionMutation
 	if lastLLMResult != nil && lastLLMResult.HasObjections && len(lastLLMResult.Objections) > 0 {
 		pending = e.ProcessObjections(lastLLMResult, sig, allDecisions, proposer, "")
+			delMuts := e.ProcessDeletedDecisions(lastLLMResult, allDecisions)
+			pending = append(pending, delMuts...)
 	}
 
 // Step 2: 检查重复
@@ -408,6 +410,8 @@ func (e *SignalActivationEngine) ProcessSignalForDocJob(sig *StateChangeSignal, 
 	var pending []*DecisionMutation
 	if lastLLMResult != nil && lastLLMResult.HasObjections && len(lastLLMResult.Objections) > 0 {
 		pending = e.ProcessObjections(lastLLMResult, sig, allDecisions, proposer, "")
+			delMuts := e.ProcessDeletedDecisions(lastLLMResult, allDecisions)
+			pending = append(pending, delMuts...)
 	}
 
 // Step 2: 检查重复
@@ -513,6 +517,58 @@ func (e *SignalActivationEngine) ProcessObjections(
 	}
 
 	return muts
+}
+
+// ProcessDeletedDecisions 处理提取结果中被删除的决策
+func (e *SignalActivationEngine) ProcessDeletedDecisions(
+	result *llm.ExtractionResult,
+	allDecisions []*decision.DecisionNode,
+) []*DecisionMutation {
+	if result == nil || !result.HasDeletions || len(result.Deletions) == 0 {
+		return nil
+	}
+	log.Printf("[SignalEngine] Processing %d deleted decisions", len(result.Deletions))
+	var muts []*DecisionMutation
+	for _, del := range result.Deletions {
+		matched := e.findMatchingDeletedDecision(del, allDecisions)
+		if matched == nil {
+			log.Printf("[SignalEngine] No matching decision found for deleted: %s", del.OriginalDecision)
+			continue
+		}
+		var newStatus decision.DecisionStatus
+		switch del.Action {
+		case "rejected":
+			newStatus = decision.StatusRejected
+		case "deprecated":
+			newStatus = decision.StatusDeprecated
+		case "superseded":
+			newStatus = decision.StatusSuperseded
+		default:
+			newStatus = decision.StatusDeprecated
+		}
+		muts = append(muts, e.StateMachine.CreateMutationForDeprecation(
+			matched.SDRID, newStatus, "Document deletion: "+del.OriginalDecision))
+		log.Printf("[SignalEngine] Created deprecation mutation for %s -> %s", matched.SDRID, newStatus)
+	}
+	return muts
+}
+
+// findMatchingDeletedDecision 将被删除的决策内容匹配到现有决策
+func (e *SignalActivationEngine) findMatchingDeletedDecision(
+	del llm.DeletedDecisionExtract,
+	allDecisions []*decision.DecisionNode,
+) *decision.DecisionNode {
+	for _, d := range allDecisions {
+		if !d.IsActive() {
+			continue
+		}
+		if strings.Contains(d.Decision, del.OriginalDecision) ||
+			strings.Contains(d.Title, del.OriginalDecision) {
+			log.Printf("[SignalEngine] Matched deleted content to decision %s", d.SDRID)
+			return d
+		}
+	}
+	return nil
 }
 
 // findMatchingDecisionForObjection 将反对意见匹配到相关决策

@@ -65,6 +65,8 @@ func (pe *PipelineEngine) ApplyMutation(mut *signal.DecisionMutation) error {
 		}
 	case signal.MutationObjection:
 		return pe.applyCreateObjection(mut)
+	case signal.MutationDeprecate:
+		return pe.applyDeprecate(mut)
 	default:
 		return fmt.Errorf("unknown mutation type: %s", mut.Type)
 	}
@@ -280,6 +282,34 @@ func (pe *PipelineEngine) applyCreateObjection(mut *signal.DecisionMutation) err
 		return fmt.Errorf("git write objection failed: %w", err)
 	}
 	log.Printf("[Pipeline] Created objection: %s (git: %s)", mut.Objection.OID, hash)
+	return nil
+}
+
+// applyDeprecate 废弃/取代决策
+func (pe *PipelineEngine) applyDeprecate(mut *signal.DecisionMutation) error {
+	project := "feishu-mem"
+	topic := "general"
+	if existingNode, ok := pe.MemoryGraph.GetDecision(mut.SDRID); ok {
+		project = existingNode.Project
+		topic = existingNode.Topic
+	}
+	existing, err := pe.GitStorage.ReadDecision(project, topic, mut.SDRID)
+	if err != nil {
+		return fmt.Errorf("read decision for deprecation failed: %w", err)
+	}
+	existing.Status = mut.NewStatus
+	hash, err := pe.GitStorage.WriteDecision(existing)
+	if err != nil {
+		return fmt.Errorf("git write deprecation failed: %w", err)
+	}
+	existing.GitCommitHash = hash
+	if pe.BitableStore != nil {
+		if err := pe.BitableStore.UpsertDecision(existing); err != nil {
+			log.Printf("[Bitable] UpsertDecision deprecation failed: %v", err)
+		}
+	}
+	pe.MemoryGraph.UpsertDecision(existing, existing.Project)
+	log.Printf("[Pipeline] Deprecated decision %s -> %s", mut.SDRID, mut.NewStatus)
 	return nil
 }
 
