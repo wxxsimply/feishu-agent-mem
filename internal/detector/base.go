@@ -17,30 +17,42 @@ import (
 	"feishu-mem/internal/ws"
 )
 
+// LongConnDetector 支持长连接的检测器接口
+type LongConnDetector interface {
+	larkadapter.Detector
+	StartLongConn(handler larkadapter.LongConnResultHandler) error
+}
+
 // BaseDetector 独立检测器基类
 type BaseDetector struct {
 	name              string
 	version           string
 	detector          larkadapter.Detector
-	wsClient         *ws.Client
-	config           config.DetectorConfig
-	larkConfig       *larkadapter.Config
-	stateMgr         *larkadapter.StateManager
-	inBurstMode      bool
-	lastCheck        time.Time
-	lastChangeTime   time.Time
-	stopChan         chan struct{}
-	stopWg           sync.WaitGroup
+	wsClient          *ws.Client
+	config            config.DetectorConfig
+	larkConfig        *larkadapter.Config
+	stateMgr          *larkadapter.StateManager
+	inBurstMode       bool
+	lastCheck         time.Time
+	lastChangeTime    time.Time
+	stopChan          chan struct{}
+	stopWg            sync.WaitGroup
+	useLongConn       bool // 是否使用长连接模式
 }
 
 // NewBaseDetector 创建通用检测器基类
 func NewBaseDetector(name string, version string, detector larkadapter.Detector) *BaseDetector {
 	return &BaseDetector{
-		name:        name,
-		version:     version,
-		detector:    detector,
-		stopChan:    make(chan struct{}),
+		name:     name,
+		version:  version,
+		detector: detector,
+		stopChan: make(chan struct{}),
 	}
+}
+
+// EnableLongConn 启用长连接模式
+func (d *BaseDetector) EnableLongConn() {
+	d.useLongConn = true
 }
 
 // Initialize 初始化检测器
@@ -157,8 +169,18 @@ func (d *BaseDetector) Run() {
 	// 启动检测循环
 	d.stopWg.Add(1)
 	if d.config.Enabled {
-		log.Printf("[%s] Detector enabled, starting detection loop", d.name)
-		go d.detectionLoop()
+		if d.useLongConn {
+			if lcDetector, ok := d.detector.(LongConnDetector); ok {
+				log.Printf("[%s] Detector enabled, starting long connection mode", d.name)
+				go d.longConnLoop(lcDetector)
+			} else {
+				log.Printf("[%s] Detector does not support long connection, falling back to polling", d.name)
+				go d.detectionLoop()
+			}
+		} else {
+			log.Printf("[%s] Detector enabled, starting detection loop", d.name)
+			go d.detectionLoop()
+		}
 	} else {
 		log.Printf("[%s] Detector disabled, only heartbeat will be sent", d.name)
 		go d.heartbeatOnlyLoop()
@@ -270,11 +292,11 @@ func (d *BaseDetector) doSingleDetection() bool {
 		}
 
 		wsResult := ws.DetectResult{
-			Source:      result.Source,
-			HasChanges:  result.HasChanges,
+			Source:     result.Source,
+			HasChanges: result.HasChanges,
 			DetectedAt: detectTime.Format(time.RFC3339),
-			LastCheck:   d.lastCheck.Format(time.RFC3339),
-			Changes:     wsChanges,
+			LastCheck:  d.lastCheck.Format(time.RFC3339),
+			Changes:    wsChanges,
 		}
 
 		if err := d.wsClient.SendDetectResult(wsResult); err != nil {
@@ -309,4 +331,84 @@ func (d *BaseDetector) heartbeatOnlyLoop() {
 			d.wsClient.UpdateDetectorState(d.lastCheck, d.lastChangeTime, false)
 		}
 	}
+}
+
+// longConnLoop 长连接模式循环
+func (d *BaseDetector) longConnLoop(detector LongConnDetector) {
+	defer d.stopWg.Done()
+
+	handler := func(result *larkadapter.DetectResult) error {
+		detectTime := time.Now()
+		d.lastCheck = detectTime
+		d.lastChangeTime = detectTime
+		d.inBurstMode = true
+		_ = d.stateMgr.UpdateLastCheck(d.detector.Name(), detectTime)
+		_ = d.stateMgr.UpdateLastDetected(d.detector.Name(), detectTime)
+
+		log.Printf("[%s] Detected %d changes via long conn", d.name, len(result.Changes))
+		for i, change := range result.Changes {
+			log.Printf("[%s] Change %d: %s [%s]", d.name, i+1, change.Type, change.Summary)
+		}
+
+		// 发送结果到 WebSocket
+		if d.wsClient != nil {
+			wsChanges := make([]ws.ChangeItem, len(result.Changes))
+			for i, c := range result.Changes {
+				wsChanges[i] = ws.ChangeItem{
+					Type:       c.Type,
+					EntityType: c.EntityType,
+					EntityID:   c.EntityID,
+					Summary:    c.Summary,
+					Timestamp:  c.Timestamp,
+				}
+			}
+
+			wsResult := ws.DetectResult{
+				Source:     result.Source,
+				HasChanges: result.HasChanges,
+				DetectedAt: detectTime.Format(time.RFC3339),
+				LastCheck:  d.lastCheck.Format(time.RFC3339),
+				Changes:    wsChanges,
+			}
+
+			if err := d.wsClient.SendDetectResult(wsResult); err != nil {
+				log.Printf("[%s] Failed to send result via WebSocket: %v", d.name, err)
+			}
+		}
+
+		_ = larkadapter.SaveDetectResult(result)
+		return nil
+	}
+
+	// 启动心跳
+	go func() {
+		heartbeatInterval := d.config.HeartbeatInterval
+		if heartbeatInterval <= 0 {
+			heartbeatInterval = 30 * time.Second
+		}
+		ticker := time.NewTicker(heartbeatInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-d.stopChan:
+				return
+			case <-ticker.C:
+				d.wsClient.UpdateDetectorState(d.lastCheck, d.lastChangeTime, d.inBurstMode)
+				// 检查是否需要退出突发模式
+				if d.inBurstMode && time.Since(d.lastChangeTime) > d.config.BurstTimeout {
+					log.Printf("[%s] No changes for %v, exiting burst mode", d.name, d.config.BurstTimeout)
+					d.inBurstMode = false
+				}
+			}
+		}
+	}()
+
+	// 启动长连接
+	if err := detector.StartLongConn(handler); err != nil {
+		log.Printf("[%s] Failed to start long connection: %v", d.name, err)
+		return
+	}
+
+	// 等待停止信号
+	<-d.stopChan
 }

@@ -12,6 +12,7 @@ const (
 func main() {
 	imDetector := larkadapter.NewIMExtractor(larkadapter.LoadConfig())
 	base := detector.NewBaseDetector("lark_im", version, imDetector)
+	base.EnableLongConn() // 启用长连接模式
 
 	if err := base.Initialize(); err != nil {
 		panic(err)
