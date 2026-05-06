@@ -1,0 +1,5 @@
+## 2.2 缓存方案调整
+
+Redis Cluster 的运维复杂度超出预期，Memcached 更简单直接。改用 Memcached 作为缓存层，部署 2 节点各 4GB。
+
+Memcached 的 KV 操作延迟更低，适合我们的简单缓存场景。

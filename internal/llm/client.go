@@ -9,11 +9,10 @@ import (
 	"strings"
 	"time"
 
+	openai "github.com/sashabaranov/go-openai"
+
 	"github.com/invopop/jsonschema"
 	"github.com/joho/godotenv"
-	"github.com/volcengine/volcengine-go-sdk/service/arkruntime"
-	"github.com/volcengine/volcengine-go-sdk/service/arkruntime/model"
-	"github.com/volcengine/volcengine-go-sdk/volcengine"
 
 	"feishu-mem/internal/llm/tools"
 )
@@ -37,13 +36,25 @@ type Config struct {
 // Client LLM 客户端
 type Client struct {
 	config *Config
+	client *openai.Client
 }
 
 // NewClient 创建 LLM 客户端
 func NewClient() *Client {
-	return &Client{
-		config: LoadConfig(),
+	cfg := LoadConfig()
+	c := &Client{
+		config: cfg,
 	}
+
+	if cfg.APIKey != "" {
+		clientConfig := openai.DefaultConfig(cfg.APIKey)
+		if cfg.BaseURL != "" {
+			clientConfig.BaseURL = cfg.BaseURL
+		}
+		c.client = openai.NewClientWithConfig(clientConfig)
+	}
+
+	return c
 }
 
 // LoadConfig 从环境变量加载配置
@@ -58,10 +69,11 @@ func LoadConfig() *Config {
 		godotenv.Load(path)
 	}
 
+	log.Printf("[LLM] LoadConfig: DEEPSEEK_MODEL=%s", os.Getenv("DEEPSEEK_MODEL"))
 	return &Config{
-		APIKey:  os.Getenv("ARK_API_KEY"),
-		BaseURL: os.Getenv("ARK_BASE_URL"),
-		Model:   os.Getenv("ARK_MODEL"),
+		APIKey:  os.Getenv("DEEPSEEK_API_KEY"),
+		BaseURL: os.Getenv("DEEPSEEK_BASE_URL"),
+		Model:   os.Getenv("DEEPSEEK_MODEL"),
 	}
 }
 
@@ -81,45 +93,30 @@ func (c *Client) Call(ctx context.Context, systemPrompt, userPrompt string) (str
 	log.Printf("[LLM] User prompt preview: %s", truncateForLog(userPrompt, 200))
 
 	if c.config.APIKey == "" {
-		log.Println("[LLM] ERROR: ARK_API_KEY is not set")
-		return "", fmt.Errorf("ARK_API_KEY is not set")
+		log.Println("[LLM] ERROR: DEEPSEEK_API_KEY is not set")
+		return "", fmt.Errorf("DEEPSEEK_API_KEY is not set")
 	}
 
 	startTime := time.Now()
 
-	baseURL := c.config.BaseURL
-	if baseURL == "" {
-		baseURL = "https://ark.cn-beijing.volces.com/api/v3"
-	}
-
 	modelName := c.config.Model
 	if modelName == "" {
-		modelName = "doubao-1-5-pro-32k-250115"
+		modelName = "deepseek-chat"
 	}
 
-	client := arkruntime.NewClientWithApiKey(c.config.APIKey, arkruntime.WithBaseUrl(baseURL))
-
-	req := model.CreateChatCompletionRequest{
+	resp, err := c.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 		Model: modelName,
-		Messages: []*model.ChatCompletionMessage{
+		Messages: []openai.ChatCompletionMessage{
 			{
-				Role: model.ChatMessageRoleSystem,
-				Content: &model.ChatCompletionMessageContent{
-					StringValue: volcengine.String(systemPrompt),
-				},
+				Role:    openai.ChatMessageRoleSystem,
+				Content: systemPrompt,
 			},
 			{
-				Role: model.ChatMessageRoleUser,
-				Content: &model.ChatCompletionMessageContent{
-					StringValue: volcengine.String(userPrompt),
-				},
+				Role:    openai.ChatMessageRoleUser,
+				Content: userPrompt,
 			},
 		},
-	}
-
-	log.Printf("[LLM] Sending request to LLM API...")
-
-	resp, err := client.CreateChatCompletion(ctx, req)
+	})
 	if err != nil {
 		log.Printf("[LLM] ERROR: LLM call failed: %v", err)
 		log.Println("========== LLM CALL FAILED ==========")
@@ -128,13 +125,13 @@ func (c *Client) Call(ctx context.Context, systemPrompt, userPrompt string) (str
 
 	elapsed := time.Since(startTime)
 
-	if len(resp.Choices) == 0 || resp.Choices[0].Message.Content == nil {
+	if len(resp.Choices) == 0 {
 		log.Println("[LLM] ERROR: No response from LLM")
 		log.Println("========== LLM CALL FAILED ==========")
 		return "", fmt.Errorf("no response from llm")
 	}
 
-	result := *resp.Choices[0].Message.Content.StringValue
+	result := resp.Choices[0].Message.Content
 
 	log.Printf("[LLM] LLM call succeeded in %v", elapsed)
 	log.Printf("[LLM] Response length: %d chars", len(result))
@@ -151,58 +148,44 @@ func (c *Client) CallWithJSONSchema(ctx context.Context, systemPrompt, userPromp
 	log.Printf("[LLM] System prompt length: %d chars", len(systemPrompt))
 
 	if c.config.APIKey == "" {
-		return "", fmt.Errorf("ARK_API_KEY is not set")
+		return "", fmt.Errorf("DEEPSEEK_API_KEY is not set")
 	}
 
-	baseURL := c.config.BaseURL
-	if baseURL == "" {
-		baseURL = "https://ark.cn-beijing.volces.com/api/v3"
-	}
 	modelName := c.config.Model
 	if modelName == "" {
-		modelName = "doubao-1-5-pro-32k-250115"
+		modelName = "deepseek-chat"
 	}
 
-	client := arkruntime.NewClientWithApiKey(c.config.APIKey, arkruntime.WithBaseUrl(baseURL))
+	// 使用 json_object response format + 在 prompt 中描述 schema
+	schemaJSON, _ := json.Marshal(schema)
+	enhancedUserPrompt := fmt.Sprintf("%s\n\n请严格按照以下 JSON Schema 返回结果（直接返回 JSON，不要包含其他文本）：\n%s", userPrompt, string(schemaJSON))
 
-	req := model.CreateChatCompletionRequest{
+	resp, err := c.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 		Model: modelName,
-		Messages: []*model.ChatCompletionMessage{
+		Messages: []openai.ChatCompletionMessage{
 			{
-				Role: model.ChatMessageRoleSystem,
-				Content: &model.ChatCompletionMessageContent{
-					StringValue: volcengine.String(systemPrompt),
-				},
+				Role:    openai.ChatMessageRoleSystem,
+				Content: systemPrompt,
 			},
 			{
-				Role: model.ChatMessageRoleUser,
-				Content: &model.ChatCompletionMessageContent{
-					StringValue: volcengine.String(userPrompt),
-				},
+				Role:    openai.ChatMessageRoleUser,
+				Content: enhancedUserPrompt,
 			},
 		},
-		ResponseFormat: &model.ResponseFormat{
-			Type: model.ResponseFormatJSONSchema,
-			JSONSchema: &model.ResponseFormatJSONSchemaJSONSchemaParam{
-				Name:        schemaName,
-				Description: schemaDesc,
-				Schema:      schema,
-				Strict:      true,
-			},
+		ResponseFormat: &openai.ChatCompletionResponseFormat{
+			Type: openai.ChatCompletionResponseFormatTypeJSONObject,
 		},
-	}
-
-	resp, err := client.CreateChatCompletion(ctx, req)
+	})
 	if err != nil {
 		log.Printf("[LLM] JSON Schema call failed: %v", err)
 		return "", fmt.Errorf("llm json schema call failed: %w", err)
 	}
 
-	if len(resp.Choices) == 0 || resp.Choices[0].Message.Content == nil {
+	if len(resp.Choices) == 0 {
 		return "", fmt.Errorf("no response from llm")
 	}
 
-	result := *resp.Choices[0].Message.Content.StringValue
+	result := resp.Choices[0].Message.Content
 	log.Printf("[LLM] JSON Schema response: %s", truncateForLog(result, 300))
 	return result, nil
 }

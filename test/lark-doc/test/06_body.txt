@@ -1,0 +1,5 @@
+## 1.6 容器编排
+
+采用 Kubernetes 管理容器编排。集群规格：3 master + 5 worker，使用 kubeadm 部署。
+
+每个服务以 Deployment 方式部署，通过 Service 暴露，HPA 配置自动扩缩容。

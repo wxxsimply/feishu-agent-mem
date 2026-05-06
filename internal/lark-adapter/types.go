@@ -106,7 +106,19 @@ func (sm *StateManager) GetLastCheck(source string) time.Time {
 	return s.LastCheck
 }
 
-// UpdateLastCheck 更新指定源的检测状态
+// GetLastDetected 获取指定源最后检测到变化的时间
+func (sm *StateManager) GetLastDetected(source string) time.Time {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	s, ok := sm.state[source]
+	if !ok {
+		return time.Time{} // zero time indicates never detected changes
+	}
+	return s.LastDetected
+}
+
+// UpdateLastCheck 更新指定源的检测时间（每次检测都调用）
 func (sm *StateManager) UpdateLastCheck(source string, t time.Time) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -116,7 +128,22 @@ func (sm *StateManager) UpdateLastCheck(source string, t time.Time) error {
 		s = SourceState{Version: 1}
 	}
 	s.LastCheck = t
-	s.LastDetected = time.Now()
+	s.Version++
+	sm.state[source] = s
+
+	return sm.save()
+}
+
+// UpdateLastDetected 更新指定源最后检测到变化的时间（仅当检测到变化时调用）
+func (sm *StateManager) UpdateLastDetected(source string, t time.Time) error {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	s, ok := sm.state[source]
+	if !ok {
+		s = SourceState{Version: 1}
+	}
+	s.LastDetected = t
 	s.Version++
 	sm.state[source] = s
 

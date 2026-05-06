@@ -4,6 +4,8 @@ import (
 	"context"
 	"log"
 	"time"
+
+	"feishu-mem/internal/decision"
 )
 
 // PushScheduler 推送调度器
@@ -29,15 +31,11 @@ func NewPushScheduler(engine *PushEngine, chatIDs []string) *PushScheduler {
 func (ps *PushScheduler) Start(ctx context.Context) {
 	log.Printf("[PushScheduler] Starting with %d chats", len(ps.chatIDs))
 	log.Printf("[PushScheduler] Daily summary at: %v", ps.dailySummaryAt)
-	log.Printf("[PushScheduler] Proactive interval: %v", ps.proactiveInterval)
+	log.Printf("[PushScheduler] Proactive push: DISABLED (only push on decision update)")
 
 	// 每分钟检查是否到了推送时间
 	minuteTicker := time.NewTicker(1 * time.Minute)
 	defer minuteTicker.Stop()
-
-	// 主动推送 ticker
-	proactiveTicker := time.NewTicker(ps.proactiveInterval)
-	defer proactiveTicker.Stop()
 
 	lastDailyPush := time.Time{}
 
@@ -58,19 +56,14 @@ func (ps *PushScheduler) Start(ctx context.Context) {
 				lastDailyPush = now
 			}
 
-		case <-proactiveTicker.C:
-			// 主动推送检查
-			log.Printf("[PushScheduler] Running proactive push check")
-			for _, chatID := range ps.chatIDs {
-				pushed := ps.engine.PushProactive(chatID)
-				if pushed > 0 {
-					log.Printf("[PushScheduler] Proactive push: %d cards to %s", pushed, chatID)
-				}
-			}
-
 		case <-ctx.Done():
 			log.Printf("[PushScheduler] Stopped")
 			return
 		}
 	}
+}
+
+// NotifyDecisionUpdate 通知调度器有决策更新
+func (ps *PushScheduler) NotifyDecisionUpdate(node *decision.DecisionNode) {
+	ps.engine.NotifyDecisionUpdate(ps.chatIDs, node)
 }

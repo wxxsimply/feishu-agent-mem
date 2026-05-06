@@ -1,0 +1,5 @@
+## 4.2 K8s 集群缩减
+
+由于预算限制，K8s 集群从 3 master + 5 worker 缩减为 1 master + 3 worker。单 master 有单点风险，但当前阶段可以接受。
+
+后续预算到位后再扩展。

@@ -2,9 +2,17 @@ package git
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
+
+// CommitLogEntry 提交日志条目
+type CommitLogEntry struct {
+	Hash    string
+	Message string
+}
 
 // GitCLI Git 命令执行封装
 type GitCLI struct {
@@ -183,4 +191,22 @@ func parseGrepOutput(output string) []SearchHit {
 func parseBlameOutput(_ string) []BlameEntry {
 	var entries []BlameEntry
 	return entries
+}
+
+// ReadFileAtCommit 读取指定提交时的文件内容
+func (g *GitCLI) ReadFileAtCommit(filePath, commitHash string) (string, error) {
+	if commitHash == "" || commitHash == "HEAD" {
+		return g.ReadFile(filePath)
+	}
+	return g.Run("show", commitHash+":"+filePath)
+}
+
+// ReadFile 读取当前工作区的文件内容
+func (g *GitCLI) ReadFile(filePath string) (string, error) {
+	fullPath := filepath.Join(g.workDir, filePath)
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }

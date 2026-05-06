@@ -1,10 +1,18 @@
 package signal
 
 import (
+	"fmt"
 	"feishu-mem/internal/decision"
 	"sync"
 	"time"
 )
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
 
 var idCounter int64
 var idMutex sync.Mutex
@@ -20,16 +28,17 @@ type StateTransition struct {
 
 // DecisionMutation 决策变更操作（传给 PipelineEngine）
 type DecisionMutation struct {
-	Type           MutationType            `json:"type"`
-	SDRID          string                  `json:"sdr_id"`
-	Node           *decision.DecisionNode  `json:"node,omitempty"`
-	FieldChanges   map[string]any          `json:"field_changes,omitempty"`
-	NewStatus      decision.DecisionStatus `json:"new_status,omitempty"`
-	ConflictSDRID  string                  `json:"conflict_sdr_id,omitempty"` // 冲突关联的决策 SDRID
-	ConflictAction string                  `json:"conflict_action,omitempty"` // "merge" | "keep_both"
-	ConflictReason string                  `json:"conflict_reason,omitempty"` // LLM 给出理由
-	Objection      *decision.Objection     `json:"objection,omitempty"`       // 反对意见（MutationObjection 时使用）
-	CommitMessage  string                  `json:"commit_message"`
+	Type             MutationType            `json:"type"`
+	SDRID            string                  `json:"sdr_id"`
+	Node             *decision.DecisionNode  `json:"node,omitempty"`
+	FieldChanges     map[string]any          `json:"field_changes,omitempty"`
+	NewStatus        decision.DecisionStatus `json:"new_status,omitempty"`
+	ConflictSDRID    string                  `json:"conflict_sdr_id,omitempty"` // 冲突关联的决策 SDRID
+	ConflictAction   string                  `json:"conflict_action,omitempty"` // "merge" | "keep_both"
+	ConflictReason   string                  `json:"conflict_reason,omitempty"` // LLM 给出理由
+	Objection        *decision.Objection     `json:"objection,omitempty"`       // 反对意见（MutationObjection 时使用）
+	CommitMessage    string                  `json:"commit_message"`
+	TargetCommitHash string                  `json:"target_commit_hash,omitempty"` // 回溯目标提交
 }
 
 // MutationType 变更类型
@@ -41,6 +50,8 @@ const (
 	MutationStatusChange MutationType = "status_change"
 	MutationConflict     MutationType = "conflict"
 	MutationObjection    MutationType = "objection"
+	MutationDeprecate    MutationType = "deprecate"
+	MutationRevert       MutationType = "revert"
 )
 
 // DecisionStateMachine 决策状态机
@@ -206,6 +217,48 @@ func (sm *DecisionStateMachine) CreateMutationForNewObjection(
 		SDRID:         obj.OID,
 		Objection:     obj,
 		CommitMessage: "Create objection from signal: " + signal.SignalID,
+	}
+}
+
+// CreateMutationForObjectionStatusChange 创建反对意见状态变更
+func (sm *DecisionStateMachine) CreateMutationForObjectionStatusChange(
+	obj *decision.Objection,
+	newStatus decision.ObjectionStatus,
+	reason string,
+) *DecisionMutation {
+	obj.Status = newStatus
+	return &DecisionMutation{
+		Type:          MutationObjection,
+		SDRID:         obj.OID,
+		Objection:     obj,
+		CommitMessage: "Objection status changed: " + reason,
+	}
+}
+// CreateMutationForDeprecation 创建废弃/取代决策的变更
+func (sm *DecisionStateMachine) CreateMutationForDeprecation(
+	sdrID string,
+	newStatus decision.DecisionStatus,
+	reason string,
+) *DecisionMutation {
+	return &DecisionMutation{
+		Type:          MutationDeprecate,
+		SDRID:         sdrID,
+		NewStatus:     newStatus,
+		CommitMessage: "Deprecation: " + reason,
+	}
+}
+
+// CreateMutationForRevert 创建回溯到指定版本的变更
+func (sm *DecisionStateMachine) CreateMutationForRevert(
+	sdrID string,
+	targetCommitHash string,
+	reason string,
+) *DecisionMutation {
+	return &DecisionMutation{
+		Type:             MutationRevert,
+		SDRID:            sdrID,
+		TargetCommitHash:  targetCommitHash,
+		CommitMessage:    fmt.Sprintf("Revert to %s: %s", targetCommitHash[:min(7, len(targetCommitHash))], reason),
 	}
 }
 

@@ -1,0 +1,5 @@
+## 3.4 CI 回退
+
+Jenkins 的维护成本太高，需要专人管理服务器和插件。GitHub Actions 的免费额度对我们的规模够用。回退到 GitHub Actions。
+
+Docker 镜像构建慢的问题通过多阶段构建优化解决。

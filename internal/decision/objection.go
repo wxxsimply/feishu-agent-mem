@@ -26,6 +26,7 @@ type Objection struct {
 	// Source tracking
 	SourceType      string `json:"source_type" yaml:"source_type"` // "comment" | "im" | "doc_content" | "meeting"
 	SourceDocToken  string `json:"source_doc_token,omitempty" yaml:"source_doc_token,omitempty"`
+	SourceCommentID string `json:"source_comment_id,omitempty" yaml:"source_comment_id,omitempty"`
 	SourceMessageID string `json:"source_message_id,omitempty" yaml:"source_message_id,omitempty"`
 	SourceChatID    string `json:"source_chat_id,omitempty" yaml:"source_chat_id,omitempty"`
 

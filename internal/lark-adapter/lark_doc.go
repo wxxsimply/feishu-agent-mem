@@ -1,6 +1,7 @@
 package larkadapter
 
 import (
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -125,6 +126,13 @@ func (e *DocExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 		changes = append(changes, docsResult...)
 	}
 
+	// 白名单文档 content_hash 变更检测（补充 docs +search 时间戳不更新的问题）
+	whitelistChanges := e.checkWhitelistedDocs()
+	if len(whitelistChanges) > 0 {
+		log.Printf("[lark_doc] Whitelist check found %d changes", len(whitelistChanges))
+		changes = append(changes, whitelistChanges...)
+	}
+
 	result := &DetectResult{
 		Source:     e.Name(),
 		HasChanges: len(changes) > 0,
@@ -142,6 +150,85 @@ func (e *DocExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 		log.Printf("[lark_doc] failed to save DetectResult: %v", err)
 	}
 	return result, nil
+}
+
+// checkWhitelistedDocs 通过 content_hash 对比检测白名单文档变更
+// 解决 docs +search API 时间戳不随 API 修改更新的问题
+func (e *DocExtractor) checkWhitelistedDocs() []Change {
+	if len(e.docTokensWhitelist) == 0 {
+		return nil
+	}
+
+	var changes []Change
+	for _, token := range e.docTokensWhitelist {
+		// 获取文档内容
+		output, err := e.cli.RunCommand("docs", "+fetch", "--doc", token)
+		if err != nil {
+			log.Printf("[lark_doc] Whitelist fetch failed for %s: %v", token, err)
+			continue
+		}
+
+		var fetchResult map[string]any
+		if err := json.Unmarshal(output, &fetchResult); err != nil {
+			continue
+		}
+
+		// 提取 markdown 内容
+		markdown := ""
+		if data, ok := fetchResult["data"].(map[string]any); ok {
+			if md, ok := data["markdown"].(string); ok {
+				markdown = md
+			}
+		}
+		if markdown == "" {
+			continue
+		}
+
+		// 计算 content hash
+		hash := fmt.Sprintf("%x", md5.Sum([]byte(markdown)))
+
+		// 对比缓存
+		e.cacheLock.Lock()
+		cachedHash, exists := e.contentCache[token]
+		if exists && cachedHash == hash {
+			e.cacheLock.Unlock()
+			continue // 内容未变化
+		}
+		// 更新缓存
+		e.contentCache[token] = hash
+		e.cacheLock.Unlock()
+
+		if !exists {
+			log.Printf("[lark_doc] Whitelist first seen: %s (hash=%s)", token, hash[:8])
+			continue // 首次看到，只缓存不触发
+		}
+
+		log.Printf("[lark_doc] Whitelist content changed: %s (old=%s new=%s)", token, cachedHash[:8], hash[:8])
+
+		// 提取标题
+		title := ""
+		if data, ok := fetchResult["data"].(map[string]any); ok {
+			if t, ok := data["title"].(string); ok {
+				title = t
+			}
+		}
+
+		change := Change{
+			Type:       "doc_updated",
+			EntityType: "doc",
+			EntityID:   token,
+			Summary:    fmt.Sprintf("Whitelist doc content changed: %s", title),
+			Timestamp:  time.Now().Unix(),
+			Meta: map[string]string{
+				"doc_token":    token,
+				"title":        title,
+				"content_hash": hash,
+				"is_whitelist": "true",
+			},
+		}
+		changes = append(changes, change)
+	}
+	return changes
 }
 
 // searchDocsByTime 使用 docs +search 按时间过滤搜索文档
@@ -307,6 +394,16 @@ func (e *DocExtractor) detectNewComments(results []any, cutoff int64) []Change {
 
 		// 检查是否有新评论（创建时间 > cutoff）
 		for _, c := range comments {
+			// 跳过已删除/已解决评论
+			if c.IsDeleted || c.IsResolved {
+				continue
+			}
+			// 检查是否已处理过（去重）
+			if c.CommentID != "" && e.processedCommentIDs != nil && e.processedCommentIDs[c.CommentID] {
+				log.Printf("[lark_doc] Comment %s already processed, skipping", c.CommentID)
+				continue
+			}
+
 			if c.CreatedAt > cutoff && c.Text != "" {
 				title, _ := itemMap["title_highlighted"].(string)
 				author := c.Author
@@ -327,10 +424,18 @@ func (e *DocExtractor) detectNewComments(results []any, cutoff int64) []Change {
 					EntityID:   token,
 					Summary:    summary,
 					Timestamp:  c.CreatedAt,
+					CommentID:  c.CommentID,
 				}
+				// 存储 comment_id 到 Meta 中，后续处理时用
 				if docToken != token {
 					change.Meta = map[string]string{"actual_doc_token": docToken}
 				}
+				// 标记为已处理
+				if e.processedCommentIDs == nil {
+					e.processedCommentIDs = make(map[string]bool)
+				}
+				e.processedCommentIDs[c.CommentID] = true
+
 				changes = append(changes, change)
 			}
 		}
@@ -380,23 +485,14 @@ func (e *DocExtractor) parseSearchItemToChange(item map[string]any) Change {
 		}
 	}
 
-	// 确定变化类型
+	// 确定变化类型 — 标记为 doc_updated，由 LLM 判断是否为决策
 	changeType := "doc_updated"
 	summary := fmt.Sprintf("文档更新: %s", title)
-
-	// 检查标题是否包含决策关键词
-	if containsDecisionKeyword(title) {
-		changeType = "doc_decision"
-		summary = fmt.Sprintf("决策文档更新: %s", title)
-	}
 
 	// 获取文档类型标签
 	typeLabel := e.getDocTypeLabel(docTypes)
 	if typeLabel != "" {
 		summary = fmt.Sprintf("%s更新: %s", typeLabel, title)
-		if changeType == "doc_decision" {
-			summary = fmt.Sprintf("决策%s更新: %s", typeLabel, title)
-		}
 	}
 
 	// 补充作者信息
@@ -496,6 +592,8 @@ type CommentEntry struct {
 	Quote     string `json:"quote"`     // 被引用的内容片段
 	IsWhole   bool   `json:"is_whole"`  // 是否为全文评论
 	CreatedAt int64  `json:"created_at"`
+	IsDeleted bool   `json:"is_deleted"` // 是否已删除/解决/隐藏
+	IsResolved bool  `json:"is_resolved"` // 是否已解决
 }
 
 // parseCommentItem 解析单个评论条目，提取最新回复文本
@@ -505,11 +603,39 @@ func (e *DocExtractor) parseCommentItem(raw json.RawMessage) CommentEntry {
 		IsWhole   bool   `json:"is_whole"`
 		Quote     string `json:"quote"`
 		CreatedAt int64  `json:"create_time"`
+		Deleted   *bool  `json:"deleted"`   // 是否被删除
+		Resolved  *bool  `json:"resolved"`  // 是否已解决
 		ReplyList struct {
 			Replies []json.RawMessage `json:"replies"`
 		} `json:"reply_list"`
+		// 也可能是其他表示状态的字段
+		Status string `json:"status"`
 	}
 	if err := json.Unmarshal(raw, &item); err != nil {
+		return CommentEntry{}
+	}
+
+	// 检查是否已删除/解决
+	isDeleted := false
+	isResolved := false
+	if item.Deleted != nil && *item.Deleted {
+		isDeleted = true
+	}
+	if item.Resolved != nil && *item.Resolved {
+		isResolved = true
+	}
+	// 检查 status 字段（有些实现可能用 status 表示）
+	if item.Status == "deleted" || item.Status == "resolved" || item.Status == "hidden" {
+		if item.Status == "resolved" {
+			isResolved = true
+		} else {
+			isDeleted = true
+		}
+	}
+
+	// 如果已删除/解决，直接返回空评论（不被处理）
+	if isDeleted || isResolved {
+		log.Printf("[Doc] Comment %s is deleted/resolved, skipping", item.CommentID)
 		return CommentEntry{}
 	}
 
@@ -518,6 +644,8 @@ func (e *DocExtractor) parseCommentItem(raw json.RawMessage) CommentEntry {
 		Quote:     item.Quote,
 		IsWhole:   item.IsWhole,
 		CreatedAt: item.CreatedAt,
+		IsDeleted: isDeleted,
+		IsResolved: isResolved,
 	}
 
 	// 提取最新一条回复的文本和作者
@@ -695,12 +823,6 @@ func (e *DocExtractor) analyzeDocChanges(doc interface{}, cutoff int64, isFirstC
 		default:
 			changeType = "doc_updated"
 			summary = fmt.Sprintf("%s更新: %s", typeLabel, title)
-		}
-
-		// 检查是否包含决策关键词
-		if containsDecisionKeyword(title) {
-			changeType = "doc_decision"
-			summary = fmt.Sprintf("决策%s: %s", typeLabel, title)
 		}
 
 		changes = append(changes, Change{
@@ -896,25 +1018,6 @@ func (e *DocExtractor) isDocChanged(doc map[string]any, cutoff int64, isFirstChe
 	return false
 }
 
-// decisionKeywords 决策关键词列表
-var decisionKeywords = []string{
-	"决定", "确认", "结论", "通过", "定下来", "决策", "决议", "评审",
-	"批准", "同意", "达成共识", "确定", "采纳", "批准", "通过", "方案",
-	"决定", "approve", "decided", "confirmed", "decision", "resolution",
-	"review", "agree", "conclusion", "finalize", "OKR", "KPI", "里程碑",
-}
-
-// containsDecisionKeyword 检查文本是否包含决策关键词
-func containsDecisionKeyword(text string) bool {
-	lowerText := strings.ToLower(text)
-	for _, kw := range decisionKeywords {
-		if strings.Contains(lowerText, strings.ToLower(kw)) {
-			return true
-		}
-	}
-	return false
-}
-
 // stringSliceContains 检查字符串切片中是否包含目标
 func stringSliceContains(slice []string, target string) bool {
 	for _, s := range slice {
@@ -923,4 +1026,18 @@ func stringSliceContains(slice []string, target string) bool {
 		}
 	}
 	return false
+}
+
+// CheckCommentExists 检查评论是否仍然存在于文档中
+func (e *DocExtractor) CheckCommentExists(docToken, commentID string) (bool, error) {
+	comments, err := e.FetchDocumentComments(docToken)
+	if err != nil {
+		return false, err
+	}
+	for _, c := range comments {
+		if c.CommentID == commentID {
+			return true, nil
+		}
+	}
+	return false, nil
 }

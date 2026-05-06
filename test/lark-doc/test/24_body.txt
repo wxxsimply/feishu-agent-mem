@@ -1,0 +1,5 @@
+## 3.2 缓存回退
+
+Memcached 不支持数据持久化和集群模式，故障恢复能力差。回退到 Redis 7.x Cluster 模式。
+
+Redis 的运维复杂度可以通过 Ansible 自动化脚本降低。

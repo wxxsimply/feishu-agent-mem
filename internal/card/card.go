@@ -28,18 +28,15 @@ func (r *Renderer) RenderLarkCard(card *recall.DecisionCard) (string, error) {
 
 	category := r.getHotCategory(card.HotScore)
 
-	cardContent := larkCard{
-		MsgType: "interactive",
-		Card: larkCardContent{
-			Header: larkCardHeader{
-				Title: larkCardText{
-					Tag:     "plain_text",
-					Content: fmt.Sprintf("%s 决策卡片 [%s]", r.getCategoryIcon(category), node.SDRID),
-				},
-				Template: r.getStatusTemplate(node.Status),
+	cardContent := larkCardContent{
+		Header: larkCardHeader{
+			Title: larkCardText{
+				Tag:     "plain_text",
+				Content: fmt.Sprintf("%s 决策卡片 [%s]", r.getCategoryIcon(category), node.SDRID),
 			},
-			Elements: r.buildCardElements(node, card.HotScore, category),
+			Template: r.getStatusTemplate(node.Status),
 		},
+		Elements: r.buildCardElements(node, card.HotScore, category),
 	}
 
 	data, err := json.Marshal(cardContent)
@@ -67,23 +64,20 @@ func (r *Renderer) RenderDailySummary(
 	forgottenDecisions []*recall.DecisionCard,
 ) (string, error) {
 
-	cardContent := larkCard{
-		MsgType: "interactive",
-		Card: larkCardContent{
-			Header: larkCardHeader{
-				Title: larkCardText{
-					Tag:     "plain_text",
-					Content: fmt.Sprintf("📋 决策日报 - %s", date.Format("2006-01-02")),
-				},
-				Template: "blue",
+	cardContent := larkCardContent{
+		Header: larkCardHeader{
+			Title: larkCardText{
+				Tag:     "plain_text",
+				Content: fmt.Sprintf("📋 决策日报 - %s", date.Format("2006-01-02")),
 			},
-			Elements: []interface{}{},
+			Template: "blue",
 		},
+		Elements: []interface{}{},
 	}
 
 	// 新增决策部分
 	if len(newDecisions) > 0 {
-		cardContent.Card.Elements = append(cardContent.Card.Elements,
+		cardContent.Elements = append(cardContent.Elements,
 			larkCardDiv{
 				Tag: "div",
 				Text: larkCardText{
@@ -97,7 +91,7 @@ func (r *Renderer) RenderDailySummary(
 			if i >= 5 { // 最多显示5个
 				break
 			}
-			cardContent.Card.Elements = append(cardContent.Card.Elements,
+			cardContent.Elements = append(cardContent.Elements,
 				larkCardDiv{
 					Tag: "div",
 					Text: larkCardText{
@@ -111,7 +105,7 @@ func (r *Renderer) RenderDailySummary(
 
 	// 遗忘决策提醒
 	if len(forgottenDecisions) > 0 {
-		cardContent.Card.Elements = append(cardContent.Card.Elements,
+		cardContent.Elements = append(cardContent.Elements,
 			larkCardHr{Tag: "hr"},
 			larkCardDiv{
 				Tag: "div",
@@ -126,7 +120,7 @@ func (r *Renderer) RenderDailySummary(
 			if i >= 3 { // 最多显示3个
 				break
 			}
-			cardContent.Card.Elements = append(cardContent.Card.Elements,
+			cardContent.Elements = append(cardContent.Elements,
 				larkCardDiv{
 					Tag: "div",
 					Text: larkCardText{
@@ -317,11 +311,6 @@ func (r *Renderer) getCategoryIcon(category recall.HotCategory) string {
 }
 
 // 飞书卡片类型定义（小写，内部使用）
-
-type larkCard struct {
-	MsgType string         `json:"msg_type"`
-	Card    larkCardContent `json:"card"`
-}
 
 type larkCardContent struct {
 	Header  larkCardHeader `json:"header"`

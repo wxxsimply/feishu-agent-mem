@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -39,6 +38,8 @@ type GitStorageInterface interface {
 	GetCommitLog(path string, limit int) ([]CommitLogEntry, error)
 	BlameDecision(project, topic, sdrID string) ([]BlameEntry, error)
 	SearchContent(project, query string) ([]SearchHit, error)
+	ReadDecisionAtCommit(project, topic, sdrID, commitHash string) (*decision.DecisionNode, error)
+	GetDecisionHistory(project, topic, sdrID string) ([]CommitLogEntry, error)
 }
 
 // BitableStoreInterface Bitable 存储接口
@@ -559,6 +560,10 @@ func (s *MCPServer) handleCallTool(req Request) {
 		content = s.handleResolveConflictAction(args)
 	case "list_objections":
 		content = s.handleListObjections(args)
+	case "decision_history":
+		content = s.handleDecisionHistory(args)
+	case "revert_decision":
+		content = s.handleRevertDecision(args)
 	default:
 		s.sendError(req.ID, ErrCodeToolNotFound, "unknown tool: "+name)
 		return
@@ -1154,6 +1159,44 @@ func (s *MCPServer) handleListObjections(args map[string]any) []Content {
 	return []Content{{Type: "text", Text: text}}
 }
 
+func (s *MCPServer) handleDecisionHistory(args map[string]any) []Content {
+	sdrID := getStringArg(args, "sdr_id", "")
+	project := getStringArg(args, "project", "feishu-mem")
+	topic := getStringArg(args, "topic", "general")
+
+	var history []CommitLogEntry
+	if s.gitStorage != nil {
+		var err error
+		history, err = s.gitStorage.GetDecisionHistory(project, topic, sdrID)
+		if err != nil {
+			return []Content{{Type: "text", Text: fmt.Sprintf("获取历史失败: %v", err)}}
+		}
+	}
+
+	text := fmt.Sprintf("## 决策 %s 的历史版本\n\n", sdrID)
+	if len(history) == 0 {
+		text += "暂无历史记录"
+	} else {
+		for _, entry := range history {
+			text += fmt.Sprintf("- `%s`: %s\n", entry.Hash, entry.Message)
+		}
+	}
+	return []Content{{Type: "text", Text: text}}
+}
+
+func (s *MCPServer) handleRevertDecision(args map[string]any) []Content {
+	sdrID := getStringArg(args, "sdr_id", "")
+	targetCommit := getStringArg(args, "target_commit", "")
+	reason := getStringArg(args, "reason", "reverted to previous version")
+
+	text := fmt.Sprintf("## 回溯决策 %s 到版本 %s\n\n", sdrID, targetCommit)
+	text += fmt.Sprintf("原因: %s\n\n", reason)
+	text += "⚠️ 注意: 此功能需要通过 PipelineEngine 执行，当前 MCP 工具未集成完整的 Pipeline 依赖。\n"
+	text += "请使用 mem-service 内部的状态机来执行回溯操作。"
+
+	return []Content{{Type: "text", Text: text}}
+}
+
 // === 辅助函数 ===
 
 func (s *MCPServer) sendResponse(id any, result any) {
@@ -1420,6 +1463,17 @@ func (s *MCPServer) validateToolArgs(name string, args map[string]any) string {
 		}
 		if _, ok := args["existing_decision"]; !ok {
 			return "missing required parameter: existing_decision"
+		}
+	case "decision_history":
+		if _, ok := args["sdr_id"]; !ok {
+			return "missing required parameter: sdr_id"
+		}
+	case "revert_decision":
+		if _, ok := args["sdr_id"]; !ok {
+			return "missing required parameter: sdr_id"
+		}
+		if _, ok := args["target_commit"]; !ok {
+			return "missing required parameter: target_commit"
 		}
 	}
 	return ""

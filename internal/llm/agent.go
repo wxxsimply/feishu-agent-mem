@@ -13,7 +13,6 @@ import (
 // MemoryAgent 记忆系统专用 Agent
 type MemoryAgent struct {
 	promptMgr *prompts.PromptManager
-	fallback  *Fallback
 	llmClient *Client
 }
 
@@ -21,7 +20,6 @@ type MemoryAgent struct {
 func NewMemoryAgent() *MemoryAgent {
 	return &MemoryAgent{
 		promptMgr: prompts.NewPromptManager(),
-		fallback:  NewFallback(),
 		llmClient: NewClient(),
 	}
 }
@@ -34,15 +32,11 @@ func (a *MemoryAgent) ExtractDecision(content string, topics []string) (*Extract
 	log.Printf("[Agent] Content length: %d", len(content))
 	log.Printf("[Agent] Topics: %v", topics)
 
-	// LLM 不可用时使用降级策略
+	// LLM 不可用时返回错误，不使用 fallback
 	if !a.llmClient.IsAvailable() {
-		log.Println("[Agent] LLM not available, using keyword fallback")
-		fallbackResult := a.fallback.ExtractDecision(content)
-		fallbackResult.ExtractedFrom = content
-		log.Printf("[Agent] Fallback result: HasDecision=%v, Confidence=%.2f",
-			fallbackResult.HasDecision, fallbackResult.Confidence)
+		log.Println("[Agent] LLM not available, skipping extraction")
 		log.Println("========== EXTRACT DECISION END ==========")
-		return fallbackResult, nil
+		return nil, fmt.Errorf("LLM not available")
 	}
 
 	// 构建提示词
@@ -82,12 +76,9 @@ func (a *MemoryAgent) ExtractDecision(content string, topics []string) (*Extract
 	log.Println("[Agent] Parsing LLM response...")
 	result, err := ParseExtractionResult(llmResponse)
 	if err != nil {
-		log.Printf("[Agent] Parse failed: %v, using fallback", err)
-		// 解析失败时回退到降级策略
-		fallbackResult := a.fallback.ExtractDecision(content)
-		fallbackResult.ExtractedFrom = content
+		log.Printf("[Agent] Parse failed: %v", err)
 		log.Println("========== EXTRACT DECISION END ==========")
-		return fallbackResult, nil
+		return nil, fmt.Errorf("parse LLM response failed: %w", err)
 	}
 
 	log.Printf("[Agent] Parse result: HasDecision=%v, Confidence=%.2f", result.HasDecision, result.Confidence)
@@ -117,7 +108,7 @@ func (a *MemoryAgent) ExtractDecisionFromDoc(content string, topics []string, do
 	log.Printf("[Agent] Topics: %v", topics)
 
 	if !a.llmClient.IsAvailable() {
-		log.Println("[Agent] LLM not available, returning fallback")
+		log.Println("[Agent] LLM not available, returning error")
 		log.Println("========== EXTRACT DECISION FROM DOC END ==========")
 		return &ExtractionResult{
 			HasDecision:    false,
@@ -160,7 +151,7 @@ func (a *MemoryAgent) ExtractDecisionFromDoc(content string, topics []string, do
 	log.Println("[Agent] Parsing LLM response...")
 	result, err := ParseExtractionResult(llmResponse)
 	if err != nil {
-		log.Printf("[Agent] Parse failed: %v, using fallback", err)
+		log.Printf("[Agent] Parse failed: %v, skipping", err)
 		log.Println("========== EXTRACT DECISION FROM DOC END ==========")
 		return &ExtractionResult{
 			HasDecision:    false,
@@ -198,7 +189,7 @@ func (a *MemoryAgent) ExtractDecisionFromDocWithContext(
 	log.Printf("[Agent] Related decisions: %d", len(relatedDecisionSummaries))
 
 	if !a.llmClient.IsAvailable() {
-		log.Println("[Agent] LLM not available, returning fallback")
+		log.Println("[Agent] LLM not available, returning error")
 		log.Println("========== EXTRACT DECISION FROM DOC WITH CONTEXT END ==========")
 		return &ExtractionResult{
 			HasDecision:    false,
@@ -241,7 +232,7 @@ func (a *MemoryAgent) ExtractDecisionFromDocWithContext(
 	log.Println("[Agent] Parsing LLM response...")
 	result, err := ParseExtractionResult(llmResponse)
 	if err != nil {
-		log.Printf("[Agent] Parse failed: %v, using fallback", err)
+		log.Printf("[Agent] Parse failed: %v, skipping", err)
 		log.Println("========== EXTRACT DECISION FROM DOC WITH CONTEXT END ==========")
 		return &ExtractionResult{
 			HasDecision:    false,
@@ -279,7 +270,7 @@ func (a *MemoryAgent) ExtractDecisionWithContext(
 
 	// 检查 LLM 是否可用
 	if !a.llmClient.IsAvailable() {
-		log.Println("[Agent] LLM not available, returning fallback")
+		log.Println("[Agent] LLM not available, returning error")
 		log.Println("========== EXTRACT DECISION WITH CONTEXT END ==========")
 		return &ExtractionResult{
 			HasDecision:    false,
@@ -326,7 +317,7 @@ func (a *MemoryAgent) ExtractDecisionWithContext(
 	log.Println("[Agent] Parsing LLM response...")
 	result, err := ParseExtractionResult(llmResponse)
 	if err != nil {
-		log.Printf("[Agent] Parse failed: %v, using fallback", err)
+		log.Printf("[Agent] Parse failed: %v, skipping", err)
 		log.Println("========== EXTRACT DECISION WITH CONTEXT END ==========")
 		return &ExtractionResult{
 			HasDecision:    false,
@@ -357,21 +348,15 @@ func (a *MemoryAgent) ExtractDecisionWithContext(
 func (a *MemoryAgent) ClassifyTopic(decision string, topics []string) (*ClassificationResult, error) {
 	log.Printf("[Agent] ClassifyTopic called: decision=%s, topics=%v", truncateForLog(decision, 100), topics)
 
-	quickResult := a.fallback.ClassifyTopic(decision, topics)
-	if quickResult.Topic != "" {
-		log.Printf("[Agent] Fallback result: %s", quickResult.Topic)
-		return quickResult, nil
-	}
-
 	if !a.llmClient.IsAvailable() {
-		log.Println("[Agent] LLM not available, returning fallback")
-		return quickResult, nil
+		log.Println("[Agent] LLM not available, skipping classification")
+		return nil, fmt.Errorf("LLM not available")
 	}
 
 	systemPrompt, userPrompt, err := a.buildClassificationPrompts(decision, topics)
 	if err != nil {
 		log.Printf("[Agent] Build classification prompts failed: %v", err)
-		return quickResult, err
+		return nil, err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -380,13 +365,13 @@ func (a *MemoryAgent) ClassifyTopic(decision string, topics []string) (*Classifi
 	llmResponse, err := a.llmClient.Call(ctx, systemPrompt, userPrompt)
 	if err != nil {
 		log.Printf("[Agent] LLM call failed: %v", err)
-		return quickResult, nil
+		return nil, fmt.Errorf("LLM call failed: %w", err)
 	}
 
 	result, err := ParseClassificationResult(llmResponse)
 	if err != nil {
 		log.Printf("[Agent] Parse classification failed: %v", err)
-		return quickResult, nil
+		return nil, fmt.Errorf("parse classification failed: %w", err)
 	}
 
 	log.Printf("[Agent] Classification result: %s", result.Topic)
@@ -395,15 +380,13 @@ func (a *MemoryAgent) ClassifyTopic(decision string, topics []string) (*Classifi
 
 // DetectCrossTopic 检测跨议题
 func (a *MemoryAgent) DetectCrossTopic(node any) (*CrossTopicResult, error) {
-	quickResult := a.fallback.DetectCrossTopic(node)
-
 	if !a.llmClient.IsAvailable() {
-		return quickResult, nil
+		return nil, fmt.Errorf("LLM not available")
 	}
 
 	systemPrompt, userPrompt, err := a.buildCrossTopicPrompts(node)
 	if err != nil {
-		return quickResult, err
+		return nil, err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -411,12 +394,12 @@ func (a *MemoryAgent) DetectCrossTopic(node any) (*CrossTopicResult, error) {
 
 	llmResponse, err := a.llmClient.Call(ctx, systemPrompt, userPrompt)
 	if err != nil {
-		return quickResult, nil
+		return nil, fmt.Errorf("LLM call failed: %w", err)
 	}
 
 	result, err := ParseCrossTopicResult(llmResponse)
 	if err != nil {
-		return quickResult, nil
+		return nil, fmt.Errorf("parse cross-topic result failed: %w", err)
 	}
 
 	return result, nil
@@ -653,7 +636,7 @@ func (a *MemoryAgent) EvaluateDedupActionFallback(systemPrompt, userPrompt strin
 
 	result, err := ParseDedupResult(llmResponse)
 	if err != nil {
-		return &DedupResult{Action: "update", Reason: "fallback"}, nil
+		return nil, fmt.Errorf("dedup fallback parse failed: %w", err)
 	}
 	return result, nil
 }
