@@ -139,7 +139,7 @@ func (e *IMExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 	cutoff := lastCheck.Unix()
 
 	// 1. 检测群聊消息
-	for _, rawChatID := range e.config.ChatIDs {
+	for _, rawChatID := range e.config.DetectChatIDs {
 		chatID := rawChatID
 		if strings.Contains(chatID, ",") {
 			chatID = strings.Split(chatID, ",")[0]
@@ -305,7 +305,7 @@ func entityTypeToLabel(entityType string) string {
 func (e *IMExtractor) Extract() error {
 	rawData := make(map[string]any)
 
-	for _, chatID := range e.config.ChatIDs {
+	for _, chatID := range e.config.DetectChatIDs {
 		items, err := e.getGroupMessageItems(chatID, time.Time{})
 		if err == nil {
 			rawData["chat_messages"] = items
@@ -565,8 +565,8 @@ func (e *IMExtractor) processIMMessageEvent(line string) *DetectResult {
 
 	// 检查是否是配置的群聊
 	isWatched := false
-	if len(e.config.ChatIDs) > 0 {
-		isWatched = slices.Contains(e.config.ChatIDs, chatID)
+	if len(e.config.DetectChatIDs) > 0 {
+		isWatched = slices.Contains(e.config.DetectChatIDs, chatID)
 	} else {
 		isWatched = true // 没有配置群聊时，处理所有消息
 	}

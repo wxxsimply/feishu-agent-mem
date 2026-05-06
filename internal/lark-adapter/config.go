@@ -11,10 +11,11 @@ import (
 
 // Config 飞书适配器配置
 type Config struct {
-	AppID     string
-	AppSecret string
-	ChatIDs   []string
-	UserID    string
+	AppID         string
+	AppSecret     string
+	ChatIDs       []string // 用于决策卡片推送
+	DetectChatIDs []string // 用于IM消息检测
+	UserID        string
 }
 
 // LoadEnv 从多个位置加载 .env 文件，提高兼容性
@@ -73,7 +74,7 @@ func LoadConfigWithPrefix(prefix string) *Config {
 		AppSecret: os.Getenv(prefix + "APP_SECRET"),
 	}
 
-	// 解析 CHAT_IDS（逗号分隔）
+	// 解析 CHAT_IDS（逗号分隔）- 用于推送
 	if raw := os.Getenv(prefix + "CHAT_IDS"); raw != "" {
 		for _, id := range strings.Split(raw, ",") {
 			id = strings.TrimSpace(id)
@@ -81,6 +82,20 @@ func LoadConfigWithPrefix(prefix string) *Config {
 				cfg.ChatIDs = append(cfg.ChatIDs, id)
 			}
 		}
+	}
+
+	// 解析 DETECT_CHAT_IDS（逗号分隔）- 用于检测消息
+	// 如果没有设置，默认使用 CHAT_IDS
+	if raw := os.Getenv(prefix + "DETECT_CHAT_IDS"); raw != "" {
+		for _, id := range strings.Split(raw, ",") {
+			id = strings.TrimSpace(id)
+			if id != "" {
+				cfg.DetectChatIDs = append(cfg.DetectChatIDs, id)
+			}
+		}
+	} else {
+		// 默认使用和推送相同的 chat ids
+		cfg.DetectChatIDs = cfg.ChatIDs
 	}
 
 	cfg.UserID = os.Getenv(prefix + "USER_ID")
