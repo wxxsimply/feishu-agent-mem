@@ -29,6 +29,7 @@ type Server struct {
 	stateMutex    sync.RWMutex
 	stopChan      chan struct{}
 	stopWg        sync.WaitGroup
+	resultChan    chan DetectResultMessage
 }
 
 // ClientConn 单个检测器客户端连接
@@ -47,6 +48,7 @@ func NewServer(port int) *Server {
 		clients:     make(map[string]*ClientConn),
 		state:       &GlobalState{Detectors: make(map[string]DetectorGlobalState)},
 		stopChan:    make(chan struct{}),
+		resultChan:  make(chan DetectResultMessage, 100),
 	}
 }
 
@@ -248,6 +250,9 @@ func (s *Server) handleDetectResult(client *ClientConn, msg *Message) {
 		s.state.Detectors[client.detectorName] = gs
 	}
 	s.stateMutex.Unlock()
+
+	// 发送结果到通道
+	s.resultChan <- detectMsg
 }
 
 // handleDisconnect 处理客户端断开
@@ -378,8 +383,7 @@ func (s *Server) SendControl(detectorName string, command string, payload map[st
 	return s.sendToClient(client, controlMsg)
 }
 
-// DetectResultChannel 用于传递检测结果给主程序（待扩展）
+// DetectResultChannel 用于传递检测结果给主程序
 func (s *Server) DetectResultChannel() <-chan DetectResultMessage {
-	// TODO: 实现消息通道
-	return nil
+	return s.resultChan
 }

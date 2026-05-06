@@ -28,7 +28,7 @@ detectors:
     heartbeat_interval: 15s
     comment_check_interval_seconds: 60
     debounce_window: 120s
-    enable_debounce: false
+    enable_debounce: true
     doc_tokens:
       - "CKCtduQ03o7mSTx7KdJcGZJqnrb"
   lark_wiki:

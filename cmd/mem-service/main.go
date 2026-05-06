@@ -19,6 +19,7 @@ import (
 	"feishu-mem/internal/signal"
 	"feishu-mem/internal/storage/bitable"
 	"feishu-mem/internal/storage/git"
+	"feishu-mem/internal/ws"
 )
 
 // detectorState 单个检测器的状态
@@ -252,6 +253,17 @@ func main() {
 			ds.lastCheck = stateMgr.GetLastDetected(ds.detector.Name())
 		}
 	}
+
+	// 启动 WebSocket 服务端（接收独立 detector 进程的检测结果）
+	wsServer := ws.NewServer(settings.Service.WSPort)
+	if err := wsServer.Start(); err != nil {
+		log.Fatalf("[WebSocket] Failed to start server: %v", err)
+	}
+	log.Printf("[WebSocket] Server started on port %d", settings.Service.WSPort)
+	defer wsServer.Stop()
+
+	// 启动 WebSocket 结果处理器
+	go wsResultProcessor(ctx, workerPool, wsServer.DetectResultChannel())
 
 	log.Println("[Service] Starting detector goroutines...")
 	// 为每个启用的检测器启动独立的协程
@@ -526,4 +538,71 @@ func boolToModeStr(burst bool) string {
 		return "BURST"
 	}
 	return "normal"
+}
+
+// wsResultProcessor 处理来自 WebSocket 的检测结果
+func wsResultProcessor(
+	ctx context.Context,
+	workerPool *signal.WorkerPool,
+	resultChan <-chan ws.DetectResultMessage,
+) {
+	log.Println("[WebSocket] Result processor started")
+
+	for {
+		select {
+		case msg := <-resultChan:
+			log.Printf("[WebSocket] Processing result from %s: %d changes",
+				msg.DetectorName, len(msg.Result.Changes))
+
+			// 转换 adapter 类型
+			adapterType := adapterTypeFromName(msg.DetectorName)
+
+			// 处理每个变化
+			for i, changeItem := range msg.Result.Changes {
+				log.Printf("[WebSocket] Change %d: %s [%s]", i+1, changeItem.Type, changeItem.Summary)
+
+				// 转换为 larkadapter.Change
+				change := larkadapter.Change{
+					Type:       changeItem.Type,
+					EntityType: changeItem.EntityType,
+					EntityID:   changeItem.EntityID,
+					Summary:    changeItem.Summary,
+					Timestamp:  changeItem.Timestamp,
+					RawContent: changeItem.Content,
+				}
+
+				// 提交任务
+				job := &signal.DetectionJob{
+					AdapterType: adapterType,
+					Change:      change,
+					ReceivedAt:  time.Now(),
+				}
+				workerPool.SubmitJob(job)
+			}
+
+		case <-ctx.Done():
+			log.Println("[WebSocket] Result processor stopped")
+			return
+		}
+	}
+}
+
+// adapterTypeFromName 从检测器名称获取 adapter 类型
+func adapterTypeFromName(name string) signal.AdapterType {
+	switch name {
+	case "lark_im":
+		return signal.AdapterIM
+	case "lark_doc":
+		return signal.AdapterDocs
+	case "lark_wiki":
+		return signal.AdapterWiki
+	case "lark_calendar":
+		return signal.AdapterCalendar
+	case "lark_task":
+		return signal.AdapterTask
+	case "lark_vc":
+		return signal.AdapterVC
+	default:
+		return signal.AdapterIM
+	}
 }

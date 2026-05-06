@@ -129,6 +129,13 @@ func (e *IMExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 		lastCheck = time.Now().Add(-1 * time.Hour)
 	}
 
+	// 修复：确保 lastCheck 不是未来时间
+	now := time.Now()
+	if lastCheck.After(now) {
+		log.Printf("[IM] lastCheck is in future (%v), resetting to now", lastCheck)
+		lastCheck = now
+	}
+
 	cutoff := lastCheck.Unix()
 
 	// 1. 检测群聊消息
@@ -326,6 +333,10 @@ func (e *IMExtractor) Extract() error {
 func (e *IMExtractor) getP2PMessageItems(lastCheck time.Time) ([]map[string]any, error) {
 	args := []string{"im", "+chat-messages-list", "--user-id", e.config.UserID, "--format", "json"}
 	if !lastCheck.IsZero() {
+		// 确保不传递未来时间
+		if lastCheck.After(time.Now()) {
+			lastCheck = time.Now()
+		}
 		args = append(args, "--start", lastCheck.Format(time.RFC3339))
 	}
 	output, err := e.cli.RunCommand(args...)
@@ -340,6 +351,10 @@ func (e *IMExtractor) getP2PMessageItems(lastCheck time.Time) ([]map[string]any,
 func (e *IMExtractor) getGroupMessageItems(chatID string, lastCheck time.Time) ([]map[string]any, error) {
 	args := []string{"im", "+chat-messages-list", "--chat-id", chatID, "--format", "json"}
 	if !lastCheck.IsZero() {
+		// 确保不传递未来时间
+		if lastCheck.After(time.Now()) {
+			lastCheck = time.Now()
+		}
 		args = append(args, "--start", lastCheck.Format(time.RFC3339))
 	}
 	output, err := e.cli.RunCommand(args...)
