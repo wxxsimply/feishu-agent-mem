@@ -1,0 +1,1 @@
+Elasticsearch 资源消耗太高了，3 节点吃掉 12GB 内存。建议重新评估 Loki 方案。

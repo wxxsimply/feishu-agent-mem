@@ -1,0 +1,5 @@
+## 4.3 JWT 有效期调整
+
+Access Token 有效期从 2 小时缩短到 30 分钟。安全审计反馈 2 小时太长，token 泄露风险高。
+
+Refresh Token 有效期保持 7 天不变。

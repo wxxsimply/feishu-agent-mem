@@ -5,18 +5,6 @@ import (
 	"strings"
 )
 
-var decisionKeywords = []string{"决定", "确认", "结论", "通过", "定下来", "approve", "decided", "confirmed", "决策", "决议", "评审", "review"}
-
-func containsDecisionKeyword(text string) bool {
-	lowerText := strings.ToLower(text)
-	for _, kw := range decisionKeywords {
-		if strings.Contains(lowerText, strings.ToLower(kw)) {
-			return true
-		}
-	}
-	return false
-}
-
 // StateChangeEmitter 将 Detector 的检测结果转为标准信号
 type StateChangeEmitter interface {
 	AdapterType() AdapterType
@@ -168,13 +156,8 @@ func (e *DocsEmitter) EmitSignal(result *larkadapter.DetectResult) (*StateChange
 			strength = maxStrength(strength, StrengthStrong)
 			signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "approval_comment")
 		case "doc_created", "doc_content_updated":
-			// 检查标题是否含决策关键词
-			if containsDecisionKeyword(ch.Summary) {
-				strength = maxStrength(strength, StrengthStrong)
-				signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "decision_doc")
-			} else {
-				strength = maxStrength(strength, StrengthWeak)
-			}
+			strength = maxStrength(strength, StrengthMedium)
+			signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "doc_change")
 		}
 	}
 
@@ -202,9 +185,12 @@ func (e *CalendarEmitter) EmitSignal(result *larkadapter.DetectResult) (*StateCh
 	strength := StrengthWeak
 
 	for _, ch := range result.Changes {
-		if ch.Type == "decision_meeting" || containsDecisionKeyword(ch.Summary) {
+		if ch.Type == "decision_meeting" {
 			strength = maxStrength(strength, StrengthMedium)
 			signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "review_meeting")
+		} else {
+			strength = maxStrength(strength, StrengthMedium)
+			signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "calendar_change")
 		}
 	}
 
@@ -264,11 +250,9 @@ func (e *WikiEmitter) EmitSignal(result *larkadapter.DetectResult) (*StateChange
 	signal := NewSignal(AdapterWiki, "Wiki changes detected")
 	strength := StrengthWeak
 
-	for _, ch := range result.Changes {
-		if containsDecisionKeyword(ch.Summary) {
-			strength = maxStrength(strength, StrengthMedium)
-			signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "decision_node")
-		}
+	for range result.Changes {
+		strength = maxStrength(strength, StrengthMedium)
+		signal.Context.DecisionSignals = append(signal.Context.DecisionSignals, "wiki_change")
 	}
 
 	if strength == StrengthWeak {

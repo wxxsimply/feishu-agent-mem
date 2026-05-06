@@ -1,0 +1,1 @@
+Redis 方案确认，3 节点 Cluster 够用。建议加上 Sentinel 做高可用。

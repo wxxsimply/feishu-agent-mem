@@ -22,16 +22,15 @@ detectors:
 
   lark_doc:
     enabled: true
-    interval: 60s
-    burst_interval: 10s
-    burst_timeout: 5m
+    interval: 10s
+    burst_interval: 5s
+    burst_timeout: 2m
     heartbeat_interval: 15s
-    comment_check_interval_seconds: 30
+    comment_check_interval_seconds: 60
     debounce_window: 120s
-    enable_debounce: true
+    enable_debounce: false
     doc_tokens:
-      - "L6u3wlmQbisSivkEOsWczAkXnrt"
-
+      - "CKCtduQ03o7mSTx7KdJcGZJqnrb"
   lark_wiki:
     enabled: false
     interval: 60s
@@ -72,7 +71,7 @@ detectors:
 # 存储配置
 storage:
   git_path: "./data/git"
-  bitable_enabled: true
+  bitable_enabled: false
 
 # LLM 配置
 llm:

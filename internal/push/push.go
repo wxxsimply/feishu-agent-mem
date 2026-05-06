@@ -126,13 +126,19 @@ func (pe *PushEngine) HandleQuery(chatID string, query string) ([]string, error)
 	return results, nil
 }
 
-// DailySummary 生成并推送每日摘要
+// DailySummary 生成并推送每日摘要（只在有内容时发送）
 func (pe *PushEngine) DailySummary(chatID string) (string, error) {
 	now := time.Now()
 	since := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
 	newDecisions := pe.memory.GetRecentDecisions(since)
 	forgettingDecisions := pe.recall.GetForgottenDecisions(20)
+
+	// 如果没有内容就不发送
+	if len(newDecisions) == 0 && len(forgettingDecisions) == 0 {
+		log.Printf("[Push] No decisions for daily summary, skipping")
+		return "", nil
+	}
 
 	var newCards []*recall.DecisionCard
 	var forgotCards []*recall.DecisionCard
@@ -165,6 +171,18 @@ func (pe *PushEngine) DailySummary(chatID string) (string, error) {
 
 	log.Printf("[Push] Daily summary sent to %s", chatID)
 	return summaryCard, nil
+}
+
+// NotifyDecisionUpdate 通知有决策更新，触发相关推送
+func (pe *PushEngine) NotifyDecisionUpdate(chatIDs []string, node *decision.DecisionNode) {
+	log.Printf("[Push] Notified of decision update: %s (%s)", node.SDRID, node.Title)
+
+	for _, chatID := range chatIDs {
+		// 推送新/更新的决策卡片
+		if _, err := pe.PushDecisionCard(chatID, node.SDRID); err != nil {
+			log.Printf("[Push] Failed to push decision card %s to %s: %v", node.SDRID, chatID, err)
+		}
+	}
 }
 
 // GetHotDecisions 获取高热点值决策列表

@@ -1,0 +1,5 @@
+## 1.10 认证授权
+
+内部用户走飞书 OAuth 登录，第三方应用走 JWT Token 认证。Access Token 有效期 2 小时，Refresh Token 有效期 7 天。
+
+JWT 使用 RS256 算法签名，密钥存储在 Vault 中。

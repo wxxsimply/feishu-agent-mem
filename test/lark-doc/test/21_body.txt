@@ -1,0 +1,5 @@
+## 2.5 认证方案调整
+
+安全审计反馈 JWT Token 存在泄露风险，建议改用 session-based 认证 + Redis 存储 session。
+
+Session 有效期 30 分钟，滑动过期。HttpOnly Cookie 存储 session ID。

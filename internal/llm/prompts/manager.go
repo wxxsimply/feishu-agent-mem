@@ -121,6 +121,11 @@ func (pm *PromptManager) GetTemplate(name string) (*PromptTemplate, bool) {
 	return template, ok
 }
 
+// RegisterTemplate 注册自定义模板
+func (pm *PromptManager) RegisterTemplate(template *PromptTemplate) {
+	pm.templates[template.Name] = template
+}
+
 // ========== 静态段定义 ==========
 
 var (

@@ -21,6 +21,15 @@ type GitStorageInterface interface {
 	ReadDecision(project, topic, sdrID string) (*decision.DecisionNode, error)
 	ListDecisions(project, topic string) ([]*decision.DecisionNode, error)
 	WriteObjection(obj *decision.Objection) (string, error)
+	ListObjections(project, topic string) ([]*decision.Objection, error)
+	ReadDecisionAtCommit(project, topic, sdrID, commitHash string) (*decision.DecisionNode, error)
+	GetDecisionHistory(project, topic, sdrID string) ([]CommitLogEntry, error)
+}
+
+// CommitLogEntry 提交日志条目
+type CommitLogEntry struct {
+	Hash    string
+	Message string
 }
 
 // BitableStoreInterface Bitable 存储接口
@@ -67,6 +76,8 @@ func (pe *PipelineEngine) ApplyMutation(mut *signal.DecisionMutation) error {
 		return pe.applyCreateObjection(mut)
 	case signal.MutationDeprecate:
 		return pe.applyDeprecate(mut)
+	case signal.MutationRevert:
+		return pe.applyRevert(mut)
 	default:
 		return fmt.Errorf("unknown mutation type: %s", mut.Type)
 	}
@@ -344,4 +355,52 @@ func (pe *PipelineEngine) ValidateDecision(node *decision.DecisionNode) []string
 	}
 
 	return issues
+}
+
+// applyRevert 执行回溯到指定版本
+func (pe *PipelineEngine) applyRevert(mut *signal.DecisionMutation) error {
+	// 从内存图获取当前决策的 project 和 topic
+	project := "feishu-mem"
+	topic := "general"
+	if existingNode, ok := pe.MemoryGraph.GetDecision(mut.SDRID); ok {
+		project = existingNode.Project
+		topic = existingNode.Topic
+	}
+
+	// 读取目标提交时的决策
+	targetNode, err := pe.GitStorage.ReadDecisionAtCommit(project, topic, mut.SDRID, mut.TargetCommitHash)
+	if err != nil {
+		return fmt.Errorf("read target commit failed: %w", err)
+	}
+
+	// 读取当前版本（用于保存 previous commit hash）
+	currentNode, err := pe.GitStorage.ReadDecision(project, topic, mut.SDRID)
+	if err == nil {
+		// 在目标节点保存上一版本的 commit hash
+		targetNode.PreviousCommitHash = currentNode.GitCommitHash
+	}
+
+	// 用目标提交的内容写入新版本（不覆盖历史，新增 commit）
+	hash, err := pe.GitStorage.WriteDecision(targetNode)
+	if err != nil {
+		return fmt.Errorf("git write failed: %w", err)
+	}
+	targetNode.GitCommitHash = hash
+
+	// 同步 Bitable
+	if pe.BitableStore != nil {
+		if err := pe.BitableStore.UpsertDecision(targetNode); err != nil {
+			log.Printf("[Bitable] UpsertDecision (revert) failed: %v", err)
+		} else {
+			log.Printf("[Bitable] UpsertDecision (revert) OK: %s", mut.SDRID)
+		}
+	} else {
+		log.Printf("[Bitable] store is nil, skipping sync")
+	}
+
+	// 更新内存图
+	pe.MemoryGraph.UpsertDecision(targetNode, targetNode.Project)
+
+	log.Printf("[Pipeline] Reverted decision %s to commit %s", mut.SDRID, mut.TargetCommitHash)
+	return nil
 }

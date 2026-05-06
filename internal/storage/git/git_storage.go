@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"feishu-mem/internal/core"
 	"feishu-mem/internal/decision"
 )
 
@@ -16,12 +17,6 @@ type Config struct {
 	Remote   string
 	AutoPush bool
 	Branch   string
-}
-
-// CommitLogEntry 提交日志条目
-type CommitLogEntry struct {
-	Hash    string
-	Message string
 }
 
 // BlameEntry blame 条目
@@ -335,6 +330,33 @@ func (gs *GitStorage) SearchContent(project, query string) ([]SearchHit, error) 
 		path = "decisions"
 	}
 	return gs.cli.GitGrep(query, path)
+}
+
+// ReadDecisionAtCommit 读取指定提交时的决策
+func (gs *GitStorage) ReadDecisionAtCommit(project, topic, sdrID, commitHash string) (*decision.DecisionNode, error) {
+	path := filepath.Join("decisions", project, topic, sdrID+".md")
+	content, err := gs.cli.ReadFileAtCommit(path, commitHash)
+	if err != nil {
+		return nil, fmt.Errorf("read at commit %s failed: %w", commitHash, err)
+	}
+	return ParseDecisionFile([]byte(content))
+}
+
+// GetDecisionHistory 获取决策的提交历史
+func (gs *GitStorage) GetDecisionHistory(project, topic, sdrID string) ([]core.CommitLogEntry, error) {
+	path := filepath.Join("decisions", project, topic, sdrID+".md")
+	logs, err := gs.cli.GetCommitLog(path, 0)
+	if err != nil {
+		return nil, err
+	}
+	var result []core.CommitLogEntry
+	for _, l := range logs {
+		result = append(result, core.CommitLogEntry{
+			Hash:    l.Hash,
+			Message: l.Message,
+		})
+	}
+	return result, nil
 }
 
 // ArchiveProject 归档项目

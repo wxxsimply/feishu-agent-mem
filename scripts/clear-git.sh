@@ -7,11 +7,25 @@ GIT_DIR="./data"
 BACKUP_ROOT="./data/backup"
 
 if [ -d "$GIT_DIR" ]; then
-    echo "1. 备份当前目录..."
+    echo "1. 备份和清空当前目录..."
     mkdir -p "$BACKUP_ROOT"
     BACKUP_DIR="${BACKUP_ROOT}/$(date +%Y%m%d_%H%M%S)"
-    mv "$GIT_DIR" "$BACKUP_DIR"
-    echo "   备份到: $BACKUP_DIR"
+
+    # 先创建备份目录
+    mkdir -p "$BACKUP_DIR"
+
+    # 遍历 data 目录下的所有内容（除了 backup）
+    for item in "$GIT_DIR"/* "$GIT_DIR"/.*; do
+        # 跳过 . 和 .. 以及 backup 目录
+        if [ "$(basename "$item")" = "." ] || [ "$(basename "$item")" = ".." ] || [ "$(basename "$item")" = "backup" ]; then
+            continue
+        fi
+        if [ -e "$item" ]; then
+            mv "$item" "$BACKUP_DIR/" 2>/dev/null || rm -rf "$item"
+        fi
+    done
+
+    echo "   已清空 data 目录，备份到: $BACKUP_DIR"
 fi
 
 echo "2. 创建新目录..."

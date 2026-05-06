@@ -1,0 +1,1 @@
+Istio 太重了，当前规模不需要 service mesh。建议先用简单的 mTLS + 服务发现就够了。

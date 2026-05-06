@@ -5,11 +5,12 @@ import "time"
 // DecisionNode 决策节点 — 与 decision-tree.md §2.1 严格对齐
 type DecisionNode struct {
 	// === 标识与内容 ===
-	SDRID         string       `json:"sdr_id" yaml:"sdr_id"`
-	GitCommitHash string       `json:"git_commit_hash" yaml:"git_commit_hash"`
-	Title         string       `json:"title" yaml:"title"`
-	Decision      string       `json:"decision" yaml:"decision"`
-	Rationale     string       `json:"rationale" yaml:"rationale"`
+	SDRID            string       `json:"sdr_id" yaml:"sdr_id"`
+	GitCommitHash    string       `json:"git_commit_hash" yaml:"git_commit_hash"`
+	PreviousCommitHash string      `json:"previous_commit_hash,omitempty" yaml:"previous_commit_hash,omitempty"`
+	Title           string       `json:"title" yaml:"title"`
+	Decision        string       `json:"decision" yaml:"decision"`
+	Rationale       string       `json:"rationale" yaml:"rationale"`
 
 	// === 树位置 ===
 	Project string `json:"project" yaml:"project"`

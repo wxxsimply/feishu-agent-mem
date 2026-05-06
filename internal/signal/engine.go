@@ -137,8 +137,9 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 			content, topics, relatedDecisionSummaries)
 			lastLLMResult = result
 		if err != nil {
-			log.Printf("[SignalEngine] LLM extraction failed: %v, falling back to heuristic", err)
-			newNode = e.createDecisionFallback(proposer, content)
+			log.Printf("[SignalEngine] LLM extraction failed: %v, skipping", err)
+			log.Println("========== SIGNAL ENGINE END ==========")
+			return nil, nil, nil
 		} else {
 			log.Printf("[SignalEngine] LLM extraction result: HasDecision=%v, Confidence=%.2f",
 				result.HasDecision, result.Confidence)
@@ -204,8 +205,9 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 			}
 		}
 	} else {
-		log.Println("[SignalEngine] LLM not available, using heuristic fallback")
-		newNode = e.createDecisionFallback(proposer, content)
+		log.Println("[SignalEngine] LLM not available, skipping")
+		log.Println("========== SIGNAL ENGINE END ==========")
+		return nil, nil, nil
 	}
 
 		// 收集反对意见（在 dedup 之前执行）
@@ -313,10 +315,8 @@ func (e *SignalActivationEngine) ProcessSignalForDocJob(sig *StateChangeSignal, 
 
 	// Step 1: LLM 提取
 	if !e.llmAgent.IsAvailable() {
-		log.Println("[SignalEngine] LLM not available, using heuristic fallback")
-		newNode := e.createDecisionFallback(proposer, content)
-		mut := e.StateMachine.CreateMutationForNewDecision(newNode, sig)
-		return mut, nil, nil
+		log.Println("[SignalEngine] LLM not available, skipping doc extraction")
+		return nil, nil, nil
 	}
 
 	log.Println("[SignalEngine] LLM is available, calling...")
@@ -347,10 +347,8 @@ func (e *SignalActivationEngine) ProcessSignalForDocJob(sig *StateChangeSignal, 
 	docResult, err := e.llmAgent.ExtractDecisionFromDocWithContext(content, topics, docType, title, relatedDecisionSummaries)
 	lastLLMResult = docResult
 	if err != nil {
-		log.Printf("[SignalEngine] LLM doc extraction failed: %v, falling back to heuristic", err)
-		newNode := e.createDecisionFallback(proposer, content)
-		mut := e.StateMachine.CreateMutationForNewDecision(newNode, sig)
-		return mut, nil, nil
+		log.Printf("[SignalEngine] LLM doc extraction failed: %v, skipping", err)
+		return nil, nil, nil
 	}
 
 	log.Printf("[SignalEngine] LLM doc extraction result: HasDecision=%v, Confidence=%.2f, ChangeType=%s",
@@ -400,6 +398,68 @@ func (e *SignalActivationEngine) ProcessSignalForDocJob(sig *StateChangeSignal, 
 
 	log.Printf("[SignalEngine] Processing %d extracted decisions", len(extractedDecisions))
 
+	// Step 2.6: 回溯检测（针对第一个决策）
+	if len(extractedDecisions) > 0 {
+		log.Println("[SignalEngine] Starting revert detection...")
+		revertDetector := llm.NewRevertDetector()
+
+		// 构建回溯检测上下文
+		newDecision := &llm.RevertDecisionInfo{
+			ID:         GenerateSDRID(),
+			Title:      extractedDecisions[0].Title,
+			Decision:   extractedDecisions[0].Decision,
+			Rationale:  extractedDecisions[0].Rationale,
+			Status:     decision.StatusPending,
+			CommitHash: "current",
+			CreateTime: time.Now(),
+		}
+
+		// 转换历史决策为回溯检测格式
+		var existingDecisions []*llm.RevertDecisionInfo
+		for _, d := range allDecisions {
+			existingDecisions = append(existingDecisions, &llm.RevertDecisionInfo{
+				ID:         d.SDRID,
+				Title:      d.Title,
+				Decision:   d.Decision,
+				Rationale:  d.Rationale,
+				Status:     d.Status,
+				CommitHash: d.GitCommitHash,
+				CreateTime: d.CreatedAt,
+			})
+		}
+
+		// 构建文档 diff（简化版）
+		docDiff := fmt.Sprintf("文档变更: %s", title)
+
+		revertCtx := &llm.RevertContext{
+			NewDecision:       newDecision,
+			ExistingDecisions: existingDecisions,
+			DocDiff:           docDiff,
+			DocTitle:          title,
+		}
+
+		// 执行回溯检测
+		revertResult, err := revertDetector.DetectRevert(revertCtx)
+		if err != nil {
+			log.Printf("[SignalEngine] Revert detection failed: %v, continuing with normal flow", err)
+		} else if revertResult.ShouldRevert && revertResult.Confidence >= 0.6 {
+			log.Printf("[SignalEngine] REVERT DETECTED: ShouldRevert=true, Confidence=%.2f", revertResult.Confidence)
+			log.Printf("[SignalEngine] Reason: %s", revertResult.Reason)
+			log.Printf("[SignalEngine] Target commit: %s", revertResult.TargetCommit)
+
+			// 创建回溯 mutation
+			mut := e.StateMachine.CreateMutationForRevert(
+				extractedDecisions[0].Title, // 使用标题作为临时标识
+				revertResult.TargetCommit,
+				revertResult.Reason,
+			)
+			log.Println("========== SIGNAL ENGINE DOC PROCESS END ==========")
+			return mut, pending, nil
+		} else {
+			log.Printf("[SignalEngine] No revert needed: ShouldRevert=%v, Confidence=%.2f", revertResult.ShouldRevert, revertResult.Confidence)
+		}
+	}
+
 	// Step 3: 逐条处理每个决策
 	var mainMutation *DecisionMutation
 	var additionalMutations []*DecisionMutation
@@ -448,17 +508,17 @@ func (e *SignalActivationEngine) ProcessSignalForDocJob(sig *StateChangeSignal, 
 			newNode.FeishuLinks.RelatedCommentIDs = appendUniqueString(newNode.FeishuLinks.RelatedCommentIDs, sig.CommentID)
 		}
 
-		// Step 3a: 同文档匹配 → 直接 update
-		if existing := e.findSameDocument(sig, allDecisions); existing != nil {
-			log.Printf("[SignalEngine] Same document match, updating existing decision %s", existing.SDRID)
-			mut := e.StateMachine.CreateMutationForUpdate(existing.SDRID, newNode, sig)
-			if mainMutation == nil {
-				mainMutation = mut
-			} else {
-				additionalMutations = append(additionalMutations, mut)
-			}
-			continue
-		}
+		// Step 3a:（已暂时禁用）同文档匹配 → 直接 update
+		// if existing := e.findSameDocument(sig, allDecisions); existing != nil {
+		// 	log.Printf("[SignalEngine] Same document match, updating existing decision %s", existing.SDRID)
+		// 	mut := e.StateMachine.CreateMutationForUpdate(existing.SDRID, newNode, sig)
+		// 	if mainMutation == nil {
+		// 		mainMutation = mut
+		// 	} else {
+		// 		additionalMutations = append(additionalMutations, mut)
+		// 	}
+		// 	continue
+		// }
 
 		// Step 3b: 跨文档匹配 → evaluateDedupAction
 		if existing := e.findSimilarDecision(newNode, sig, allDecisions); existing != nil {
@@ -542,6 +602,10 @@ func (e *SignalActivationEngine) ProcessObjections(
 		if sig != nil {
 			obj.SourceChatID = extractChatID(sig)
 			obj.SourceMessageID = sig.SignalID
+			if sig.CommentID != "" {
+				// 如果是来自评论的反对意见，保存评论 ID
+				obj.SourceCommentID = sig.CommentID
+			}
 		}
 
 		// 尝试匹配到已有决策
@@ -911,35 +975,6 @@ func (e *SignalActivationEngine) getAllTopics() []string {
 	return topics
 }
 
-func (e *SignalActivationEngine) createDecisionFallback(proposer, content string) *decision.DecisionNode {
-	newNode := decision.NewDecisionNode(
-		GenerateSDRID(),
-		"Auto-extracted decision",
-		"feishu-mem",
-		"general",
-	)
-	newNode.Status = decision.StatusPending
-	newNode.Decision = content
-	newNode.Proposer = proposer
-	newNode.Executor = extractExecutorFromSummary(content)
-	newNode.ImpactLevel = extractImpactFromSummary(content)
-	return newNode
-}
-
-// matchDecisionKeywords 使用增强型检测器进行关键词检测
-// Deprecated: 新代码应直接使用 EnhancedDetector.Analyze()
-func matchDecisionKeywords(text string) []string {
-	detector := NewEnhancedDetector()
-	result := detector.Analyze(text, nil)
-	if !result.IsDecision {
-		return nil
-	}
-	var keywords []string
-	for _, s := range result.SignalDetails {
-		keywords = append(keywords, s.Name)
-	}
-	return keywords
-}
 
 func extractSenderFromSummary(summary string) string {
 	if idx := strings.Index(summary, "] "); idx >= 0 {
@@ -1029,7 +1064,7 @@ func NewPatternMatcher() *PatternMatcher {
 // ========== 决策筛选与合并 ==========
 
 // FilterAndMergeDecisions 对提取的决策进行筛选、合并和降噪
-// 流程：硬过滤 → 相关性分组 → 组内合并
+// 流程：硬过滤 → 不合并！（暂时禁用合并逻辑，保留所有决策）
 func FilterAndMergeDecisions(decisions []llm.DecisionExtract) []llm.DecisionExtract {
 	if len(decisions) <= 1 {
 		return decisions
@@ -1041,28 +1076,9 @@ func FilterAndMergeDecisions(decisions []llm.DecisionExtract) []llm.DecisionExtr
 	filtered := hardFilterDecisions(decisions)
 	log.Printf("[Filter] After hard filter: %d decisions", len(filtered))
 
-	if len(filtered) <= 1 {
-		return filtered
-	}
-
-	// Step 2: 按 project_phase + topic 分组
-	groups := groupDecisionsByRelation(filtered)
-	log.Printf("[Filter] Grouped into %d clusters", len(groups))
-
-	// Step 3: 组内合并
-	var merged []llm.DecisionExtract
-	for _, group := range groups {
-		if len(group) == 1 {
-			merged = append(merged, group[0])
-		} else {
-			m := mergeDecisionGroup(group)
-			log.Printf("[Filter] Merged %d decisions into: %s", len(group), m.Title)
-			merged = append(merged, m)
-		}
-	}
-
-	log.Printf("[Filter] Output: %d decisions (merged from %d)", len(merged), len(filtered))
-	return merged
+	// ⚠️ 暂时禁用合并逻辑！保留所有独立决策！
+	log.Printf("[Filter] Output: %d decisions (MERGING DISABLED!)", len(filtered))
+	return filtered
 }
 
 // hardFilterDecisions 硬过滤：移除不符合决策标准的条目
@@ -1083,11 +1099,11 @@ func hardFilterDecisions(decisions []llm.DecisionExtract) []llm.DecisionExtract 
 			continue
 		}
 
-		// 规则 2: 没有依据且没有执行者的低置信度决策跳过
-		if dec.Rationale == "" && dec.Executor == "" && dec.ImpactLevel != "critical" && dec.ImpactLevel != "major" {
-			log.Printf("[Filter] Skipping low-info decision: %s", dec.Title)
-			continue
-		}
+		// 规则 2:（已暂时禁用）没有依据且没有执行者的低置信度决策跳过
+		// if dec.Rationale == "" && dec.Executor == "" && dec.ImpactLevel != "critical" && dec.ImpactLevel != "major" {
+		// 	log.Printf("[Filter] Skipping low-info decision: %s", dec.Title)
+		// 	continue
+		// }
 
 		// 规则 3: 标题匹配任务模式 → 跳过
 		titleLower := strings.ToLower(dec.Title)

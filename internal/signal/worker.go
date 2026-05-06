@@ -278,7 +278,7 @@ func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) 
 		"doc_created":          true,
 		"doc_comment_added":    true,
 	}
-	if !contentTypes[job.Change.Type] && !containsDecisionKeyword(job.Change.Summary) {
+	if !contentTypes[job.Change.Type] {
 		log.Println("[Worker] Not a document content change, skipping")
 		log.Println("========== WORKER PROCESS END ==========")
 		return result
@@ -286,10 +286,7 @@ func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) 
 
 	docToken := job.Change.EntityID
 	if docToken == "" {
-		log.Println("[Worker] No document token, falling back to keyword check")
-		if containsDecisionKeyword(job.Change.Summary) {
-			return wp.processDocFallback(job, result)
-		}
+		log.Println("[Worker] No document token, skipping")
 		log.Println("========== WORKER PROCESS END ==========")
 		return result
 	}
@@ -306,8 +303,9 @@ func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) 
 
 	content, err := docExt.FetchDocumentContent(docToken)
 	if err != nil {
-		log.Printf("[Worker] Failed to fetch doc content: %v, falling back with docToken=%s", err, docToken)
-		return wp.processDocFallback(job, result)
+		log.Printf("[Worker] Failed to fetch doc content: %v, skipping docToken=%s", err, docToken)
+		log.Println("========== WORKER PROCESS END ==========")
+		return result
 	}
 
 	title := extractDocTitleFromSummary(job.Change.Summary)
@@ -392,10 +390,7 @@ func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) 
 
 // processCalendarJob 处理 Calendar 类型任务
 func (wp *WorkerPool) processCalendarJob(job *DetectionJob, result *DecisionResult) *DecisionResult {
-	if containsDecisionKeyword(job.Change.Summary) {
-		log.Printf("[Worker] Found decision-related calendar event: %s", job.Change.Summary)
-	}
-
+	log.Printf("[Worker] Processing calendar event: %s", job.Change.Summary)
 	log.Println("========== WORKER PROCESS END ==========")
 	return result
 }
@@ -445,31 +440,10 @@ func (wp *WorkerPool) processDocComment(job *DetectionJob, result *DecisionResul
 	return result
 }
 
-// processDocFallback Docs 降级处理（内容获取失败时使用）
-func (wp *WorkerPool) processDocFallback(job *DetectionJob, result *DecisionResult) *DecisionResult {
-	sig := NewSignal(job.AdapterType, job.Change.Summary)
-	sig.PrimaryID = job.Change.EntityID // 即使内容获取失败，也要设置 docToken 用于去重
-	sig.Strength = StrengthStrong
-	sig.Context.ContentSnippet = job.Change.Summary
-	sig.CommentID = job.Change.CommentID
-
-	proposer := "文档系统"
-	// 使用 ProcessSignalForDocJob 确保 token 被保存到 FeishuLinks
-	mut, pendingMuts, err := wp.engine.ProcessSignalForDocJob(sig, proposer, job.Change.Summary, "doc", "")
-	if err != nil {
-		log.Printf("[Worker] Error processing Docs fallback signal: %v", err)
-		result.Err = err
-		return result
-	}
-	result.Mutation = mut
-	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
-	return result
-}
-
 // processWikiJob 处理 Wiki 类型任务 — 4 阶段分阶段分析
 func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) *DecisionResult {
 	// 只处理节点内容变更
-	if job.Change.Type != "updated" && job.Change.Type != "new" && !containsDecisionKeyword(job.Change.Summary) {
+	if job.Change.Type != "updated" && job.Change.Type != "new" {
 		log.Println("[Worker] Not a wiki content change, skipping")
 		log.Println("========== WORKER PROCESS END ==========")
 		return result
@@ -477,8 +451,9 @@ func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) 
 
 	nodeToken := job.Change.EntityID
 	if nodeToken == "" {
-		log.Println("[Worker] No wiki node token, falling back anyway")
-		return wp.processWikiFallback(job, result)
+		log.Println("[Worker] No wiki node token, skipping")
+		log.Println("========== WORKER PROCESS END ==========")
+		return result
 	}
 
 	// Phase 1: Context Gathering — 获取知识库节点内容
@@ -487,8 +462,9 @@ func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) 
 
 	content, err := wikiExt.FetchWikiNodeContent(nodeToken)
 	if err != nil {
-		log.Printf("[Worker] Failed to fetch wiki content: %v, falling back with nodeToken=%s", err, nodeToken)
-		return wp.processWikiFallback(job, result)
+		log.Printf("[Worker] Failed to fetch wiki content: %v, skipping nodeToken=%s", err, nodeToken)
+		log.Println("========== WORKER PROCESS END ==========")
+		return result
 	}
 
 	title := extractDocTitleFromSummary(job.Change.Summary)
@@ -548,26 +524,6 @@ func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) 
 	}
 
 	log.Println("========== WORKER PROCESS END ==========")
-	return result
-}
-
-// processWikiFallback Wiki 决策关键词降级处理
-func (wp *WorkerPool) processWikiFallback(job *DetectionJob, result *DecisionResult) *DecisionResult {
-	sig := NewSignal(job.AdapterType, job.Change.Summary)
-	sig.PrimaryID = job.Change.EntityID // 即使内容获取失败，也要设置 nodeToken 用于去重
-	sig.Strength = StrengthMedium
-	sig.Context.ContentSnippet = job.Change.Summary
-
-	proposer := "知识库系统"
-	// 使用 ProcessSignalForDocJob 确保 token 被保存到 FeishuLinks
-	mut, pendingMuts, err := wp.engine.ProcessSignalForDocJob(sig, proposer, job.Change.Summary, "wiki", "")
-	if err != nil {
-		log.Printf("[Worker] Error processing Wiki fallback signal: %v", err)
-		result.Err = err
-		return result
-	}
-	result.Mutation = mut
-	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
 	return result
 }
 

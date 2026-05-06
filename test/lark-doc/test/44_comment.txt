@@ -1,0 +1,1 @@
+反对使用 APISIX。Lua 插件开发门槛太高，团队没有 Lua 经验。建议用 Kong 或者直接 Nginx。

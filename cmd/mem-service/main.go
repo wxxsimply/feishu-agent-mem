@@ -107,10 +107,25 @@ func main() {
 	pipeline := core.NewPipelineEngine(gitStorage, bitableStore, memoryGraph)
 	signalEngine := signal.NewSignalActivationEngine(pipeline, memoryGraph)
 
+	// 初始化防抖追踪器
+	var docDebounceTracker *larkadapter.DocDebounceTracker
+	if settings.Detectors.LarkDoc.EnableDebounce {
+		docDebounceTracker = larkadapter.NewDocDebounceTracker(
+			larkadapter.StateDir(),
+			settings.Detectors.LarkDoc.DebounceWindow,
+		)
+		log.Printf("[Service] Debounce tracker enabled, window: %v", settings.Detectors.LarkDoc.DebounceWindow)
+	} else {
+		log.Println("[Service] Debounce tracker disabled")
+	}
+
 	// 初始化检测器状态
 	docExtractor := larkadapter.NewDocExtractor(larkCfg)
 	if len(settings.Detectors.LarkDoc.DocTokens) > 0 {
 		docExtractor.SetDocTokens(settings.Detectors.LarkDoc.DocTokens)
+	}
+	if docDebounceTracker != nil {
+		docExtractor.SetDebounceTracker(docDebounceTracker)
 	}
 	detectorStates := map[signal.AdapterType]*detectorState{
 		signal.AdapterIM: {
@@ -166,24 +181,8 @@ func main() {
 		filepath.Join(larkadapter.StateDir(), "detect_state.json"),
 	)
 
-	// 初始化防抖追踪器
-	var docDebounceTracker *larkadapter.DocDebounceTracker
-	if settings.Detectors.LarkDoc.EnableDebounce || settings.Detectors.LarkWiki.EnableDebounce {
-		debounceWindow := settings.Detectors.LarkDoc.DebounceWindow
-		if debounceWindow <= 0 {
-			debounceWindow = 120 * time.Second
-		}
-		docDebounceTracker = larkadapter.NewDocDebounceTracker(larkadapter.StateDir(), debounceWindow)
-		log.Printf("[Debounce] Initialized with window: %v", debounceWindow)
-
-		// 注入到 extractor
-		docExtractor.SetDebounceTracker(docDebounceTracker)
-	}
-
 	maxWorkers := max(runtime.NumCPU(), 2)
 	workerPool := signal.NewWorkerPool(signalEngine, maxWorkers)
-
-	// 将防抖追踪器注入到 worker pool 中（需要先修改 worker pool 支持）
 	if docDebounceTracker != nil {
 		workerPool.SetDebounceTracker(docDebounceTracker)
 	}
@@ -193,12 +192,21 @@ func main() {
 	log.Printf("[Service] Topics: %d", memoryGraph.TopicCount(settings.Project.Name))
 	log.Printf("[Service] MCP port: %d", settings.MCP.Port)
 
+	// 启动推送调度器
+	chatIDs := larkCfg.ChatIDs
+	var pushScheduler *push.PushScheduler
+	if len(chatIDs) > 0 {
+		pushEngine := push.NewPushEngine(memoryGraph)
+		pushScheduler = push.NewPushScheduler(pushEngine, chatIDs)
+		log.Printf("[Service] PushScheduler initialized (chats: %v)", chatIDs)
+	}
+
 	workerPool.Start()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go resultProcessor(ctx, workerPool, pipeline, workerPool.Results())
+	go resultProcessor(ctx, workerPool, pipeline, memoryGraph, pushScheduler, workerPool.Results())
 
 	// 启动状态自动更新器
 	statusUpdater := signal.NewStatusUpdater(memoryGraph, pipeline, 5*time.Minute)
@@ -229,19 +237,19 @@ func main() {
 	log.Println("[Service] Dirty flush goroutine started (interval: 5m)")
 
 	// 启动推送调度器
-	chatIDs := larkCfg.ChatIDs
-	if len(chatIDs) > 0 {
-		pushEngine := push.NewPushEngine(memoryGraph)
-		pushScheduler := push.NewPushScheduler(pushEngine, chatIDs)
+	if pushScheduler != nil {
 		go pushScheduler.Start(ctx)
 		log.Printf("[Service] PushScheduler started (chats: %v)", chatIDs)
 	}
 
-	// 初始化所有检测器的lastCheck
+	// 初始化所有检测器的lastCheck和lastDetected
 	log.Println("[Service] Initializing detector states...")
 	for _, ds := range detectorStates {
 		if ds.enabled {
 			ds.lastCheck = stateMgr.GetLastCheck(ds.detector.Name())
+			// 关键！用 LastDetected 作为实际检测变化的时间点！
+			// 只有检测到变化时才更新 LastDetected，避免跳过文档更新！
+			ds.lastCheck = stateMgr.GetLastDetected(ds.detector.Name())
 		}
 	}
 
@@ -378,16 +386,36 @@ func runSingleDetection(
 	}
 
 	detectTime := time.Now()
-	ds.lastCheck = detectTime
+
+	// 关键！LastCheck 仍然每次都更新（用于记录活跃度）
 	_ = stateMgr.UpdateLastCheck(detectorName, detectTime)
 
 	// 处理检测结果
 	if !result.HasChanges {
 		log.Printf("[Detector] %s: No changes", detectorName)
+		// 没有变化，ds.lastCheck 仍然是原来的值（LastDetected）
 		return false
 	}
 
 	log.Printf("[Detector] %s: Detected %d changes", detectorName, len(result.Changes))
+
+	// 找到最新的变化时间戳，作为新的 lastDetected
+	newestTs := int64(0)
+	for _, change := range result.Changes {
+		if change.Timestamp > newestTs {
+			newestTs = change.Timestamp
+		}
+	}
+	if newestTs == 0 {
+		newestTs = detectTime.Unix()
+	}
+	newLastDetected := time.Unix(newestTs, 0)
+
+	// 更新 lastDetected 为最新的变化时间！下次用这个作为起点继续检测！
+	ds.lastCheck = newLastDetected
+	_ = stateMgr.UpdateLastDetected(detectorName, newLastDetected)
+
+	// 现在提交任务
 	hasSubmittedChanges := false
 	for i, change := range result.Changes {
 		log.Printf("[Detector] Change %d: %s [%s]", i+1, change.Type, change.Summary)
@@ -431,6 +459,8 @@ func resultProcessor(
 	ctx context.Context,
 	_ *signal.WorkerPool,
 	pipeline *core.PipelineEngine,
+	memoryGraph *core.MemoryGraph,
+	pushScheduler *push.PushScheduler,
 	results <-chan *signal.DecisionResult,
 ) {
 	log.Println("[ResultProcessor] Started")
@@ -456,6 +486,13 @@ func resultProcessor(
 					log.Printf("[ResultProcessor] Failed to apply mutation: %v", err)
 				} else {
 					log.Printf("[ResultProcessor] Mutation applied successfully")
+					// 推送更新的决策卡片
+					if pushScheduler != nil {
+						if node, ok := memoryGraph.GetDecision(result.Mutation.SDRID); ok {
+							log.Printf("[ResultProcessor] Notifying push of decision update: %s", node.SDRID)
+							pushScheduler.NotifyDecisionUpdate(node)
+						}
+					}
 				}
 			}
 
@@ -467,6 +504,13 @@ func resultProcessor(
 					log.Printf("[ResultProcessor] Failed to apply pending mutation: %v", err)
 				} else {
 					log.Printf("[ResultProcessor] Pending mutation applied successfully")
+					// 推送更新的决策卡片
+					if pushScheduler != nil {
+						if node, ok := memoryGraph.GetDecision(pendingMut.SDRID); ok {
+							log.Printf("[ResultProcessor] Notifying push of decision update: %s", node.SDRID)
+							pushScheduler.NotifyDecisionUpdate(node)
+						}
+					}
 				}
 			}
 

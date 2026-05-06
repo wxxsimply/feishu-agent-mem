@@ -1,0 +1,5 @@
+## 2.4 CI 工具调整
+
+GitHub Actions 在构建大型 Docker 镜像时速度很慢，内网构建尤其慢。改用 Jenkins，内网有闲置服务器可以直接复用。
+
+Jenkins 的构建速度在内网环境下快很多。

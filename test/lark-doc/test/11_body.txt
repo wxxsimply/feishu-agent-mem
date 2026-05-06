@@ -1,0 +1,5 @@
+## 1.11 服务网格
+
+服务间通信采用 Istio service mesh，通过 Envoy sidecar 代理实现 mTLS 加密和流量管理。
+
+外部流量入口使用 Nginx Ingress Controller。先在 staging 环境验证，确认稳定后推到 production。

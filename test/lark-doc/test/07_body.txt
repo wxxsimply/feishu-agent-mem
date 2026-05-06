@@ -1,0 +1,5 @@
+## 1.7 CI/CD 流水线
+
+使用 GitHub Actions 作为 CI/CD 工具。代码合并到 main 后自动触发：单元测试 → 集成测试 → Docker 构建 → 推送镜像 → 部署 staging → 人工确认 → 发布 production。
+
+流水线配置文件版本化管理，放在 `.github/workflows/` 目录下。

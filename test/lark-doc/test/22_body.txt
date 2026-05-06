@@ -1,0 +1,5 @@
+## 2.6 测试框架调整
+
+testify 的 mock 模块用起来不太顺手，建议换成 gomock。gomock 可以从 interface 自动生成 mock 代码，减少手写 mock 的工作量。
+
+迁移成本不大，主要是替换断言和 mock 的写法。
