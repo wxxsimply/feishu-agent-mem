@@ -227,7 +227,7 @@ func (wp *WorkerPool) processIMJob(job *DetectionJob, result *DecisionResult) *D
 	if proposer == "" {
 		proposer = extractSenderFromSummary(change.Summary)
 	}
-	mut, _, err := wp.engine.ProcessSignalForJob(sig, proposer, content)
+	mut, pendingMuts, err := wp.engine.ProcessSignalForJob(sig, proposer, content)
 	if err != nil {
 		log.Printf("[Worker] Error processing signal: %v", err)
 		result.Err = err
@@ -235,6 +235,7 @@ func (wp *WorkerPool) processIMJob(job *DetectionJob, result *DecisionResult) *D
 	}
 
 	result.Mutation = mut
+	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
 	return result
 }
 
@@ -247,13 +248,14 @@ func (wp *WorkerPool) processVCJob(job *DetectionJob, result *DecisionResult) *D
 		sig.Context.ContentSnippet = job.Change.Summary
 
 		proposer := "会议系统"
-		mut, _, err := wp.engine.ProcessSignalForJob(sig, proposer, job.Change.Summary)
+		mut, pendingMuts, err := wp.engine.ProcessSignalForJob(sig, proposer, job.Change.Summary)
 		if err != nil {
 			log.Printf("[Worker] Error processing VC signal: %v", err)
 			result.Err = err
 			return result
 		}
 		result.Mutation = mut
+	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
 	}
 
 	log.Println("========== WORKER PROCESS END ==========")
@@ -268,6 +270,7 @@ func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) 
 		"doc_updated":          true,
 		"doc_content_updated":  true,
 		"doc_created":          true,
+		"doc_comment_added":    true,
 	}
 	if !contentTypes[job.Change.Type] && !containsDecisionKeyword(job.Change.Summary) {
 		log.Println("[Worker] Not a document content change, skipping")
@@ -304,6 +307,22 @@ func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) 
 	title := extractDocTitleFromSummary(job.Change.Summary)
 	log.Printf("[Worker] Doc content fetched: title=%s, content_len=%d", title, len(content))
 
+	// 使用 go-diff 比较内容变化，只提取变更部分
+	diffContent, diffs, _ := docExt.GetDocumentContentDiff(docToken)
+	if diffContent != "" {
+		log.Printf("[Worker] Content diff found: %d changes", len(diffs))
+		content = diffContent
+		if len(content) > 3000 {
+			content = content[:3000] + "\n...（diff已截断）"
+		}
+	} else {
+		// 首次检测（无缓存），取文档末尾部分
+		log.Printf("[Worker] No cached content, using document tail")
+		if len(content) > 3000 {
+			content = "...（文档前面已省略）\n" + content[len(content)-3000:]
+		}
+	}
+
 	// 获取文档评论（用于反对意见提取）
 	actualDocToken := docToken
 	if tok, ok := job.Change.Meta["actual_doc_token"]; ok && tok != "" {
@@ -333,20 +352,21 @@ func (wp *WorkerPool) processDocsJob(job *DetectionJob, result *DecisionResult) 
 	sig.Context.ContentSnippet = truncateForLog(content, 1000)
 	sig.Context.IsDecision = true
 
-	// 提取前 3000 字符送 LLM 分析（避免 token 超限）
+	// 提取后 3000 字符送 LLM 分析（避免 token 超限，取末尾以捕获最新变更）
 	analysisContent := content
 	if len(analysisContent) > 3000 {
-		analysisContent = analysisContent[:3000] + "\n\n...（内容已截断）"
+		analysisContent = "...（前面已截断）\n" + analysisContent[len(analysisContent)-3000:]
 	}
 
 	proposer := "文档系统"
-	mut, _, err := wp.engine.ProcessSignalForDocJob(sig, proposer, analysisContent, string(docType), title)
+	mut, pendingMuts, err := wp.engine.ProcessSignalForDocJob(sig, proposer, analysisContent, string(docType), title)
 	if err != nil {
 		log.Printf("[Worker] Error processing doc signal: %v", err)
 		result.Err = err
 		return result
 	}
 	result.Mutation = mut
+	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
 
 	log.Println("========== WORKER PROCESS END ==========")
 	return result
@@ -371,13 +391,14 @@ func (wp *WorkerPool) processTaskJob(job *DetectionJob, result *DecisionResult) 
 		sig.Context.DecisionSignals = []string{"task_done"}
 
 		proposer := "任务系统"
-		mut, _, err := wp.engine.ProcessSignalForJob(sig, proposer, job.Change.Summary)
+		mut, pendingMuts, err := wp.engine.ProcessSignalForJob(sig, proposer, job.Change.Summary)
 		if err != nil {
 			log.Printf("[Worker] Error processing Task signal: %v", err)
 			result.Err = err
 			return result
 		}
 		result.Mutation = mut
+	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
 	}
 
 	log.Println("========== WORKER PROCESS END ==========")
@@ -390,15 +411,17 @@ func (wp *WorkerPool) processDocComment(job *DetectionJob, result *DecisionResul
 	sig.PrimaryID = docToken
 	sig.Strength = StrengthMedium
 	sig.Context.ContentSnippet = job.Change.Summary
+	sig.CommentID = job.Change.CommentID
 
 	proposer := "文档系统"
-	mut, _, err := wp.engine.ProcessSignalForDocJob(sig, proposer, job.Change.Summary, "comment", "")
+	mut, pendingMuts, err := wp.engine.ProcessSignalForDocJob(sig, proposer, job.Change.Summary, "comment", "")
 	if err != nil {
 		log.Printf("[Worker] Error processing doc comment signal: %v", err)
 		result.Err = err
 		return result
 	}
 	result.Mutation = mut
+	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
 
 	log.Println("========== WORKER PROCESS END ==========")
 	return result
@@ -410,16 +433,18 @@ func (wp *WorkerPool) processDocFallback(job *DetectionJob, result *DecisionResu
 	sig.PrimaryID = job.Change.EntityID // 即使内容获取失败，也要设置 docToken 用于去重
 	sig.Strength = StrengthStrong
 	sig.Context.ContentSnippet = job.Change.Summary
+	sig.CommentID = job.Change.CommentID
 
 	proposer := "文档系统"
 	// 使用 ProcessSignalForDocJob 确保 token 被保存到 FeishuLinks
-	mut, _, err := wp.engine.ProcessSignalForDocJob(sig, proposer, job.Change.Summary, "doc", "")
+	mut, pendingMuts, err := wp.engine.ProcessSignalForDocJob(sig, proposer, job.Change.Summary, "doc", "")
 	if err != nil {
 		log.Printf("[Worker] Error processing Docs fallback signal: %v", err)
 		result.Err = err
 		return result
 	}
 	result.Mutation = mut
+	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
 	return result
 }
 
@@ -451,6 +476,29 @@ func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) 
 	title := extractDocTitleFromSummary(job.Change.Summary)
 	log.Printf("[Worker] Wiki content fetched: title=%s, content_len=%d", title, len(content))
 
+	// 使用 go-diff 比较内容变化，只提取变更部分
+	diffContent, diffs, _ := wikiExt.GetWikiNodeContentDiff(nodeToken)
+	if diffContent != "" {
+		log.Printf("[Worker] Wiki content diff found: %d changes", len(diffs))
+		content = diffContent
+		if len(content) > 3000 {
+			content = content[:3000] + "\n...（diff已截断）"
+		}
+	} else {
+		// 首次检测（无缓存），取文档末尾部分
+		log.Printf("[Worker] No cached wiki content, using tail")
+		if len(content) > 3000 {
+			content = "...（前面已截断）\n" + content[len(content)-3000:]
+		}
+	}
+	if len(content) > 0 {
+		preview := content
+		if len(preview) > 800 {
+			preview = preview[:800] + "\n...（截断）"
+		}
+		log.Printf("[Worker] Wiki analysis content preview:\n%s", preview)
+	}
+
 	// 直接送 LLM 判断，不经过本地 pattern 过滤
 	docType := classifyDocType(title, content)
 
@@ -462,18 +510,16 @@ func (wp *WorkerPool) processWikiJob(job *DetectionJob, result *DecisionResult) 
 	sig.Context.IsDecision = true
 
 	analysisContent := content
-	if len(analysisContent) > 3000 {
-		analysisContent = analysisContent[:3000] + "\n\n...（内容已截断）"
-	}
 
 	proposer := "知识库系统"
-	mut, _, err := wp.engine.ProcessSignalForDocJob(sig, proposer, analysisContent, string(docType), title)
+	mut, pendingMuts, err := wp.engine.ProcessSignalForDocJob(sig, proposer, analysisContent, string(docType), title)
 	if err != nil {
 		log.Printf("[Worker] Error processing Wiki signal: %v", err)
 		result.Err = err
 		return result
 	}
 	result.Mutation = mut
+	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
 
 	log.Println("========== WORKER PROCESS END ==========")
 	return result
@@ -488,13 +534,14 @@ func (wp *WorkerPool) processWikiFallback(job *DetectionJob, result *DecisionRes
 
 	proposer := "知识库系统"
 	// 使用 ProcessSignalForDocJob 确保 token 被保存到 FeishuLinks
-	mut, _, err := wp.engine.ProcessSignalForDocJob(sig, proposer, job.Change.Summary, "wiki", "")
+	mut, pendingMuts, err := wp.engine.ProcessSignalForDocJob(sig, proposer, job.Change.Summary, "wiki", "")
 	if err != nil {
 		log.Printf("[Worker] Error processing Wiki fallback signal: %v", err)
 		result.Err = err
 		return result
 	}
 	result.Mutation = mut
+	result.PendingMutations = append(result.PendingMutations, pendingMuts...)
 	return result
 }
 

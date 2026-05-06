@@ -15,6 +15,7 @@ import (
 	"feishu-mem/internal/core"
 	larkadapter "feishu-mem/internal/lark-adapter"
 	"feishu-mem/internal/mcp/server"
+	"feishu-mem/internal/push"
 	"feishu-mem/internal/signal"
 	"feishu-mem/internal/storage/bitable"
 	"feishu-mem/internal/storage/git"
@@ -161,8 +162,27 @@ func main() {
 		filepath.Join(larkadapter.StateDir(), "detect_state.json"),
 	)
 
+	// 初始化防抖追踪器
+	var docDebounceTracker *larkadapter.DocDebounceTracker
+	if settings.Detectors.LarkDoc.EnableDebounce || settings.Detectors.LarkWiki.EnableDebounce {
+		debounceWindow := settings.Detectors.LarkDoc.DebounceWindow
+		if debounceWindow <= 0 {
+			debounceWindow = 120 * time.Second
+		}
+		docDebounceTracker = larkadapter.NewDocDebounceTracker(larkadapter.StateDir(), debounceWindow)
+		log.Printf("[Debounce] Initialized with window: %v", debounceWindow)
+
+		// 注入到 extractor
+		docExtractor.SetDebounceTracker(docDebounceTracker)
+	}
+
 	maxWorkers := max(runtime.NumCPU(), 2)
 	workerPool := signal.NewWorkerPool(signalEngine, maxWorkers)
+
+	// 将防抖追踪器注入到 worker pool 中（需要先修改 worker pool 支持）
+	if docDebounceTracker != nil {
+		workerPool.SetDebounceTracker(docDebounceTracker)
+	}
 
 	log.Println("[Service] Running in service mode (v2 with burst mode)")
 	log.Printf("[Service] Decisions loaded: %d", memoryGraph.Count())
@@ -175,6 +195,43 @@ func main() {
 	defer cancel()
 
 	go resultProcessor(ctx, workerPool, pipeline, workerPool.Results())
+
+	// 启动状态自动更新器
+	statusUpdater := signal.NewStatusUpdater(memoryGraph, pipeline, 5*time.Minute)
+	go statusUpdater.Start(ctx)
+	log.Println("[Service] StatusUpdater started (interval: 5m)")
+
+	// 启动脏数据定期持久化（每 5 分钟把 AccessStats 变更写回 Git）
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				dirtyNodes := memoryGraph.GetDirtyAndClean()
+				for _, node := range dirtyNodes {
+					if _, err := gitStorage.WriteDecision(node); err != nil {
+						log.Printf("[Flush] Failed to persist %s: %v", node.SDRID, err)
+					}
+				}
+				if len(dirtyNodes) > 0 {
+					log.Printf("[Flush] Persisted %d dirty nodes to Git", len(dirtyNodes))
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	log.Println("[Service] Dirty flush goroutine started (interval: 5m)")
+
+	// 启动推送调度器
+	chatIDs := larkCfg.ChatIDs
+	if len(chatIDs) > 0 {
+		pushEngine := push.NewPushEngine(memoryGraph)
+		pushScheduler := push.NewPushScheduler(pushEngine, chatIDs)
+		go pushScheduler.Start(ctx)
+		log.Printf("[Service] PushScheduler started (chats: %v)", chatIDs)
+	}
 
 	// 初始化所有检测器的lastCheck
 	log.Println("[Service] Initializing detector states...")
@@ -191,7 +248,7 @@ func main() {
 			continue
 		}
 		ds := ds // 捕获变量
-		go runDetectorLoop(ctx, ds, signalEngine, stateMgr, workerPool)
+		go runDetectorLoop(ctx, ds, signalEngine, stateMgr, workerPool, docDebounceTracker)
 	}
 
 	sigChan := make(chan os.Signal, 1)
@@ -240,6 +297,7 @@ func runDetectorLoop(
 	signalEngine *signal.SignalActivationEngine,
 	stateMgr *larkadapter.StateManager,
 	workerPool *signal.WorkerPool,
+	debounceTracker *larkadapter.DocDebounceTracker,
 ) {
 	detectorName := ds.detector.Name()
 	log.Printf("[Detector] Starting loop for %s", detectorName)
@@ -253,7 +311,7 @@ func runDetectorLoop(
 		}
 
 		// 执行一次检测
-		hasChanges := runSingleDetection(ds, signalEngine, stateMgr, workerPool)
+		hasChanges := runSingleDetection(ds, signalEngine, stateMgr, workerPool, debounceTracker)
 
 		// 计算下次检测间隔
 		var nextInterval time.Duration
@@ -300,6 +358,7 @@ func runSingleDetection(
 	_ *signal.SignalActivationEngine,
 	stateMgr *larkadapter.StateManager,
 	workerPool *signal.WorkerPool,
+	debounceTracker *larkadapter.DocDebounceTracker,
 ) bool {
 	detectorName := ds.detector.Name()
 	lastCheck := ds.lastCheck
@@ -325,17 +384,43 @@ func runSingleDetection(
 	}
 
 	log.Printf("[Detector] %s: Detected %d changes", detectorName, len(result.Changes))
+	hasSubmittedChanges := false
 	for i, change := range result.Changes {
 		log.Printf("[Detector] Change %d: %s [%s]", i+1, change.Type, change.Summary)
-		job := &signal.DetectionJob{
-			AdapterType: ds.adapterType,
-			Change:      change,
-			ReceivedAt:  time.Now(),
+
+		// 如果启用了防抖，先检查文档是否可以处理
+		shouldSubmit := true
+		if debounceTracker != nil && (ds.adapterType == signal.AdapterDocs || ds.adapterType == signal.AdapterWiki) {
+			// 获取文档 token
+			docToken := change.EntityID
+			if actualToken, ok := change.Meta["actual_doc_token"]; ok && actualToken != "" {
+				docToken = actualToken
+			}
+
+			// 先通知追踪器有变更（更新 lastChange 时间）
+			contentHash, _ := change.Meta["content_hash"]
+			debounceTracker.OnDocumentChanged(docToken, contentHash)
+
+			// 检查是否可以处理
+			canProcess, reason := debounceTracker.CanProcessNow(docToken)
+			if !canProcess {
+				log.Printf("[Debounce] Skipping change %d: %s", i+1, reason)
+				shouldSubmit = false
+			}
 		}
-		workerPool.SubmitJob(job)
+
+		if shouldSubmit {
+			job := &signal.DetectionJob{
+				AdapterType: ds.adapterType,
+				Change:      change,
+				ReceivedAt:  time.Now(),
+			}
+			workerPool.SubmitJob(job)
+			hasSubmittedChanges = true
+		}
 	}
 
-	return true
+	return hasSubmittedChanges
 }
 
 func resultProcessor(

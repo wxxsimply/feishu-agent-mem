@@ -367,6 +367,38 @@ func buildDecisionFields(node *decision.DecisionNode) map[string]interface{} {
 		"access_count":    node.AccessStats.AccessCount,
 		"reference_count": node.AccessStats.ReferenceCount,
 	}
+
+	// 新增字段：决策依据、时间关联、项目阶段
+	if node.Rationale != "" {
+		fields["rationale"] = node.Rationale
+	}
+	if node.ProjectPhase != "" {
+		fields["project_phase"] = node.ProjectPhase
+	}
+	if node.DecisionTime != "" {
+		fields["decision_time"] = node.DecisionTime
+	}
+	if node.EffectiveTime != "" {
+		fields["effective_time"] = node.EffectiveTime
+	}
+	if node.Deadline != "" {
+		fields["deadline"] = node.Deadline
+	}
+	if node.DecisionType != "" {
+		fields["decision_type"] = node.DecisionType
+	}
+	if node.Phase != "" {
+		fields["phase"] = node.Phase
+	}
+
+	// 飞书关联
+	if len(node.FeishuLinks.RelatedChatIDs) > 0 {
+		fields["related_chat_ids"] = strings.Join(node.FeishuLinks.RelatedChatIDs, ",")
+	}
+	if len(node.FeishuLinks.RelatedDocTokens) > 0 {
+		fields["related_doc_tokens"] = strings.Join(node.FeishuLinks.RelatedDocTokens, ",")
+	}
+
 	if node.AccessStats.LastAccessedAt != nil {
 		fields["last_accessed_at"] = node.AccessStats.LastAccessedAt.Format("2006-01-02 15:04:05")
 	}

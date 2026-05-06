@@ -117,6 +117,9 @@ type DetectorConfig struct {
 	HeartbeatInterval    time.Duration `yaml:"heartbeat_interval"`
 	CommentCheckInterval int           `yaml:"comment_check_interval_seconds"` // 评论检测周期（秒），0=不检测
 	DocTokens    []string      `yaml:"doc_tokens"`             // 可检测评论的文档 token 白名单
+	// 防抖配置
+	DebounceWindow time.Duration `yaml:"debounce_window"` // 静默期，文档停止编辑后多久才处理
+	EnableDebounce bool          `yaml:"enable_debounce"` // 是否启用防抖
 }
 
 // StorageConfigV2 存储配置 (v2)
@@ -200,18 +203,22 @@ func DefaultSettings() *Settings {
 			},
 			LarkDoc: DetectorConfig{
 				Enabled: true,
-				Interval: 30 * time.Second,
-				BurstInterval: 5 * time.Second,
-				BurstTimeout: 1 * time.Minute,
+				Interval: 60 * time.Second,
+				BurstInterval: 10 * time.Second,
+				BurstTimeout: 5 * time.Minute,
 				HeartbeatInterval: 15 * time.Second,
 				CommentCheckInterval: 150,
+				DebounceWindow: 120 * time.Second,
+				EnableDebounce: true,
 			},
 			LarkWiki: DetectorConfig{
 				Enabled: true,
-				Interval: 30 * time.Second,
-				BurstInterval: 5 * time.Second,
-				BurstTimeout: 1 * time.Minute,
+				Interval: 60 * time.Second,
+				BurstInterval: 10 * time.Second,
+				BurstTimeout: 5 * time.Minute,
 				HeartbeatInterval: 15 * time.Second,
+				DebounceWindow: 120 * time.Second,
+				EnableDebounce: true,
 			},
 			LarkCalendar: DetectorConfig{
 				Enabled: true,

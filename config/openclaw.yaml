@@ -1,0 +1,123 @@
+# Feishu Agentic Memory Engine - OpenClaw Configuration
+# v2.0
+
+# Mem-Service 配置
+service:
+  name: "feishu-memory-service"
+  version: "2.0.0"
+  ws_port: 8765                    # WebSocket 服务端口
+  heartbeat_interval: 30s          # mem-service 心跳间隔
+  data_dir: "./data"
+  output_dir: "./outputs"
+  log_dir: "./logs"
+
+# 检测器配置
+detectors:
+  lark_im:
+    enabled: false
+    interval: 5s                    # 正常检测间隔
+    burst_interval: 5s              # 突发模式检测间隔
+    burst_timeout: 1m               # 突发模式超时时间（无新变更后恢复正常）
+    heartbeat_interval: 15s         # 检测器心跳间隔
+
+  lark_doc:
+    enabled: true
+    interval: 60s
+    burst_interval: 10s
+    burst_timeout: 5m
+    heartbeat_interval: 15s
+    comment_check_interval_seconds: 30
+    debounce_window: 120s
+    enable_debounce: true
+    doc_tokens:
+      - "L6u3wlmQbisSivkEOsWczAkXnrt"
+
+  lark_wiki:
+    enabled: false
+    interval: 60s
+    burst_interval: 10s
+    burst_timeout: 5m
+    heartbeat_interval: 15s
+    debounce_window: 120s
+    enable_debounce: true
+
+  lark_calendar:
+    enabled: false
+    interval: 1m
+    burst_interval: 10s
+    burst_timeout: 1m
+    heartbeat_interval: 15s
+
+  lark_task:
+    enabled: false
+    interval: 10s
+    burst_interval: 5s
+    burst_timeout: 1m
+    heartbeat_interval: 15s
+
+  lark_vc:
+    enabled: false
+    interval: 30s
+    burst_interval: 5s
+    burst_timeout: 1m
+    heartbeat_interval: 15s
+
+  lark_contact:
+    enabled: false
+    interval: 1m
+    burst_interval: 30s
+    burst_timeout: 1m
+    heartbeat_interval: 30s
+
+# 存储配置
+storage:
+  git_path: "./data/git"
+  bitable_enabled: true
+
+# LLM 配置
+llm:
+  enabled: true
+  extract_prompt: "extraction"
+  doc_extract_prompt: "extraction_doc"
+
+# 日志配置
+log:
+  level: "info"       # debug | info | warn | error
+  format: "text"
+
+# 旧格式兼容（仅保留用于兼容性）
+project:
+  name: "feishu-mem"
+  topics:
+    - "general"
+    - "system"
+  phases:
+    - "initial"
+
+lark_cli:
+  bin: "lark-cli"
+  default_identity: "user"
+
+git:
+  work_dir: "./data"
+  remote: ""
+  auto_push: false
+  branch: "main"
+
+bitable:
+  base_token: "NnnMb5mWJaBJkXsHf69cIpfMn8b"
+  tables:
+    decision: "tblEBXkSxaqxnY6l"
+    topic: ""
+
+mcp:
+  port: 37777
+  register_path: "~/.openclaw/openclaw.json"
+
+memory:
+  preload_on_start: true
+  max_cache_size: 1000
+  dirty_flush_interval_seconds: 300
+
+polling:
+  interval: 5s

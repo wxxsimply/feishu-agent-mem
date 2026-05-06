@@ -289,18 +289,45 @@ func (mg *MemoryGraph) GetRelatedDecisions(sdrID string) []*decision.DecisionNod
 	return result
 }
 
-// UpdateAccessStats 更新访问统计
+// UpdateAccessStats 更新访问统计（标记为脏，等待持久化）
 func (mg *MemoryGraph) UpdateAccessStats(sdrID string) error {
 	mg.mu.Lock()
 	defer mg.mu.Unlock()
 
 	if d, ok := mg.decisions[sdrID]; ok {
-		now := time.Now()
-		d.AccessStats.LastAccessedAt = &now
-		d.AccessStats.AccessCount++
+		d.AccessStats.RecordAccess()
+		mg.dirtyDecisions[sdrID] = struct{}{}
 		return nil
 	}
 	return fmt.Errorf("decision not found: %s", sdrID)
+}
+
+// RecordReference 记录决策被引用（标记为脏，等待持久化）
+func (mg *MemoryGraph) RecordReference(sdrID string) error {
+	mg.mu.Lock()
+	defer mg.mu.Unlock()
+
+	if d, ok := mg.decisions[sdrID]; ok {
+		d.AccessStats.RecordReference()
+		mg.dirtyDecisions[sdrID] = struct{}{}
+		return nil
+	}
+	return fmt.Errorf("decision not found: %s", sdrID)
+}
+
+// GetDirtyAndClean 获取脏决策列表并清除脏标记
+func (mg *MemoryGraph) GetDirtyAndClean() []*decision.DecisionNode {
+	mg.mu.Lock()
+	defer mg.mu.Unlock()
+
+	var result []*decision.DecisionNode
+	for sdrID := range mg.dirtyDecisions {
+		if d, ok := mg.decisions[sdrID]; ok {
+			result = append(result, d)
+		}
+	}
+	mg.dirtyDecisions = make(map[string]struct{})
+	return result
 }
 
 // GetDecisionsByHotScore 按热点值获取决策（从高到低）

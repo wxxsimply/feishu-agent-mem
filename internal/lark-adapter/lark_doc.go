@@ -23,7 +23,8 @@ type DocExtractor struct {
 	commentCheckEvery   int                // 每 N 次检测扫描一次评论（默认 5）
 	lastCommentCheck    int64              // 上次检查评论时的 Unix 时间戳
 	processedCommentIDs map[string]bool     // 已处理的评论 ID
-	docTokensWhitelist    []string           // 白名单：只检测这些 token 的文档（秒），用于评论新增判断
+	docTokensWhitelist  []string           // 白名单：只检测这些 token 的文档（秒），用于评论新增判断
+	debounceTracker     *DocDebounceTracker // 防抖追踪器
 }
 
 // NewDocExtractor 创建云文档提取器
@@ -58,6 +59,12 @@ func (e *DocExtractor) SetCommentCheckInterval(seconds int) {
 		e.commentCheckEvery = cycles
 		log.Printf("[lark_doc] Comment check interval set to every %d cycles (~%ds)", cycles, cycles*30)
 	}
+}
+
+// SetDebounceTracker 设置防抖追踪器
+func (e *DocExtractor) SetDebounceTracker(tracker *DocDebounceTracker) {
+	e.debounceTracker = tracker
+	log.Printf("[lark_doc] Debounce tracker enabled with window: %v", tracker.debounceWindow)
 }
 
 // Name 实现 Extractor 接口
@@ -401,6 +408,13 @@ func (e *DocExtractor) parseSearchItemToChange(item map[string]any) Change {
 	if actualDocToken != "" {
 		meta["actual_doc_token"] = actualDocToken
 	}
+
+	// // 如果有 actual_doc_token，说明这是一个 wiki 节点
+	// // wiki 节点由 lark-wiki 专门处理，lark-doc 跳过避免冲突
+	// if actualDocToken != "" {
+	// 	log.Printf("[lark_doc] Skipping wiki node %s (actual doc: %s), handled by lark-wiki", token, actualDocToken)
+	// 	return Change{} // 返回空 change，会被上层过滤掉
+	// }
 
 	return Change{
 		Type:       changeType,
