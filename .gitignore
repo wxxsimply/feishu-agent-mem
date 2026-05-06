@@ -46,3 +46,13 @@ scripts/package-lock.json
 .env
 .VSCodeCounter/
 outputs/
+
+.txt
+benchmarks/
+evaldata/
+.log
+mem-service
+mem-service.pid
+
+webhooks.md
+

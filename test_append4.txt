@@ -1,0 +1,11 @@
+
+## 技术决策：日志监控方案
+
+经过团队讨论，决定采用 Grafana Loki + Promtail 作为日志监控方案。主要原因是 Loki 的资源消耗远低于 EFK，且与现有的 Prometheus + Grafana 监控栈集成更方便。
+
+实施计划：
+1. 本周内完成 Loki 部署
+2. 下周一前完成 Promtail 配置
+3. 下周三前完成 Grafana 日志看板
+
+负责人：刘洋

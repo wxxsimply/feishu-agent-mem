@@ -136,7 +136,8 @@ func (e *IMExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 		lastCheck = now
 	}
 
-	cutoff := lastCheck.Unix()
+	// 缓冲60秒，避免 create_time 精确到分钟时与 lastCheck 相同而被跳过
+	cutoff := lastCheck.Add(-60 * time.Second).Unix()
 
 	// 1. 检测群聊消息
 	for _, rawChatID := range e.config.DetectChatIDs {
@@ -473,7 +474,7 @@ func parseMessageTime(timeStr string) int64 {
 		"2006-01-02T15:04:05-07:00",
 	}
 	for _, f := range formats {
-		if t, err := time.Parse(f, timeStr); err == nil {
+		if t, err := time.ParseInLocation(f, timeStr, time.Local); err == nil {
 			return t.Unix()
 		}
 	}

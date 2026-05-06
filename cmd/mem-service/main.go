@@ -423,6 +423,14 @@ func runSingleDetection(
 	}
 	newLastDetected := time.Unix(newestTs, 0)
 
+	// 确保 last_detected 不会被设置成未来时间
+	now := time.Now()
+	if newLastDetected.After(now) {
+		log.Printf("[Detector] %s: newLastDetected (%v) is in future, using now instead",
+			detectorName, newLastDetected)
+		newLastDetected = now
+	}
+
 	// 更新 lastDetected 为最新的变化时间！下次用这个作为起点继续检测！
 	ds.lastCheck = newLastDetected
 	_ = stateMgr.UpdateLastDetected(detectorName, newLastDetected)
