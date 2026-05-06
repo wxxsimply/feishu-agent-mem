@@ -740,12 +740,9 @@ func (e *SignalActivationEngine) findSimilarDecision(
 	log.Printf("[SignalEngine] Checking %d existing decisions for duplicates...", len(allDecisions))
 
 	for _, existing := range allDecisions {
-		log.Printf("[SignalEngine] Comparing with: SDRID=%s, Title=%s, DocTokens=%v",
-			existing.SDRID, existing.Title, existing.FeishuLinks.RelatedDocTokens)
+		// 规则1：同文档匹配由 caller 提前处理
 
-		// 规则1（已移至 findSameDocument）：同文档匹配由 caller 提前处理，不在此处做冲突判断
-
-		// 规则2：Doc/Wiki 降级匹配 — 标题相似（跨文档匹配，可能触发冲突检测）
+		// 规则2：Doc/Wiki 降级匹配 — 标题相似
 		if sig.Adapter == AdapterDocs || sig.Adapter == AdapterWiki {
 			if e.hasSimilarTitle(newNode, existing) {
 				log.Printf("[SignalEngine] Found decision with SIMILAR TITLE (cross-document)!")
@@ -753,7 +750,7 @@ func (e *SignalActivationEngine) findSimilarDecision(
 			}
 		}
 
-		// 规则3：Wiki 同主题匹配（跨文档匹配，可能触发冲突检测）
+		// 规则3：Wiki 同主题匹配
 		if sig.Adapter == AdapterWiki {
 			if e.isSameTopicWikiDocument(newNode, existing) {
 				log.Printf("[SignalEngine] Found decision from SAME TOPIC (Wiki)!")
@@ -761,7 +758,29 @@ func (e *SignalActivationEngine) findSimilarDecision(
 			}
 		}
 
-		// 规则4：不同文档 → 不去重
+		// 规则4：IM/通用消息 — 标题或决策内容重叠（包含/被包含关系）
+		// 用于轮询检测时的去重：同一段聊天内容在多个轮询周期中提取出的相似决策
+		{
+			existingTitle := strings.TrimSpace(existing.Title)
+			newTitle := strings.TrimSpace(newNode.Title)
+			existingDecision := strings.TrimSpace(existing.Decision)
+			newDecision := strings.TrimSpace(newNode.Decision)
+
+			// 标题互相包含
+			titleMatch := existingTitle != "" && newTitle != "" &&
+				(strings.Contains(existingTitle, newTitle) || strings.Contains(newTitle, existingTitle))
+			// 决策内容互相包含
+			decisionMatch := existingDecision != "" && newDecision != "" &&
+				(strings.Contains(existingDecision, newDecision) || strings.Contains(newDecision, existingDecision))
+
+			if titleMatch || decisionMatch {
+				log.Printf("[SignalEngine] Found overlapping decision: %s vs %s (titleMatch=%v, decisionMatch=%v)",
+					existing.SDRID, newNode.Title, titleMatch, decisionMatch)
+				return existing
+			}
+		}
+
+		// 规则5：不同文档 → 不去重
 	}
 	log.Printf("[SignalEngine] No similar decision found.")
 	return nil

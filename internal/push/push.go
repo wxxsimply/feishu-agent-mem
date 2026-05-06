@@ -1,9 +1,11 @@
 package push
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,10 +23,15 @@ type PushEngine struct {
 	cardRender *card.Renderer
 	cli        *larkadapter.LarkCLI
 
-	// 推送防重
+	// 推送防重（基于 SDRID，24h 冷却）
 	pushedMu         sync.Mutex
 	pushedDecisions  map[string]time.Time // sdr_id → 最后推送时间
 	pushCooldown     time.Duration        // 同一决策的推送冷却期
+
+	// 内容去重（基于决策内容 hash，5min 冷却）
+	contentMu         sync.Mutex
+	recentPushedHash  map[string]time.Time // content_hash → 最后推送时间
+	contentCooldown   time.Duration
 }
 
 // NewPushEngine 创建推送引擎
@@ -36,20 +43,29 @@ func NewPushEngine(memory *core.MemoryGraph) *PushEngine {
 		cli:             larkadapter.NewLarkCLI(),
 		pushedDecisions: make(map[string]time.Time),
 		pushCooldown:    24 * time.Hour,
+		recentPushedHash: make(map[string]time.Time),
+		contentCooldown: 5 * time.Minute,
 	}
 }
 
 // PushDecisionCard 推送单个决策卡片到飞书群聊
 func (pe *PushEngine) PushDecisionCard(chatID string, sdrID string) (string, error) {
-	// 检查推送防重
-	if !pe.canPush(sdrID) {
-		log.Printf("[Push] Skipping %s: recently pushed", sdrID)
-		return "", nil
-	}
-
 	d, ok := pe.memory.GetDecision(sdrID)
 	if !ok {
 		return "", fmt.Errorf("decision not found: %s", sdrID)
+	}
+
+	// 基于 SDRID 的推送防重（24h 冷却）
+	if !pe.canPush(sdrID) {
+		log.Printf("[Push] Skipping %s: recently pushed (SDRID cooldown)", sdrID)
+		return "", nil
+	}
+
+	// 基于决策内容的推送去重（5min 冷却）
+	contentHash := pe.decisionContentHash(d)
+	if !pe.canPushContent(contentHash) {
+		log.Printf("[Push] Skipping %s: similar content recently pushed", sdrID)
+		return "", nil
 	}
 
 	hotScore := pe.recall.CalculateHotScore(d)
@@ -64,6 +80,7 @@ func (pe *PushEngine) PushDecisionCard(chatID string, sdrID string) (string, err
 	}
 
 	pe.markPushed(sdrID)
+	pe.markPushedContent(contentHash)
 	log.Printf("[Push] Sent decision card %s to chat %s", sdrID, chatID)
 	return cardContent, nil
 }
@@ -265,11 +282,43 @@ func (pe *PushEngine) canPush(sdrID string) bool {
 	return time.Since(lastPush) > pe.pushCooldown
 }
 
-// markPushed 标记已推送
+// markPushed 标记已推送（基于 SDRID）
 func (pe *PushEngine) markPushed(sdrID string) {
 	pe.pushedMu.Lock()
 	defer pe.pushedMu.Unlock()
 	pe.pushedDecisions[sdrID] = time.Now()
+}
+
+// decisionContentHash 基于决策内容生成 hash 用于内容去重
+func (pe *PushEngine) decisionContentHash(d *decision.DecisionNode) string {
+	// 用 Title + Decision 的主体内容生成 hash
+	content := strings.TrimSpace(d.Title) + "|" + strings.TrimSpace(d.Decision)
+	// 取前 200 字即可，足够区分不同决策
+	runes := []rune(content)
+	if len(runes) > 200 {
+		content = string(runes[:200])
+	}
+	h := sha256.Sum256([]byte(content))
+	return fmt.Sprintf("%x", h[:16]) // 取前 16 字节，足够区分
+}
+
+// canPushContent 检查基于内容的推送去重
+func (pe *PushEngine) canPushContent(contentHash string) bool {
+	pe.contentMu.Lock()
+	defer pe.contentMu.Unlock()
+
+	lastPush, exists := pe.recentPushedHash[contentHash]
+	if !exists {
+		return true
+	}
+	return time.Since(lastPush) > pe.contentCooldown
+}
+
+// markPushedContent 标记内容已推送
+func (pe *PushEngine) markPushedContent(contentHash string) {
+	pe.contentMu.Lock()
+	defer pe.contentMu.Unlock()
+	pe.recentPushedHash[contentHash] = time.Now()
 }
 
 // getRecentlyCompleted 获取最近完成的决策
