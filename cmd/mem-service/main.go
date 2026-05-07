@@ -198,6 +198,7 @@ func main() {
 	var pushScheduler *push.PushScheduler
 	if len(chatIDs) > 0 {
 		pushEngine := push.NewPushEngine(memoryGraph)
+		pipeline.ConflictNotifier = pushEngine
 		pushScheduler = push.NewPushScheduler(pushEngine, chatIDs)
 		log.Printf("[Service] PushScheduler initialized (chats: %v)", chatIDs)
 	}
@@ -405,7 +406,8 @@ func runSingleDetection(
 	// 处理检测结果
 	if !result.HasChanges {
 		log.Printf("[Detector] %s: No changes", detectorName)
-		// 没有变化，ds.lastCheck 仍然是原来的值（LastDetected）
+		// 没有变化时推进 lastCheck，避免下次轮询空转
+		ds.lastCheck = detectTime
 		return false
 	}
 

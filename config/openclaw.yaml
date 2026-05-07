@@ -14,14 +14,14 @@ service:
 # 检测器配置
 detectors:
   lark_im:
-    enabled: false
-    interval: 5s                    # 正常检测间隔
+    enabled: true
+    interval: 10s                    # 正常检测间隔
     burst_interval: 5s              # 突发模式检测间隔
     burst_timeout: 1m               # 突发模式超时时间（无新变更后恢复正常）
     heartbeat_interval: 15s         # 检测器心跳间隔
 
   lark_doc:
-    enabled: true
+    enabled: false
     interval: 10s
     burst_interval: 5s
     burst_timeout: 2m
@@ -30,7 +30,7 @@ detectors:
     debounce_window: 120s
     enable_debounce: true
     doc_tokens:
-      - "CKCtduQ03o7mSTx7KdJcGZJqnrb"
+      - "UxJZwA218iXVPjkL0nbcXFDWnSd"
   lark_wiki:
     enabled: false
     interval: 60s

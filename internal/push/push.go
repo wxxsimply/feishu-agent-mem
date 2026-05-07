@@ -190,6 +190,31 @@ func (pe *PushEngine) DailySummary(chatID string) (string, error) {
 	return summaryCard, nil
 }
 
+// NotifyConflict 实现 core.ConflictNotifier 接口
+// 当决策冲突需要用户确认时，推送冲突解决卡片到群聊
+func (pe *PushEngine) NotifyConflict(nodeA, nodeB *decision.DecisionNode, reason string) {
+	chatIDs := pe.getChatIDs()
+	if len(chatIDs) == 0 {
+		log.Printf("[Push] No chat IDs configured for conflict notification")
+		return
+	}
+	for _, chatID := range chatIDs {
+		if _, err := pe.PushConflictResolutionCard(chatID, nodeA, nodeB, reason); err != nil {
+			log.Printf("[Push] Failed to push conflict card to %s: %v", chatID, err)
+		}
+	}
+}
+
+// getChatIDs 获取推送目标群聊列表
+func (pe *PushEngine) getChatIDs() []string {
+	// 从配置加载
+	cfg := larkadapter.LoadConfig()
+	if len(cfg.ChatIDs) > 0 {
+		return cfg.ChatIDs
+	}
+	return nil
+}
+
 // NotifyDecisionUpdate 通知有决策更新，触发相关推送
 func (pe *PushEngine) NotifyDecisionUpdate(chatIDs []string, node *decision.DecisionNode) {
 	log.Printf("[Push] Notified of decision update: %s (%s)", node.SDRID, node.Title)
@@ -340,6 +365,26 @@ func truncateStr(s string, maxLen int) string {
 		return s
 	}
 	return string(runes[:maxLen]) + "..."
+}
+
+// PushConflictResolutionCard 推送冲突解决卡片到飞书群聊
+// 展示两个冲突决策，用户可选择保留哪一个
+func (pe *PushEngine) PushConflictResolutionCard(chatID string, nodeA, nodeB *decision.DecisionNode, reason string) (string, error) {
+	if chatID == "" {
+		return "", fmt.Errorf("chatID is empty")
+	}
+
+	cardContent, err := pe.cardRender.RenderConflictResolutionCard(nodeA, nodeB, reason)
+	if err != nil {
+		return "", fmt.Errorf("render conflict card failed: %w", err)
+	}
+
+	if err := pe.sendToFeishu(chatID, cardContent); err != nil {
+		return "", fmt.Errorf("send conflict card failed: %w", err)
+	}
+
+	log.Printf("[Push] Sent conflict resolution card to %s: %s vs %s", chatID, nodeA.SDRID, nodeB.SDRID)
+	return cardContent, nil
 }
 
 // RenderCardJSON 渲染决策为飞书卡片 JSON（供外部调用）

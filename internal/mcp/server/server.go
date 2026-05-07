@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -188,6 +189,31 @@ func (s *MemoryMCPServer) registerTools() {
 		Name:        "revert_decision",
 		Description: "回溯决策到指定版本",
 	}, s.handleRevertDecision)
+
+	mcp.AddTool(s.sdkServer, &mcp.Tool{
+		Name:        "confirm_decision",
+		Description: "确认决策（将 pending_confirmation 状态改为 decided）",
+	}, s.handleConfirmDecision)
+
+	mcp.AddTool(s.sdkServer, &mcp.Tool{
+		Name:        "reject_decision",
+		Description: "拒绝决策（将 pending_confirmation 状态改为 rejected）",
+	}, s.handleRejectDecision)
+
+	mcp.AddTool(s.sdkServer, &mcp.Tool{
+		Name:        "resolve_conflict",
+		Description: "解决决策冲突 - 用户选择保留一个决策，另一个标记为 superseded",
+	}, s.handleResolveConflict)
+
+	mcp.AddTool(s.sdkServer, &mcp.Tool{
+		Name:        "extract_and_create",
+		Description: "从文本提取决策并持久化到系统（含去重和冲突检测）",
+	}, s.handleExtractAndCreate)
+
+	mcp.AddTool(s.sdkServer, &mcp.Tool{
+		Name:        "refresh",
+		Description: "从 Git 重新加载所有决策到内存（MCP 启动后新写入的决策需要刷新才能查询到）",
+	}, s.handleRefresh)
 }
 
 type searchArgs struct {
@@ -306,6 +332,26 @@ type decisionHistoryArgs struct {
 	SdrID   string `json:"sdr_id" jsonschema:"决策ID"`
 	Project string `json:"project,omitempty" jsonschema:"项目名称，默认为feishu-mem"`
 	Topic   string `json:"topic,omitempty" jsonschema:"议题名称，默认为general"`
+}
+
+type confirmDecisionArgs struct {
+	SdrID string `json:"sdr_id" jsonschema:"决策ID"`
+}
+
+type rejectDecisionArgs struct {
+	SdrID string `json:"sdr_id" jsonschema:"决策ID"`
+}
+
+type resolveConflictArgs struct {
+	WinnerSdrID string `json:"winner_sdr_id" jsonschema:"胜者决策ID（将保留）"`
+	LoserSdrID  string `json:"loser_sdr_id" jsonschema:"败者决策ID（将被标记为superseded）"`
+	Reason      string `json:"reason,omitempty" jsonschema:"解决原因"`
+}
+
+type extractAndCreateArgs struct {
+	Content  string   `json:"content" jsonschema:"待分析的文本内容"`
+	Topics   []string `json:"topics" jsonschema:"候选议题"`
+	Proposer string   `json:"proposer,omitempty" jsonschema:"提出人"`
 }
 
 type revertDecisionArgs struct {
@@ -596,6 +642,10 @@ func (s *MemoryMCPServer) handleRelatedDecisions(ctx context.Context, req *mcp.C
 	var related []*decision.DecisionNode
 	if s.memoryGraph != nil {
 		related = s.memoryGraph.GetRelatedDecisions(args.SdrID)
+		// 记录访问
+		for _, r := range related {
+			_ = s.memoryGraph.UpdateAccessStats(r.SDRID)
+		}
 	}
 
 	text := fmt.Sprintf("## 与 %s 相关的决策\n\n", args.SdrID)
@@ -707,6 +757,9 @@ func (s *MemoryMCPServer) handleDecisionCard(ctx context.Context, req *mcp.CallT
 		}, emptyResult{}, nil
 	}
 
+	// 记录访问
+	_ = s.memoryGraph.UpdateAccessStats(args.SdrID)
+
 	text := fmt.Sprintf("## 决策卡片: %s\n\n", d.Title)
 	text += fmt.Sprintf("- **SDR ID**: %s\n", d.SDRID)
 	text += fmt.Sprintf("- **议题**: %s\n", d.Topic)
@@ -744,6 +797,11 @@ func (s *MemoryMCPServer) handleFulltextSearch(ctx context.Context, req *mcp.Cal
 	var results []*decision.DecisionNode
 	if s.memoryGraph != nil {
 		results = s.memoryGraph.SearchByKeywords(args.Query, "")
+	}
+
+	// 记录访问
+	for _, r := range results {
+		_ = s.memoryGraph.UpdateAccessStats(r.SDRID)
 	}
 
 	text := fmt.Sprintf("## 全文搜索: %s\n\n", args.Query)
@@ -1235,6 +1293,11 @@ func (s *MemoryMCPServer) handleDecisionHistory(ctx context.Context, req *mcp.Ca
 		topic = "general"
 	}
 
+	// 记录访问
+	if s.memoryGraph != nil {
+		_ = s.memoryGraph.UpdateAccessStats(args.SdrID)
+	}
+
 	history, err := s.gitStorage.GetDecisionHistory(project, topic, args.SdrID)
 	if err != nil {
 		text += "获取历史失败: " + err.Error()
@@ -1260,10 +1323,347 @@ func (s *MemoryMCPServer) handleDecisionHistory(ctx context.Context, req *mcp.Ca
 }
 
 func (s *MemoryMCPServer) handleRevertDecision(ctx context.Context, req *mcp.CallToolRequest, args revertDecisionArgs) (*mcp.CallToolResult, emptyResult, error) {
-	text := fmt.Sprintf("## 回溯决策 %s 到版本 %s\n\n", args.SdrID, args.TargetCommit)
-	text += fmt.Sprintf("原因: %s\n\n", args.Reason)
-	text += "⚠️ 注意: 此功能需要通过 PipelineEngine 执行，当前 MCP 工具未集成完整的 Pipeline 依赖。\n"
-	text += "请使用 mem-service 内部的状态机来执行回溯操作。"
+	if args.SdrID == "" || args.TargetCommit == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "请提供 sdr_id 和 target_commit"}},
+		}, emptyResult{}, nil
+	}
+
+	// 从内存图获取当前决策的 project 和 topic
+	project := "feishu-mem"
+	topic := "general"
+	if existingNode, ok := s.memoryGraph.GetDecision(args.SdrID); ok {
+		project = existingNode.Project
+		topic = existingNode.Topic
+	}
+
+	// 读取目标提交时的决策
+	targetNode, err := s.gitStorage.ReadDecisionAtCommit(project, topic, args.SdrID, args.TargetCommit)
+	if err != nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("读取目标版本失败: %v", err)}},
+		}, emptyResult{}, nil
+	}
+
+	// 读取当前版本（用于保存 previous commit hash）
+	currentNode, err := s.gitStorage.ReadDecision(project, topic, args.SdrID)
+	if err == nil {
+		targetNode.PreviousCommitHash = currentNode.GitCommitHash
+	}
+
+	// 用目标提交的内容写入新版本（不覆盖历史，新增 commit）
+	hash, err := s.gitStorage.WriteDecision(targetNode)
+	if err != nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Git写入失败: %v", err)}},
+		}, emptyResult{}, nil
+	}
+	targetNode.GitCommitHash = hash
+
+	// 更新内存图
+	s.memoryGraph.UpsertDecision(targetNode, targetNode.Project)
+
+	text := fmt.Sprintf("## ✅ 回溯成功\n\n- **决策**: %s (%s)\n- **目标版本**: %s\n- **新提交**: %s\n- **原因**: %s\n",
+		targetNode.Title, args.SdrID, args.TargetCommit[:7], hash[:7], args.Reason)
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: text}},
+	}, emptyResult{}, nil
+}
+
+func (s *MemoryMCPServer) handleConfirmDecision(ctx context.Context, req *mcp.CallToolRequest, args confirmDecisionArgs) (*mcp.CallToolResult, emptyResult, error) {
+	if args.SdrID == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "请提供 sdr_id"}},
+		}, emptyResult{}, nil
+	}
+
+	d, found := s.memoryGraph.GetDecision(args.SdrID)
+	if !found || d == nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("未找到决策: %s", args.SdrID)}},
+		}, emptyResult{}, nil
+	}
+
+	if d.Status != decision.StatusPendingConfirmation {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("决策 %s 当前状态为 %s，无需确认", args.SdrID, d.Status)}},
+		}, emptyResult{}, nil
+	}
+
+	d.Status = decision.StatusDecided
+	now := time.Now()
+	d.DecidedAt = &now
+
+	if s.memoryGraph != nil {
+		s.memoryGraph.UpsertDecision(d, "")
+	}
+	if s.gitStorage != nil {
+		if _, err := s.gitStorage.WriteDecision(d); err != nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("❌ 确认失败: %v", err)}},
+			}, emptyResult{}, nil
+		}
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("✅ 决策已确认: %s (%s)", d.Title, d.SDRID)}},
+	}, emptyResult{}, nil
+}
+
+func (s *MemoryMCPServer) handleRejectDecision(ctx context.Context, req *mcp.CallToolRequest, args rejectDecisionArgs) (*mcp.CallToolResult, emptyResult, error) {
+	if args.SdrID == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "请提供 sdr_id"}},
+		}, emptyResult{}, nil
+	}
+
+	d, found := s.memoryGraph.GetDecision(args.SdrID)
+	if !found || d == nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("未找到决策: %s", args.SdrID)}},
+		}, emptyResult{}, nil
+	}
+
+	if d.Status != decision.StatusPendingConfirmation {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("决策 %s 当前状态为 %s，无法拒绝", args.SdrID, d.Status)}},
+		}, emptyResult{}, nil
+	}
+
+	d.Status = decision.StatusRejected
+
+	if s.memoryGraph != nil {
+		s.memoryGraph.UpsertDecision(d, "")
+	}
+	if s.gitStorage != nil {
+		if _, err := s.gitStorage.WriteDecision(d); err != nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("❌ 拒绝失败: %v", err)}},
+			}, emptyResult{}, nil
+		}
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("✅ 决策已拒绝: %s (%s)", d.Title, d.SDRID)}},
+	}, emptyResult{}, nil
+}
+
+func (s *MemoryMCPServer) handleResolveConflict(ctx context.Context, req *mcp.CallToolRequest, args resolveConflictArgs) (*mcp.CallToolResult, emptyResult, error) {
+	if args.WinnerSdrID == "" || args.LoserSdrID == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "请提供 winner_sdr_id 和 loser_sdr_id"}},
+		}, emptyResult{}, nil
+	}
+
+	winner, found := s.memoryGraph.GetDecision(args.WinnerSdrID)
+	if !found || winner == nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("未找到胜者决策: %s", args.WinnerSdrID)}},
+		}, emptyResult{}, nil
+	}
+
+	loser, found := s.memoryGraph.GetDecision(args.LoserSdrID)
+	if !found || loser == nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("未找到败者决策: %s", args.LoserSdrID)}},
+		}, emptyResult{}, nil
+	}
+
+	// 确认两个决策之间存在冲突关系
+	hasConflict := false
+	for _, rel := range winner.Relations {
+		if rel.Type == decision.RelationConflictsWith && rel.TargetSDRID == args.LoserSdrID {
+			hasConflict = true
+			break
+		}
+	}
+	for _, rel := range loser.Relations {
+		if rel.Type == decision.RelationConflictsWith && rel.TargetSDRID == args.WinnerSdrID {
+			hasConflict = true
+			break
+		}
+	}
+
+	if !hasConflict {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("决策 %s 和 %s 之间不存在冲突关系", args.WinnerSdrID, args.LoserSdrID)}},
+		}, emptyResult{}, nil
+	}
+
+	// 移除 loser 的冲突关系，添加 SUPERSEDES 关系
+	var newLoserRelations []decision.Relation
+	for _, rel := range loser.Relations {
+		if !(rel.Type == decision.RelationConflictsWith && rel.TargetSDRID == args.WinnerSdrID) {
+			newLoserRelations = append(newLoserRelations, rel)
+		}
+	}
+	newLoserRelations = append(newLoserRelations, decision.Relation{
+		Type:        decision.RelationSupersedes,
+		TargetSDRID: args.WinnerSdrID,
+		Description: fmt.Sprintf("Resolved by user: %s", args.Reason),
+	})
+	loser.Relations = newLoserRelations
+	loser.Status = decision.StatusSuperseded
+
+	// 移除 winner 的冲突关系
+	var newWinnerRelations []decision.Relation
+	for _, rel := range winner.Relations {
+		if !(rel.Type == decision.RelationConflictsWith && rel.TargetSDRID == args.LoserSdrID) {
+			newWinnerRelations = append(newWinnerRelations, rel)
+		}
+	}
+	winner.Relations = newWinnerRelations
+
+	// 写入 Git 和 MemoryGraph
+	if s.memoryGraph != nil {
+		s.memoryGraph.UpsertDecision(winner, "")
+		s.memoryGraph.UpsertDecision(loser, "")
+	}
+	if s.gitStorage != nil {
+		if _, err := s.gitStorage.WriteDecision(winner); err != nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("保存胜者决策失败: %v", err)}},
+			}, emptyResult{}, nil
+		}
+		if _, err := s.gitStorage.WriteDecision(loser); err != nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("保存败者决策失败: %v", err)}},
+			}, emptyResult{}, nil
+		}
+	}
+
+	text := fmt.Sprintf("## ✅ 冲突已解决\n\n- **胜者**: %s (%s)\n- **败者**: %s (%s) → superseded\n- **原因**: %s\n",
+		winner.Title, winner.SDRID, loser.Title, loser.SDRID, args.Reason)
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: text}},
+	}, emptyResult{}, nil
+}
+
+func (s *MemoryMCPServer) handleRefresh(ctx context.Context, req *mcp.CallToolRequest, args emptyArgs) (*mcp.CallToolResult, emptyResult, error) {
+	project := "feishu-mem"
+	if s.memoryGraph != nil && s.gitStorage != nil {
+		before := s.memoryGraph.Count()
+		if err := s.memoryGraph.LoadFromGit(s.gitStorage, project); err != nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("刷新失败: %v", err)}},
+			}, emptyResult{}, nil
+		}
+		after := s.memoryGraph.Count()
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("✅ 刷新完成: %d → %d 个决策", before, after)}},
+		}, emptyResult{}, nil
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "内存图或 Git 存储未初始化"}},
+	}, emptyResult{}, nil
+}
+
+func (s *MemoryMCPServer) handleExtractAndCreate(ctx context.Context, req *mcp.CallToolRequest, args extractAndCreateArgs) (*mcp.CallToolResult, emptyResult, error) {
+	if args.Content == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "请提供 content"}},
+		}, emptyResult{}, nil
+	}
+
+	if !s.llmAgent.IsAvailable() {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "LLM不可用，无法提取决策"}},
+		}, emptyResult{}, nil
+	}
+
+	// 1. LLM 提取
+	topics := args.Topics
+	if len(topics) == 0 {
+		// 尝试从现有议题中推断
+		if s.memoryGraph != nil {
+			topics = s.memoryGraph.ListAllTopics("")
+		}
+	}
+	result, err := s.llmAgent.ExtractDecision(args.Content, topics)
+	if err != nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("提取失败: %v", err)}},
+		}, emptyResult{}, nil
+	}
+
+	if !result.HasDecision || result.Confidence < 0.6 || result.Decision == nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("未检测到有效决策（置信度: %.2f）", result.Confidence)}},
+		}, emptyResult{}, nil
+	}
+
+	// 2. 构建 DecisionNode
+	d := decision.NewDecisionNode(
+		signal.GenerateSDRID(),
+		result.Decision.Title,
+		"feishu-mem",
+		result.Decision.SuggestedTopic,
+	)
+	d.Decision = result.Decision.Decision
+	d.Rationale = result.Decision.Rationale
+	d.Proposer = args.Proposer
+	if d.Proposer == "" {
+		d.Proposer = result.Decision.Proposer
+	}
+	d.Executor = result.Decision.Executor
+	d.ImpactLevel = decision.ImpactLevel(result.Decision.ImpactLevel)
+
+	// 低置信度设为待确认状态
+	if result.Confidence < 0.8 {
+		d.Status = decision.StatusPendingConfirmation
+	} else {
+		d.Status = decision.StatusPending
+	}
+
+	// 3. 去重检测：搜索相似决策
+	var existingDecision *decision.DecisionNode
+	if s.memoryGraph != nil {
+		allDecisions := s.memoryGraph.GetAllDecisions()
+		for _, existing := range allDecisions {
+			// 标题或决策内容包含关系
+			titleMatch := existing.Title != "" && d.Title != "" &&
+				(strings.Contains(existing.Title, d.Title) || strings.Contains(d.Title, existing.Title))
+			decisionMatch := existing.Decision != "" && d.Decision != "" &&
+				(strings.Contains(existing.Decision, d.Decision) || strings.Contains(d.Decision, existing.Decision))
+			if titleMatch || decisionMatch {
+				existingDecision = existing
+				break
+			}
+		}
+	}
+
+	dedupInfo := ""
+	if existingDecision != nil {
+		dedupInfo = fmt.Sprintf("\n\n⚠️ **检测到相似决策**: %s (%s)\n可以删除后重新创建，或使用 resolve_conflict 处理冲突。",
+			existingDecision.Title, existingDecision.SDRID)
+	}
+
+	// 4. 持久化
+	if s.memoryGraph != nil {
+		s.memoryGraph.UpsertDecision(d, "")
+	}
+	commitHash := ""
+	if s.gitStorage != nil {
+		hash, err := s.gitStorage.WriteDecision(d)
+		if err != nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("❌ 持久化失败: %v", err)}},
+			}, emptyResult{}, nil
+		}
+		commitHash = hash[:7]
+	}
+
+	text := fmt.Sprintf("## ✅ 决策已创建\n\n- **标题**: %s\n- **SDR ID**: %s\n- **议题**: %s\n- **置信度**: %.2f\n- **状态**: %s\n- **Git提交**: %s%s",
+		d.Title, d.SDRID, d.Topic, result.Confidence, d.Status, commitHash, dedupInfo)
+
+	if result.HasObjections && len(result.Objections) > 0 {
+		text += "\n\n### 提取到的反对意见\n"
+		for _, obj := range result.Objections {
+			text += fmt.Sprintf("- %s: %s\n", obj.Objector, obj.ObjectionContent)
+		}
+	}
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: text}},

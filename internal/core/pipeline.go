@@ -8,11 +8,17 @@ import (
 	"feishu-mem/internal/signal"
 )
 
+// ConflictNotifier 冲突通知接口
+type ConflictNotifier interface {
+	NotifyConflict(nodeA, nodeB *decision.DecisionNode, reason string)
+}
+
 // PipelineEngine 流程引擎
 type PipelineEngine struct {
-	GitStorage   GitStorageInterface
-	BitableStore BitableStoreInterface
-	MemoryGraph  *MemoryGraph
+	GitStorage       GitStorageInterface
+	BitableStore     BitableStoreInterface
+	MemoryGraph      *MemoryGraph
+	ConflictNotifier ConflictNotifier // 冲突时推送卡片通知用户
 }
 
 // GitStorageInterface Git 存储接口
@@ -278,8 +284,12 @@ func (pe *PipelineEngine) applyConflictKeepBoth(mut *signal.DecisionMutation) er
 
 	pe.MemoryGraph.UpsertDecision(mut.Node, mut.Node.Project)
 
-	// MCP 通知占位
-	NotifyConflictViaMCP(mut.SDRID, mut.ConflictSDRID, mut.ConflictReason)
+	// 推送冲突通知（卡片 -> 飞书群聊）
+	if pe.ConflictNotifier != nil && mut.ConflictSDRID != "" {
+		if existingNode, ok := pe.MemoryGraph.GetDecision(mut.ConflictSDRID); ok && existingNode != nil {
+			pe.ConflictNotifier.NotifyConflict(existingNode, mut.Node, mut.ConflictReason)
+		}
+	}
 	return nil
 }
 

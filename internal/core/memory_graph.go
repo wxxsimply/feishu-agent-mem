@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -233,13 +234,16 @@ type Conflict struct {
 	ContradictionScore float64
 }
 
-// SearchByKeywords 按关键词搜索
+// SearchByKeywords 按关键词搜索活跃决策
 func (mg *MemoryGraph) SearchByKeywords(query, topic string) []*decision.DecisionNode {
 	mg.mu.RLock()
 	defer mg.mu.RUnlock()
 
 	var result []*decision.DecisionNode
 	for _, d := range mg.decisions {
+		if !d.IsActive() {
+			continue
+		}
 		if topic != "" && d.Topic != topic {
 			continue
 		}
@@ -315,6 +319,31 @@ func (mg *MemoryGraph) RecordReference(sdrID string) error {
 	return fmt.Errorf("decision not found: %s", sdrID)
 }
 
+// RecalculateHotScore 重新计算决策热点值并及时生效
+// 每次决策被引用或访问时调用，确保热点值实时反映讨论活跃度
+func (mg *MemoryGraph) RecalculateHotScore(sdrID string) error {
+	mg.mu.Lock()
+	defer mg.mu.Unlock()
+
+	if d, ok := mg.decisions[sdrID]; ok {
+		refScore := math.Min(100, float64(d.AccessStats.ReferenceCount)*20)
+		accessScore := math.Min(100, float64(d.AccessStats.AccessCount)*15)
+		relationScore := math.Min(100, float64(len(d.Relations))*25)
+		// 加权计算：reference 占 40%，access 占 20%，relation 占 15%
+		// 剩余 25% 为基础值（新决策基础值 = 25，老决策会随时间衰减）
+		baseScore := math.Min(25, 25-math.Max(0, float64(time.Since(d.CreatedAt).Hours()/24)*1.5))
+		hotScore := refScore*0.40 + accessScore*0.20 + relationScore*0.15 + baseScore
+		hotScore = math.Max(0, math.Min(100, hotScore))
+
+		d.AccessStats.HotScore = hotScore
+		now := time.Now()
+		d.AccessStats.LastCalculated = &now
+		mg.dirtyDecisions[sdrID] = struct{}{}
+		return nil
+	}
+	return fmt.Errorf("decision not found: %s", sdrID)
+}
+
 // GetDirtyAndClean 获取脏决策列表并清除脏标记
 func (mg *MemoryGraph) GetDirtyAndClean() []*decision.DecisionNode {
 	mg.mu.Lock()
@@ -330,14 +359,15 @@ func (mg *MemoryGraph) GetDirtyAndClean() []*decision.DecisionNode {
 	return result
 }
 
-// GetDecisionsByHotScore 按热点值获取决策（从高到低）
+// GetDecisionsByHotScore 按热点值获取活跃决策（从高到低）
+// 已弃用/已拒绝/已搁置等非活跃决策不参与排序
 func (mg *MemoryGraph) GetDecisionsByHotScore(minScore float64) []*decision.DecisionNode {
 	mg.mu.RLock()
 	defer mg.mu.RUnlock()
 
 	var result []*decision.DecisionNode
 	for _, d := range mg.decisions {
-		if d.AccessStats.HotScore >= minScore {
+		if d.IsActive() && d.AccessStats.HotScore >= minScore {
 			result = append(result, d)
 		}
 	}
@@ -354,14 +384,14 @@ func (mg *MemoryGraph) GetDecisionsByHotScore(minScore float64) []*decision.Deci
 	return result
 }
 
-// GetRecentDecisions 获取最近的决策
+// GetRecentDecisions 获取最近的活跃决策
 func (mg *MemoryGraph) GetRecentDecisions(since time.Time) []*decision.DecisionNode {
 	mg.mu.RLock()
 	defer mg.mu.RUnlock()
 
 	var result []*decision.DecisionNode
 	for _, d := range mg.decisions {
-		if d.CreatedAt.After(since) {
+		if d.IsActive() && d.CreatedAt.After(since) {
 			result = append(result, d)
 		}
 	}

@@ -57,6 +57,102 @@ func (r *Renderer) RenderLarkCardFromNode(node *decision.DecisionNode, hotScore 
 	return r.RenderLarkCard(card)
 }
 
+// RenderConflictResolutionCard 渲染冲突解决卡片
+// 展示两个冲突决策，提供"保留A"和"保留B"两个操作按钮
+func (r *Renderer) RenderConflictResolutionCard(
+	nodeA, nodeB *decision.DecisionNode,
+	reason string,
+) (string, error) {
+	cardContent := larkCardContent{
+		Header: larkCardHeader{
+			Title: larkCardText{
+				Tag:     "plain_text",
+				Content: "⚠️ 决策冲突需要确认",
+			},
+			Template: "red",
+		},
+		Elements: []interface{}{
+			larkCardDiv{
+				Tag: "div",
+				Text: larkCardText{
+					Tag:     "lark_md",
+					Content: fmt.Sprintf("检测到以下两个决策存在冲突：\n%s\n请选择保留哪一个。", reason),
+				},
+			},
+			larkCardHr{Tag: "hr"},
+			// 决策 A
+			larkCardDiv{
+				Tag: "div",
+				Fields: []larkCardField{
+					{IsShort: true, Text: larkCardText{Tag: "lark_md", Content: fmt.Sprintf("**📌 A: %s**", nodeA.Title)}},
+					{IsShort: true, Text: larkCardText{Tag: "lark_md", Content: fmt.Sprintf("**📊 影响**: %s", nodeA.ImpactLevel)}},
+				},
+			},
+			larkCardDiv{
+				Tag: "div",
+				Text: larkCardText{
+					Tag:     "lark_md",
+					Content: fmt.Sprintf("**决策内容**: %s", truncateStr(nodeA.Decision, 200)),
+				},
+			},
+			// 决策 B
+			larkCardDiv{
+				Tag: "div",
+				Fields: []larkCardField{
+					{IsShort: true, Text: larkCardText{Tag: "lark_md", Content: fmt.Sprintf("**📌 B: %s**", nodeB.Title)}},
+					{IsShort: true, Text: larkCardText{Tag: "lark_md", Content: fmt.Sprintf("**📊 影响**: %s", nodeB.ImpactLevel)}},
+				},
+			},
+			larkCardDiv{
+				Tag: "div",
+				Text: larkCardText{
+					Tag:     "lark_md",
+					Content: fmt.Sprintf("**决策内容**: %s", truncateStr(nodeB.Decision, 200)),
+				},
+			},
+			larkCardHr{Tag: "hr"},
+			// 操作按钮
+			larkCardAction{
+				Tag: "action",
+				Actions: []larkCardButton{
+					{
+						Tag:  "button",
+						Text: larkCardText{Tag: "plain_text", Content: "✅ 保留 A"},
+						Type: "primary",
+						Value: map[string]interface{}{
+							"action":     "conflict_resolve",
+							"winner_sdr": nodeA.SDRID,
+							"loser_sdr":  nodeB.SDRID,
+						},
+					},
+					{
+						Tag:  "button",
+						Text: larkCardText{Tag: "plain_text", Content: "✅ 保留 B"},
+						Type: "primary",
+						Value: map[string]interface{}{
+							"action":     "conflict_resolve",
+							"winner_sdr": nodeB.SDRID,
+							"loser_sdr":  nodeA.SDRID,
+						},
+					},
+				},
+			},
+			larkCardNote{
+				Tag: "note",
+				Elements: []larkCardText{
+					{Tag: "plain_text", Content: "选择保留一个后，另一个将被标记为 superseded。也可通过 resolve_conflict MCP 工具处理。"},
+				},
+			},
+		},
+	}
+
+	data, err := json.Marshal(cardContent)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
 // RenderDailySummary 渲染每日摘要卡片
 func (r *Renderer) RenderDailySummary(
 	date time.Time,
@@ -267,6 +363,14 @@ func (r *Renderer) buildCardElements(node *decision.DecisionNode, hotScore float
 	})
 
 	return elements
+}
+
+func truncateStr(s string, maxLen int) string {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen]) + "..."
 }
 
 func (r *Renderer) getStatusTemplate(status decision.DecisionStatus) string {

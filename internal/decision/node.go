@@ -84,15 +84,16 @@ const (
 type DecisionStatus string
 
 const (
-	StatusPending      DecisionStatus = "pending"
-	StatusInDiscussion DecisionStatus = "in_discussion"
-	StatusDecided      DecisionStatus = "decided"
-	StatusExecuting    DecisionStatus = "executing"
-	StatusCompleted    DecisionStatus = "completed"
-	StatusShelved      DecisionStatus = "shelved"
-	StatusRejected     DecisionStatus = "rejected"
-	StatusSuperseded  DecisionStatus = "superseded"
-	StatusDeprecated  DecisionStatus = "deprecated"
+	StatusPending              DecisionStatus = "pending"
+	StatusInDiscussion         DecisionStatus = "in_discussion"
+	StatusDecided              DecisionStatus = "decided"
+	StatusExecuting            DecisionStatus = "executing"
+	StatusCompleted            DecisionStatus = "completed"
+	StatusShelved              DecisionStatus = "shelved"
+	StatusRejected             DecisionStatus = "rejected"
+	StatusSuperseded           DecisionStatus = "superseded"
+	StatusDeprecated           DecisionStatus = "deprecated"
+	StatusPendingConfirmation DecisionStatus = "pending_confirmation"
 )
 
 // VersionRange 版本范围
@@ -161,7 +162,7 @@ func NewDecisionNode(sdrID, title, project, topic string) *DecisionNode {
 // IsActive 检查决策是否处于活动状态
 func (d *DecisionNode) IsActive() bool {
 	switch d.Status {
-	case StatusPending, StatusInDiscussion, StatusDecided, StatusExecuting:
+	case StatusPending, StatusPendingConfirmation, StatusInDiscussion, StatusDecided, StatusExecuting:
 		return true
 	default:
 		return false
@@ -171,7 +172,7 @@ func (d *DecisionNode) IsActive() bool {
 // IsValid 检查状态是否有效
 func (s DecisionStatus) IsValid() bool {
 	switch s {
-	case StatusPending, StatusInDiscussion, StatusDecided, StatusExecuting,
+	case StatusPending, StatusPendingConfirmation, StatusInDiscussion, StatusDecided, StatusExecuting,
 		StatusCompleted, StatusShelved, StatusRejected, StatusSuperseded, StatusDeprecated:
 		return true
 	default:
