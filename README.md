@@ -13,10 +13,6 @@
 LARK_APP_ID=cli_xxxxxxxxxxxxxxxx
 LARK_APP_SECRET=xxxxxxxxxxxxxxxxxxxxxxxx
 
-# LLM API（必填，二选一）
-DASHSCOPE_API_KEY=sk-xxxxx          # 通义千问
-DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-# 或
 DEEPSEEK_API_KEY=sk-xxxxx           # DeepSeek
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
