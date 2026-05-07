@@ -8,11 +8,17 @@ import (
 	"feishu-mem/internal/signal"
 )
 
+// ConflictNotifier 冲突通知接口
+type ConflictNotifier interface {
+	NotifyConflict(nodeA, nodeB *decision.DecisionNode, reason string)
+}
+
 // PipelineEngine 流程引擎
 type PipelineEngine struct {
-	GitStorage   GitStorageInterface
-	BitableStore BitableStoreInterface
-	MemoryGraph  *MemoryGraph
+	GitStorage       GitStorageInterface
+	BitableStore     BitableStoreInterface
+	MemoryGraph      *MemoryGraph
+	ConflictNotifier ConflictNotifier // 冲突时推送卡片通知用户
 }
 
 // GitStorageInterface Git 存储接口
@@ -251,17 +257,42 @@ func (pe *PipelineEngine) applyConflictMerge(mut *signal.DecisionMutation) error
 	return nil
 }
 
-// applyConflictKeepBoth — LLM 无法解决冲突，保留双方
+// applyConflictKeepBoth — LLM 无法解决冲突，保留双方（各自分支标记冲突）
 func (pe *PipelineEngine) applyConflictKeepBoth(mut *signal.DecisionMutation) error {
 	if mut.Node == nil {
 		return fmt.Errorf("node is required for keep_both mutation")
 	}
 
+	// 1. 写入新决策（自动创建其分支）
 	hash, err := pe.GitStorage.WriteDecision(mut.Node)
 	if err != nil {
-		return fmt.Errorf("git write conflict failed: %w", err)
+		return fmt.Errorf("git write new decision failed: %w", err)
 	}
 	mut.Node.GitCommitHash = hash
+
+	// 2. 标记已存在的决策为冲突状态
+	if mut.ConflictSDRID != "" {
+		if existingNode, ok := pe.MemoryGraph.GetDecision(mut.ConflictSDRID); ok && existingNode != nil {
+			existingNode.SetConflict(mut.SDRID)
+			if _, err := pe.GitStorage.WriteDecision(existingNode); err != nil {
+				log.Printf("[Pipeline] failed to mark conflict on %s: %v", mut.ConflictSDRID, err)
+			} else {
+				log.Printf("[Pipeline] Marked conflict on %s -> %s", mut.ConflictSDRID, mut.SDRID)
+			}
+		}
+
+		// 3. 标记新决策也为冲突状态
+		freshNode, err := pe.GitStorage.ReadDecision(mut.Node.Project, mut.Node.Topic, mut.SDRID)
+		if err == nil && freshNode != nil {
+			freshNode.SetConflict(mut.ConflictSDRID)
+			if _, err := pe.GitStorage.WriteDecision(freshNode); err != nil {
+				log.Printf("[Pipeline] failed to mark conflict on %s: %v", mut.SDRID, err)
+			} else {
+				log.Printf("[Pipeline] Marked conflict on %s -> %s", mut.SDRID, mut.ConflictSDRID)
+			}
+			mut.Node = freshNode
+		}
+	}
 
 	log.Printf("[Pipeline] ⚠️ CONFLICT %s vs %s: %s", mut.SDRID, mut.ConflictSDRID, mut.ConflictReason)
 
@@ -278,8 +309,12 @@ func (pe *PipelineEngine) applyConflictKeepBoth(mut *signal.DecisionMutation) er
 
 	pe.MemoryGraph.UpsertDecision(mut.Node, mut.Node.Project)
 
-	// MCP 通知占位
-	NotifyConflictViaMCP(mut.SDRID, mut.ConflictSDRID, mut.ConflictReason)
+	// 推送冲突通知（卡片 -> 飞书群聊）
+	if pe.ConflictNotifier != nil && mut.ConflictSDRID != "" {
+		if existingNode, ok := pe.MemoryGraph.GetDecision(mut.ConflictSDRID); ok && existingNode != nil {
+			pe.ConflictNotifier.NotifyConflict(existingNode, mut.Node, mut.ConflictReason)
+		}
+	}
 	return nil
 }
 
@@ -357,7 +392,7 @@ func (pe *PipelineEngine) ValidateDecision(node *decision.DecisionNode) []string
 	return issues
 }
 
-// applyRevert 执行回溯到指定版本
+// applyRevert 执行回溯到指定版本（在历史决策分支上提交新版本）
 func (pe *PipelineEngine) applyRevert(mut *signal.DecisionMutation) error {
 	// 从内存图获取当前决策的 project 和 topic
 	project := "feishu-mem"
@@ -376,16 +411,35 @@ func (pe *PipelineEngine) applyRevert(mut *signal.DecisionMutation) error {
 	// 读取当前版本（用于保存 previous commit hash）
 	currentNode, err := pe.GitStorage.ReadDecision(project, topic, mut.SDRID)
 	if err == nil {
-		// 在目标节点保存上一版本的 commit hash
 		targetNode.PreviousCommitHash = currentNode.GitCommitHash
+		// 版本跳跃: target.version = current.version + 1
+		targetNode.Version = currentNode.Version + 1
 	}
 
-	// 用目标提交的内容写入新版本（不覆盖历史，新增 commit）
+	// 确保 targetNode 有正确的 branch 设置
+	if targetNode.Branch == "" || targetNode.Branch == "main" {
+		targetNode.Branch = decision.BranchPrefixDecision + targetNode.SDRID
+	}
+
+	// 设置当前决策为 superseded
+	if currentNode != nil {
+		currentNode.Status = decision.StatusSuperseded
+		currentNode.AddRelation(decision.RelationSupersedes, targetNode.SDRID,
+			fmt.Sprintf("reverted to commit %s", mut.TargetCommitHash))
+		if _, err := pe.GitStorage.WriteDecision(currentNode); err != nil {
+			log.Printf("[Pipeline] failed to mark superseded on %s: %v", mut.SDRID, err)
+		}
+	}
+
+	// 用目标提交的内容写入新版本（在目标决策的分支上提交）
 	hash, err := pe.GitStorage.WriteDecision(targetNode)
 	if err != nil {
 		return fmt.Errorf("git write failed: %w", err)
 	}
 	targetNode.GitCommitHash = hash
+
+	log.Printf("[Pipeline] Reverted decision %s to commit %s, new version=%d",
+		mut.SDRID, mut.TargetCommitHash, targetNode.Version)
 
 	// 同步 Bitable
 	if pe.BitableStore != nil {
@@ -400,7 +454,9 @@ func (pe *PipelineEngine) applyRevert(mut *signal.DecisionMutation) error {
 
 	// 更新内存图
 	pe.MemoryGraph.UpsertDecision(targetNode, targetNode.Project)
+	if currentNode != nil {
+		pe.MemoryGraph.UpsertDecision(currentNode, currentNode.Project)
+	}
 
-	log.Printf("[Pipeline] Reverted decision %s to commit %s", mut.SDRID, mut.TargetCommitHash)
 	return nil
 }

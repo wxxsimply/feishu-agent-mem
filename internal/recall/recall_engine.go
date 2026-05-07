@@ -117,6 +117,9 @@ func (e *RecallEngine) GetForgottenDecisions(threshold float64) []*DecisionCard 
 
 	var results []*DecisionCard
 	for _, node := range e.memory.GetAllDecisions() {
+		if !node.IsActive() {
+			continue
+		}
 		hotScore := e.calculator.Calculate(node)
 		if hotScore < threshold {
 			results = append(results, e.wrapCardWithScore(node, RecallForgotten, hotScore))
@@ -176,6 +179,9 @@ func (e *RecallEngine) GetHotDecisions(minScore float64, limit int) []*DecisionC
 
 	var results []*DecisionCard
 	for _, node := range e.memory.GetAllDecisions() {
+		if !node.IsActive() {
+			continue
+		}
 		hotScore := e.calculator.Calculate(node)
 		if hotScore >= minScore {
 			results = append(results, e.wrapCardWithScore(node, RecallExact, hotScore))

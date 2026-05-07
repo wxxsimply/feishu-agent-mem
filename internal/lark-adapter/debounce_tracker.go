@@ -51,17 +51,17 @@ func (t *DocDebounceTracker) OnDocumentChanged(docToken string, contentHash stri
 		state = &DocEditState{
 			DocToken:      docToken,
 			FirstDetected: now,
+			LastChange:    now,
 			IsStaged:      false,
 		}
 		t.states[docToken] = state
 	}
 
-	state.LastChange = now
-
-	// 如果内容哈希变化了，重置 staged 状态
+	// 只有内容哈希真正变化时，才重置防抖时间和 staged 状态
 	if contentHash != "" && state.ContentHash != contentHash {
 		state.IsStaged = false
 		state.ContentHash = contentHash
+		state.LastChange = now
 	}
 
 	_ = t.save()
@@ -133,6 +133,23 @@ func (t *DocDebounceTracker) GetAllStates() map[string]*DocEditState {
 		result[k] = &copy
 	}
 	return result
+}
+
+// GetReadyDocs 获取已过静默期但尚未处理的文档
+func (t *DocDebounceTracker) GetReadyDocs() []string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	var ready []string
+	for docToken, state := range t.states {
+		if state.IsStaged {
+			continue
+		}
+		if time.Since(state.LastChange) >= t.debounceWindow {
+			ready = append(ready, docToken)
+		}
+	}
+	return ready
 }
 
 func (t *DocDebounceTracker) load() error {
