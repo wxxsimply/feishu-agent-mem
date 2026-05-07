@@ -384,7 +384,7 @@ func (gs *GitStorage) ReadDecisionFromBranch(branch, sdrID string) (*decision.De
 		return nil, fmt.Errorf("ls-tree on %s failed: %w", branch, err)
 	}
 	for _, line := range strings.Split(output, "\n") {
-		line = strings.TrimSpace(line)
+		line = strings.Trim(line, "\" \t\r\n")
 		if strings.HasSuffix(line, "/"+sdrID+".md") {
 			content, err := gs.cli.ReadFileAtCommit(line, branch)
 			if err != nil {

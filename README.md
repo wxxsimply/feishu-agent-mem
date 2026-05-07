@@ -1,6 +1,97 @@
 # Feishu Memory Agent
 
-飞书群聊/文档决策记忆系统。自动检测 IM 消息和文档变更中的决策信息，提取结构化记录，Git 持久化，飞书卡片推送。
+飞书群聊/文档决策记忆系统。自动检测 IM 消息和文档变更中的决策信息，提取结构化记录，Git 分支持久化，飞书卡片推送，OpenClaw MCP 查询。
+
+## 快速开始
+
+### 1. 环境配置
+
+复制 `.env.example` 为 `.env`，填入飞书应用凭证：
+
+```bash
+# 飞书应用凭证（必填）
+LARK_APP_ID=cli_xxxxxxxxxxxxxxxx
+LARK_APP_SECRET=xxxxxxxxxxxxxxxxxxxxxxxx
+
+# LLM API（必填，二选一）
+DASHSCOPE_API_KEY=sk-xxxxx          # 通义千问
+DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+# 或
+DEEPSEEK_API_KEY=sk-xxxxx           # DeepSeek
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
+
+# 飞书群聊（检测与推送）
+LARK_CHAT_IDS=oc_xxxxx              # 推送目标群
+LARK_DETECT_CHAT_IDS=oc_xxxxx       # 检测源群（不填则用 LARK_CHAT_IDS）
+
+# MCP Server 注册路径（供 OpenClaw 发现）
+MCP_REGISTER_PATH=~/.openclaw/openclaw.json
+```
+
+### 2. 启动 mem-service（全功能模式）
+
+```bash
+# 编译
+go build -o bin/mem-service ./cmd/mem-service/main.go
+
+# 启动（后台运行）
+./bin/mem-service &
+
+# 查看日志
+tail -f logs/app.log
+```
+
+mem-service 启动后会：
+- 以 5-10s 间隔轮询飞书群聊消息
+- 自动检测并提取决策 → Git 持久化 → 飞书卡片推送
+- 同时启动 MCP Server（端口 37777）供 OpenClaw 连接
+- 同时启动 WebSocket Server（端口 8765）供独立检测器连接
+
+### 3. 启动 mcp-server（仅查询模式）
+
+```bash
+# 编译
+go build -o bin/mcp-server ./cmd/mcp-server/main.go
+
+# 启动（stdio 模式，供 OpenClaw 或 MCP 客户端使用）
+./bin/mcp-server
+```
+
+mcp-server 启动后通过 stdin/stdout 暴露 30+ MCP 工具。OpenClaw 配置示例：
+
+```json
+{
+  "mcpServers": {
+    "feishu-mem": {
+      "command": "/root/openclaw-workspace/feishu-agent-mem/bin/mcp-server"
+    }
+  }
+}
+```
+
+### 4. Docker 内快速重启
+
+```bash
+# 一键编译 + 重启 mem-service
+docker exec openclaw-zh bash -c 'cd /root/openclaw-workspace/feishu-agent-mem && \
+  pkill -f mem-service 2>/dev/null; sleep 1; \
+  go build -o bin/mem-service ./cmd/mem-service/main.go && \
+  ./bin/mem-service & echo "✅ 已启动"'
+```
+
+## 环境变量参考
+
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `LARK_APP_ID` | ✅ | 飞书应用 ID |
+| `LARK_APP_SECRET` | ✅ | 飞书应用 Secret |
+| `DASHSCOPE_API_KEY` | ✅* | 通义千问 API Key（与 DeepSeek 二选一） |
+| `DEEPSEEK_API_KEY` | ✅* | DeepSeek API Key |
+| `DEEPSEEK_MODEL` | | 模型名，默认 `deepseek-chat` |
+| `LARK_CHAT_IDS` | ✅ | 推送目标群聊 ID（逗号分隔） |
+| `LARK_DETECT_CHAT_IDS` | | 检测源群聊 ID（不填则用 LARK_CHAT_IDS） |
+| `CONFIG_PATH` | | 配置文件路径，默认 `config/openclaw.yaml` |
 
 ## 数据模型
 
@@ -12,8 +103,12 @@ type DecisionNode struct {
     Rationale   string        // 决策依据
     Project     string        // 项目
     Topic       string        // 议题（位置锚点）
-    Status      DecisionStatus // pending / pending_confirmation / decided / superseded / rejected / deprecated
-    ImpactLevel ImpactLevel   // advisory / minor / major / critical
+    Branch      string        // Git 分支 decision/DEC-xxx
+    Version     int           // 版本号（分支 commits 数）
+    Status      DecisionStatus // pending | pending_confirmation | decided | superseded | rejected | deprecated
+    ConflictStatus string     // "" | "active" | "resolved"
+    ConflictWith   string     // 冲突对端 SDRID
+    ImpactLevel ImpactLevel   // advisory | minor | major | critical
     Relations   []Relation    // 关系图：DEPENDS_ON | SUPERSEDES | CONFLICTS_WITH
     Proposer    string        // 提出人
     Executor    string        // 执行人
@@ -25,8 +120,8 @@ type DecisionNode struct {
 
 ```
 外部源 → 检测器 → 工作池 → 信号引擎 → 状态机 → 管线引擎 → Git + Bitable + 内存图
-                                                                        ↓
-                                                                   MCP Server → OpenClaw Agent
+                                                                       ↓
+                                                                  MCP Server → OpenClaw Agent
 ```
 
 ### 核心流程
@@ -47,34 +142,44 @@ findSimilarDecision → Token重叠匹配(CJK分词 + 英文完整匹配)
   → evaluateDedupAction → LLM: skip / update / conflict
     → resolveConflict → LLM: merge / keep_both
 ```
-Token 重叠: matchCount ≥ 3 且比例 ≥ 60%，准确率 100%（10 组测试 vs LLM 80%）
+Token 重叠: matchCount ≥ 3 且比例 ≥ 60%
 
 **4. 持久化** — `internal/core/pipeline.go` → `internal/storage/git/git_storage.go`
-```
-applyCreate     → Git WriteDecision + MemoryGraph UpsertDecision
-applyUpdate     → Git WriteDecision(覆盖文件, 新commit)
-applyStatusChange → Git WriteDecision + MemoryGraph UpsertDecision
-applyConflictMerge → Git WriteDecision + Bitable 清理冲突
-applyConflictKeepBoth → Git WriteDecision(新SDRID) + Bitable 双向冲突标记
-applyDeprecate  → Git WriteDecision + MemoryGraph UpsertDecision
-applyRevert     → Git ReadDecisionAtCommit + Git WriteDecision(新commit)
-applyCreateObjection → Git WriteObjection + MemoryGraph Upsert
-```
+每个决策写入独立 Git 分支 `decision/{sdr_id}`，版本号由分支 commits 数推导。
 
 **5. 热点值** — `internal/recall/hot_score.go`
 ```
 HotScore = ReferenceCount*20*0.4 + AccessCount*15*0.2 + Relations*25*0.15 + Base(25)
 ```
-每次讨论引用即时重算（`RecordReference` + `RecalculateHotScore`），讨论越多热点值逐步放大。
 
-## Git 存储结构
+## Git 决策树模型
+
+每决策 = 每分支。所有决策以独立 Git 分支存储，通过分支操作管理生命周期。
 
 ```
-data/decisions/{project}/{topic}/{SDRID}.md
-data/objections/{project}/{topic}/{OID}.md
+data/
+├── decisions/{project}/{topic}/{SDRID}.md   ← 各在分支 decision/DEC-xxx 上
+├── objections/{project}/{topic}/{OID}.md
+├── L0_RULES.md                              ← 首个提交
+└── DEC-000.md                               ← Dummy 根决策（main 分支，v0）
 ```
 
-文件格式: YAML frontmatter + Markdown 正文。每次写操作 = `git add + git commit`，全部历史可追溯。
+查看决策树拓扑：
+```bash
+cd data
+git log --graph --oneline --all --decorate
+```
+
+### 6 种 Git 操作
+
+| 操作 | 说明 |
+|------|------|
+| **创建** | `git checkout -b decision/DEC-001 main` → commit, version=1 |
+| **更新** | checkout 自身分支 → 修改 → commit, version++ |
+| **冲突** | 双方分支各自标记 `conflict_status=active` + CONFLICTS_WITH 关系 |
+| **解决** | 胜者 `resolved`，败者 `superseded` + SUPERSEDES 关系 |
+| **回退** | 切回历史分支 → `version = 当前版本 + 1` → commit |
+| **废弃** | 自身分支 `status=deprecated` → commit |
 
 ## MCP 工具
 
@@ -86,12 +191,28 @@ data/objections/{project}/{topic}/{OID}.md
 | 创建 | `create_decision` / `extract_and_create` / `confirm_decision` / `reject_decision` |
 | 冲突 | `conflict_list` / `resolve_conflict` / `check_conflict` / `evaluate_dedup` |
 | Git | `git_history` / `git_search` / `git_blame` / `decision_history` / `revert_decision` |
+| 卡片 | `decision_card` / `refresh` / `stats` / `llm_stats` |
 
-## 构建
+## 测试
 
 ```bash
-go build -o bin/mem-service ./cmd/mem-service/main.go    # 服务模式(检测+推送)
-go build -o bin/mcp-server ./cmd/mcp-server/main.go       # MCP模式(OpenClaw)
+# 核心模型测试
+go test ./internal/decision/ -v
+
+# 管线引擎测试
+go test ./internal/core/ -v
+
+# 信号引擎测试
+go test ./internal/signal/ -v
+
+# Git 决策树全量测试（18 个用例）
+go test ./test/git-tree/ -v
+
+# MCP 集成测试（启动 MCP server + create + resolve + 验证 DAG）
+go test ./test/git-tree/ -v -run "TestMCP"
+
+# 卡片渲染测试（状态 emoji/颜色指示）
+go test ./test/git-tree/ -v -run "TestCard"
 ```
 
 ## 项目结构
@@ -100,8 +221,7 @@ go build -o bin/mcp-server ./cmd/mcp-server/main.go       # MCP模式(OpenClaw)
 cmd/
 ├── mem-service/        # 主服务(检测器循环 + 工作池 + WebSocket)
 ├── mcp-server/         # MCP stdio 服务器
-├── openclaw-hooks/     # OpenClaw 钩子
-└── send-messages/      # 消息发送工具
+
 
 internal/
 ├── lark-adapter/       # 飞书检测器(im/doc/wiki/vc/calendar/task/contact)
@@ -113,8 +233,12 @@ internal/
 ├── recall/             # 检索 + 热点值计算
 ├── card/               # 卡片渲染
 ├── llm/                # LLM 代理
-├── storage/git/        # Git CRUD + 历史追溯
+├── storage/git/        # Git CRUD + 分支管理 + 历史追溯
 ├── storage/bitable/    # Bitable 同步
 ├── config/             # 配置加载
 └── ws/                 # WebSocket 通信
+
+docs/
+├── git-tree.md         # Git 决策树设计文档
+
 ```
