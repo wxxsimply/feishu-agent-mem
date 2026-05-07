@@ -18,7 +18,6 @@ import (
 	"feishu-mem/internal/llm/tools"
 )
 
-
 // LLM 调用计数
 var (
 	llmCallCount atomic.Int64
@@ -113,7 +112,7 @@ func (c *Client) Call(ctx context.Context, systemPrompt, userPrompt string) (str
 
 	modelName := c.config.Model
 	if modelName == "" {
-		modelName = "deepseek-chat"
+		modelName = "deepseek-v4-flash"
 	}
 
 	resp, err := c.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
@@ -166,7 +165,7 @@ func (c *Client) CallWithJSONSchema(ctx context.Context, systemPrompt, userPromp
 
 	modelName := c.config.Model
 	if modelName == "" {
-		modelName = "deepseek-chat"
+		modelName = "deepseek-v4-flash"
 	}
 
 	// 使用 json_object response format + 在 prompt 中描述 schema

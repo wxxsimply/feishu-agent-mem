@@ -5,7 +5,7 @@ mcpServers:
   - name: feishu-memory-agent
     description: 飞书记忆代理 - 管理项目决策记忆
     command:
-      path: /root/openclaw-workspace/feishu-agent-mem/bin/mcp-server
+      path: D:/Code/feishu-agent-mem/bin/mcp-server
       args: []
     env:
-      CONFIG_PATH: /root/openclaw-workspace/feishu-agent-mem/config/openclaw.yaml
+      CONFIG_PATH: D:/Code/feishu-agent-mem/config/openclaw.yaml

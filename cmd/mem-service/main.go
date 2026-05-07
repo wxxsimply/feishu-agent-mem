@@ -24,7 +24,7 @@ import (
 
 // detectorState 单个检测器的状态
 type detectorState struct {
-	detector        larkadapter.Detector
+	detector       larkadapter.Detector
 	adapterType    signal.AdapterType
 	config         config.DetectorConfig
 	inBurstMode    bool
@@ -130,40 +130,40 @@ func main() {
 	}
 	detectorStates := map[signal.AdapterType]*detectorState{
 		signal.AdapterIM: {
-			detector: larkadapter.NewIMExtractor(larkCfg),
+			detector:    larkadapter.NewIMExtractor(larkCfg),
 			adapterType: signal.AdapterIM,
-			config: settings.Detectors.LarkIM,
-			enabled: settings.Detectors.LarkIM.Enabled,
+			config:      settings.Detectors.LarkIM,
+			enabled:     settings.Detectors.LarkIM.Enabled,
 		},
 		signal.AdapterVC: {
-			detector: larkadapter.NewVCExtractor(larkCfg),
+			detector:    larkadapter.NewVCExtractor(larkCfg),
 			adapterType: signal.AdapterVC,
-			config: settings.Detectors.LarkVC,
-			enabled: settings.Detectors.LarkVC.Enabled,
+			config:      settings.Detectors.LarkVC,
+			enabled:     settings.Detectors.LarkVC.Enabled,
 		},
-	signal.AdapterDocs: {
-			detector: docExtractor,
+		signal.AdapterDocs: {
+			detector:    docExtractor,
 			adapterType: signal.AdapterDocs,
-			config: settings.Detectors.LarkDoc,
-			enabled: settings.Detectors.LarkDoc.Enabled,
+			config:      settings.Detectors.LarkDoc,
+			enabled:     settings.Detectors.LarkDoc.Enabled,
 		},
 		signal.AdapterCalendar: {
-			detector: larkadapter.NewCalendarExtractor(larkCfg),
+			detector:    larkadapter.NewCalendarExtractor(larkCfg),
 			adapterType: signal.AdapterCalendar,
-			config: settings.Detectors.LarkCalendar,
-			enabled: settings.Detectors.LarkCalendar.Enabled,
+			config:      settings.Detectors.LarkCalendar,
+			enabled:     settings.Detectors.LarkCalendar.Enabled,
 		},
 		signal.AdapterTask: {
-			detector: larkadapter.NewTaskExtractor(larkCfg),
+			detector:    larkadapter.NewTaskExtractor(larkCfg),
 			adapterType: signal.AdapterTask,
-			config: settings.Detectors.LarkTask,
-			enabled: settings.Detectors.LarkTask.Enabled,
+			config:      settings.Detectors.LarkTask,
+			enabled:     settings.Detectors.LarkTask.Enabled,
 		},
 		signal.AdapterWiki: {
-			detector: larkadapter.NewWikiExtractor(larkCfg),
+			detector:    larkadapter.NewWikiExtractor(larkCfg),
 			adapterType: signal.AdapterWiki,
-			config: settings.Detectors.LarkWiki,
-			enabled: settings.Detectors.LarkWiki.Enabled,
+			config:      settings.Detectors.LarkWiki,
+			enabled:     settings.Detectors.LarkWiki.Enabled,
 		},
 	}
 
@@ -184,9 +184,6 @@ func main() {
 
 	maxWorkers := max(runtime.NumCPU(), 2)
 	workerPool := signal.NewWorkerPool(signalEngine, maxWorkers)
-	if docDebounceTracker != nil {
-		workerPool.SetDebounceTracker(docDebounceTracker)
-	}
 
 	log.Println("[Service] Running in service mode (v2 with burst mode)")
 	log.Printf("[Service] Decisions loaded: %d", memoryGraph.Count())
@@ -194,7 +191,11 @@ func main() {
 	log.Printf("[Service] MCP port: %d", settings.MCP.Port)
 
 	// 启动推送调度器
-	chatIDs := larkCfg.ChatIDs
+	clawCfg := larkadapter.LoadConfigWithPrefix("CLAW_")
+	chatIDs := clawCfg.ChatIDs
+	if len(chatIDs) == 0 {
+		chatIDs = larkCfg.ChatIDs
+	}
 	var pushScheduler *push.PushScheduler
 	if len(chatIDs) > 0 {
 		pushEngine := push.NewPushEngine(memoryGraph)
@@ -434,6 +435,11 @@ func runSingleDetection(
 	}
 
 	// 更新 lastDetected 为最新的变化时间！下次用这个作为起点继续检测！
+	// 防止 lastCheck 被设为未来时间（飞书 API 不接受未来的时间参数）
+	if newLastDetected.After(detectTime) {
+		log.Printf("[Detector] %s: WARNING: change timestamp is in the future (%v), clamping to now", detectorName, newLastDetected)
+		newLastDetected = detectTime
+	}
 	ds.lastCheck = newLastDetected
 	_ = stateMgr.UpdateLastDetected(detectorName, newLastDetected)
 

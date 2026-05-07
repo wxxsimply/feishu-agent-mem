@@ -136,7 +136,7 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 		log.Println("[SignalEngine] Calling ExtractDecisionWithContext...")
 		result, err := e.llmAgent.ExtractDecisionWithContext(
 			content, topics, relatedDecisionSummaries)
-			lastLLMResult = result
+		lastLLMResult = result
 		if err != nil {
 			log.Printf("[SignalEngine] LLM extraction failed: %v, skipping", err)
 			log.Println("========== SIGNAL ENGINE END ==========")
@@ -215,15 +215,15 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 		return nil, nil, nil
 	}
 
-		// 收集反对意见（在 dedup 之前执行）
+	// 收集反对意见（在 dedup 之前执行）
 	var pending []*DecisionMutation
 	if lastLLMResult != nil && lastLLMResult.HasObjections && len(lastLLMResult.Objections) > 0 {
 		pending = e.ProcessObjections(lastLLMResult, sig, allDecisions, proposer, "")
-			delMuts := e.ProcessDeletedDecisions(lastLLMResult, allDecisions)
-			pending = append(pending, delMuts...)
+		delMuts := e.ProcessDeletedDecisions(lastLLMResult, allDecisions)
+		pending = append(pending, delMuts...)
 	}
 
-// Step 2: 检查重复
+	// Step 2: 检查重复
 	if newNode != nil {
 		// Step 2a: 同文档匹配 → 直接 update，不做冲突判断
 		if existing := e.findSameDocument(sig, allDecisions); existing != nil {
@@ -237,7 +237,7 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 		// Step 2b: 跨文档匹配 → evaluateDedupAction（可能检测到冲突）
 		if existing := e.findSimilarDecision(newNode, sig, allDecisions); existing != nil {
 			log.Printf("[SignalEngine] Found similar/related decision: %s (%s)", existing.Title, existing.SDRID)
-			_ = e.Memory.RecordReference(existing.SDRID) // 记录被引用
+			_ = e.Memory.RecordReference(existing.SDRID)     // 记录被引用
 			_ = e.Memory.RecalculateHotScore(existing.SDRID) // 热点值即时更新
 
 			action := e.evaluateDedupAction(newNode, existing)
@@ -533,7 +533,7 @@ func (e *SignalActivationEngine) ProcessSignalForDocJob(sig *StateChangeSignal, 
 		// Step 3b: 跨文档匹配 → evaluateDedupAction
 		if existing := e.findSimilarDecision(newNode, sig, allDecisions); existing != nil {
 			log.Printf("[SignalEngine] Found similar decision: %s (%s)", existing.Title, existing.SDRID)
-			_ = e.Memory.RecordReference(existing.SDRID) // 记录被引用
+			_ = e.Memory.RecordReference(existing.SDRID)     // 记录被引用
 			_ = e.Memory.RecalculateHotScore(existing.SDRID) // 热点值即时更新
 
 			action := e.evaluateDedupAction(newNode, existing)
@@ -1008,7 +1008,6 @@ func (e *SignalActivationEngine) getAllTopics() []string {
 	return topics
 }
 
-
 func extractSenderFromSummary(summary string) string {
 	if idx := strings.Index(summary, "] "); idx >= 0 {
 		rest := summary[idx+2:]
@@ -1390,6 +1389,7 @@ func tokenize(s string) []string {
 
 // hasHighTokenOverlap 检查两个文本是否共享高比例的关键词 Token
 // 用于检测语义相同但措辞不同的决策重复（如"确定使用 Gin" vs "选型确定为 Gin"）
+// 排除单字 CJK 匹配，避免常见决策动词（使用、决定等）导致误匹配
 func hasHighTokenOverlap(a, b string) bool {
 	tokensA := tokenize(a)
 	tokensB := tokenize(b)
@@ -1411,15 +1411,19 @@ func hasHighTokenOverlap(a, b string) bool {
 
 	// 统计短 Token 集中有多少出现在长 Token 集中
 	matchCount := 0
+	substantiveMatch := false // at least one substantive match
 	for _, st := range shorter {
 		for _, lt := range longer {
 			if st == lt || strings.Contains(st, lt) || strings.Contains(lt, st) {
 				matchCount++
+				if len([]rune(st)) > 1 {
+					substantiveMatch = true
+				}
 				break
 			}
 		}
 	}
 
 	// 匹配比例 >= 60% 且至少匹配 3 个 Token 则认为重叠
-	return matchCount >= 3 && float64(matchCount)/float64(len(shorter)) >= 0.6
+	return matchCount >= 3 && substantiveMatch && float64(matchCount)/float64(len(shorter)) >= 0.6
 }

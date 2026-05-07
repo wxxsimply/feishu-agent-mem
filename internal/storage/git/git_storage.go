@@ -148,7 +148,7 @@ func (gs *GitStorage) WriteDecision(node *decision.DecisionNode) (string, error)
 	path := filepath.Join(dir, node.SDRID+".md")
 
 	// 版本号 = 分支上实际 commit 数（从 git 推导，确保与 git 一致）
-	countStr, err := gs.cli.Run("rev-list", "--count", branch, "^main")
+	countStr, err := gs.cli.Run("rev-list", "--count", branch, "^"+gs.config.Branch)
 	if err == nil {
 		if count, e := strconv.Atoi(countStr); e == nil && count > 0 {
 			node.Version = count
@@ -358,7 +358,7 @@ func (gs *GitStorage) EnsureDecisionBranch(branchName string) error {
 		}
 	}
 	// 从 main 创建新分支
-	return gs.cli.CreateBranchFrom(branchName, "main")
+	return gs.cli.CreateBranchFrom(branchName, gs.config.Branch)
 }
 
 // ListDecisionBranches 列出所有 decision/ 前缀的分支

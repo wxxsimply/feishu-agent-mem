@@ -10,9 +10,11 @@ import (
 	"sync"
 	"time"
 
+	"feishu-mem/internal/core"
 	"feishu-mem/internal/decision"
 	"feishu-mem/internal/llm"
 	"feishu-mem/internal/recall"
+	"feishu-mem/internal/storage/git"
 )
 
 // MemoryGraphInterface 内存图接口
@@ -35,11 +37,11 @@ type GitStorageInterface interface {
 	ReadDecision(project, topic, sdrID string) (*decision.DecisionNode, error)
 	ListTopics(project string) ([]string, error)
 	ListObjections(project, topic string) ([]*decision.Objection, error)
-	GetCommitLog(path string, limit int) ([]CommitLogEntry, error)
-	BlameDecision(project, topic, sdrID string) ([]BlameEntry, error)
-	SearchContent(project, query string) ([]SearchHit, error)
+	GetCommitLog(path string, limit int) ([]git.CommitLogEntry, error)
+	BlameDecision(project, topic, sdrID string) ([]git.BlameEntry, error)
+	SearchContent(project, query string) ([]git.SearchHit, error)
 	ReadDecisionAtCommit(project, topic, sdrID, commitHash string) (*decision.DecisionNode, error)
-	GetDecisionHistory(project, topic, sdrID string) ([]CommitLogEntry, error)
+	GetDecisionHistory(project, topic, sdrID string) ([]core.CommitLogEntry, error)
 }
 
 // BitableStoreInterface Bitable 存储接口
@@ -226,6 +228,17 @@ func (s *MCPServer) handleRequest(req Request) {
 }
 
 func (s *MCPServer) handleInitialize(req Request) {
+	if s.initialized {
+		s.sendResponse(req.ID, map[string]any{
+			"protocolVersion": "2024-11-05",
+			"capabilities":    map[string]any{},
+			"serverInfo": map[string]any{
+				"name":    "Feishu Memory Agent",
+				"version": "1.0.0",
+			},
+		})
+		return
+	}
 	s.initialized = true
 	close(s.initDone)
 	s.sendResponse(req.ID, map[string]any{
@@ -1032,7 +1045,7 @@ func (s *MCPServer) handleGitHistory(args map[string]any) []Content {
 	path := getStringArg(args, "path", "")
 	limit := int(getNumberArg(args, "limit", 10))
 
-	var history []CommitLogEntry
+	var history []git.CommitLogEntry
 	if s.gitStorage != nil {
 		var err error
 		history, err = s.gitStorage.GetCommitLog(path, limit)
@@ -1056,7 +1069,7 @@ func (s *MCPServer) handleGitSearch(args map[string]any) []Content {
 	query := getStringArg(args, "query", "")
 	project := getStringArg(args, "project", "")
 
-	var hits []SearchHit
+	var hits []git.SearchHit
 	if s.gitStorage != nil {
 		var err error
 		hits, err = s.gitStorage.SearchContent(project, query)
@@ -1081,7 +1094,7 @@ func (s *MCPServer) handleGitBlame(args map[string]any) []Content {
 	project := getStringArg(args, "project", "")
 	topic := getStringArg(args, "topic", "")
 
-	var blame []BlameEntry
+	var blame []git.BlameEntry
 	if s.gitStorage != nil {
 		var err error
 		blame, err = s.gitStorage.BlameDecision(project, topic, sdrID)
@@ -1164,7 +1177,7 @@ func (s *MCPServer) handleDecisionHistory(args map[string]any) []Content {
 	project := getStringArg(args, "project", "feishu-mem")
 	topic := getStringArg(args, "topic", "general")
 
-	var history []CommitLogEntry
+	var history []core.CommitLogEntry
 	if s.gitStorage != nil {
 		var err error
 		history, err = s.gitStorage.GetDecisionHistory(project, topic, sdrID)

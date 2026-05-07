@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"log"
 	"os"
 	gosignal "os/signal"
@@ -9,14 +11,18 @@ import (
 	"feishu-mem/internal/config"
 	"feishu-mem/internal/core"
 	"feishu-mem/internal/mcp"
+	"feishu-mem/internal/mcp/transport"
 	"feishu-mem/internal/storage/bitable"
 	"feishu-mem/internal/storage/git"
 )
 
 func main() {
-	// 1. 加载配置
-	larkadapter.LoadEnv()
+	// 解析命令行参数
+	mode := flag.String("mode", "stdio", "Transport mode: stdio or http")
+	addr := flag.String("addr", ":37777", "HTTP listen address (only for http mode)")
+	flag.Parse()
 
+	// 1. 加载配置
 	settings := config.DefaultSettings()
 	if cfgPath := os.Getenv("CONFIG_PATH"); cfgPath != "" {
 		if s, err := config.LoadSettings(cfgPath); err == nil {
@@ -73,14 +79,31 @@ func main() {
 	log.Printf("  Project: %s", settings.Project.Name)
 	log.Printf("  Decisions loaded: %d", memoryGraph.Count())
 
-	// 6. 启动 MCP Server (stdio 模式)
+	// 6. 根据模式启动传输层
+	switch *mode {
+	case "http":
+		log.Printf("  Mode: HTTP on %s", *addr)
+		httpTransport := transport.NewHTTPTransport(*addr, "/mcp")
+		// In() 返回 io.Reader（MCP server 读取请求）
+		// Out() 返回 io.Writer（MCP server 写入响应）
+		server.SetIO(httpTransport.In(), httpTransport.Out())
+		if err := httpTransport.Start(); err != nil {
+			log.Fatalf("HTTP transport error: %v", err)
+		}
+		fmt.Fprintf(os.Stderr, "MCP HTTP server listening on %s\n", *addr)
+	default:
+		log.Printf("  Mode: stdio")
+		// 默认使用 stdio，无需额外设置
+	}
+
+	// 7. 启动 MCP Server
 	go func() {
 		if err := server.Start(); err != nil {
 			log.Fatalf("MCP server error: %v", err)
 		}
 	}()
 
-	// 7. 等待退出信号
+	// 8. 等待退出信号
 	sigChan := make(chan os.Signal, 1)
 	gosignal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-sigChan

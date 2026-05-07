@@ -23,10 +23,16 @@ build-hooks:
 	@go build -o $(HOOKS_BINARY) ./cmd/openclaw-hooks/
 
 test:
-	@go test ./test/p1 ./test/p2 ./test/p3 ./test/p4 -v
+	@go test ./internal/... -count=1 -timeout=60s
 
 test-all:
-	@go test ./test/... -v
+	@go test ./test/... -v -count=1 -timeout=120s
+
+test-benchmark:
+	@go test ./test/benchmark/... -v -count=1 -timeout=300s
+
+bench:
+	@go test ./benchmarks/... -bench=. -benchtime=10s -count=1 -timeout=300s
 
 run: build
 	@./$(BINARY)

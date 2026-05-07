@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -24,27 +25,27 @@ type PushEngine struct {
 	cli        *larkadapter.LarkCLI
 
 	// 推送防重（基于 SDRID，24h 冷却）
-	pushedMu         sync.Mutex
-	pushedDecisions  map[string]time.Time // sdr_id → 最后推送时间
-	pushCooldown     time.Duration        // 同一决策的推送冷却期
+	pushedMu        sync.Mutex
+	pushedDecisions map[string]time.Time // sdr_id → 最后推送时间
+	pushCooldown    time.Duration        // 同一决策的推送冷却期
 
 	// 内容去重（基于决策内容 hash，5min 冷却）
-	contentMu         sync.Mutex
-	recentPushedHash  map[string]time.Time // content_hash → 最后推送时间
-	contentCooldown   time.Duration
+	contentMu        sync.Mutex
+	recentPushedHash map[string]time.Time // content_hash → 最后推送时间
+	contentCooldown  time.Duration
 }
 
 // NewPushEngine 创建推送引擎
 func NewPushEngine(memory *core.MemoryGraph) *PushEngine {
 	return &PushEngine{
-		memory:          memory,
-		recall:          recall.NewRecallEngine(memory),
-		cardRender:      card.NewRenderer(),
-		cli:             larkadapter.NewLarkCLI(),
-		pushedDecisions: make(map[string]time.Time),
-		pushCooldown:    24 * time.Hour,
+		memory:           memory,
+		recall:           recall.NewRecallEngine(memory),
+		cardRender:       card.NewRenderer(),
+		cli:              larkadapter.NewLarkCLI(),
+		pushedDecisions:  make(map[string]time.Time),
+		pushCooldown:     24 * time.Hour,
 		recentPushedHash: make(map[string]time.Time),
-		contentCooldown: 5 * time.Minute,
+		contentCooldown:  5 * time.Minute,
 	}
 }
 
@@ -248,13 +249,27 @@ func (pe *PushEngine) sendToFeishu(chatID string, cardJSON string) error {
 		return fmt.Errorf("chatID is empty")
 	}
 
-	// 使用 lark-cli 发送卡片消息
-	output, err := pe.cli.RunCommand("im", "+messages-send",
-		"--chat-id", chatID,
-		"--msg-type", "interactive",
-		"--content", cardJSON,
-		"--as", "bot",
-	)
+	// 写卡片 JSON 到临时文件，避免 bash 命令行转义问题
+	tmpFile, err := os.CreateTemp("", "feishu-card-*.json")
+	if err != nil {
+		return fmt.Errorf("create temp file failed: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := tmpFile.WriteString(cardJSON); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("write temp file failed: %w", err)
+	}
+	tmpFile.Close()
+
+	// 使用 bash 读取文件内容发送（避免 Windows 编码和 bash 转义问题）
+	cmdLine := fmt.Sprintf(`lark-cli im +messages-send --chat-id '%s' --msg-type interactive --content "$(cat '%s')" --as bot`,
+		chatID, tmpPath)
+	output, err := pe.cli.RunBashCommand(cmdLine)
+	if err != nil {
+		return fmt.Errorf("lark-cli send failed: %w", err)
+	}
 	if err != nil {
 		return fmt.Errorf("lark-cli send failed: %w", err)
 	}

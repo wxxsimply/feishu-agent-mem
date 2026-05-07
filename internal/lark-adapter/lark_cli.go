@@ -51,3 +51,23 @@ func (l *LarkCLI) RunCommandJSON(result any, args ...string) error {
 	}
 	return json.Unmarshal(output, result)
 }
+
+// RunBashCommand 通过 bash 执行任意命令（解决 Windows 中文编码问题）
+func (l *LarkCLI) RunBashCommand(cmdLine string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), l.Timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bash", "-c", cmdLine)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("bash command timed out after %v: %s", l.Timeout, cmdLine)
+		}
+		return nil, fmt.Errorf("bash command failed: %w, stderr: %s", err, stderr.String())
+	}
+
+	return stdout.Bytes(), nil
+}

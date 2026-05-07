@@ -20,7 +20,7 @@ logs/
 *.pid
 
 # 配置文件（示例保留，真实配置忽略）
-# config/openclaw.yaml
+config/openclaw.yaml
 
 # Go
 testbed/

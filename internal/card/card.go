@@ -50,8 +50,8 @@ func (r *Renderer) RenderLarkCard(card *recall.DecisionCard) (string, error) {
 // RenderLarkCardFromNode 渲染单个决策为飞书卡片
 func (r *Renderer) RenderLarkCardFromNode(node *decision.DecisionNode, hotScore float64) (string, error) {
 	card := &recall.DecisionCard{
-		Decision:    node,
-		HotScore:    hotScore,
+		Decision:   node,
+		HotScore:   hotScore,
 		RecallType: recall.RecallExact,
 	}
 	return r.RenderLarkCard(card)
@@ -74,7 +74,7 @@ func (r *Renderer) RenderConflictResolutionCard(
 		Elements: []interface{}{
 			larkCardDiv{
 				Tag: "div",
-				Text: larkCardText{
+				Text: &larkCardText{
 					Tag:     "lark_md",
 					Content: fmt.Sprintf("检测到以下两个决策存在冲突：\n%s\n请选择保留哪一个。", reason),
 				},
@@ -84,13 +84,13 @@ func (r *Renderer) RenderConflictResolutionCard(
 			larkCardDiv{
 				Tag: "div",
 				Fields: []larkCardField{
-					{IsShort: true, Text: larkCardText{Tag: "lark_md", Content: fmt.Sprintf("**📌 A: %s**", nodeA.Title)}},
-					{IsShort: true, Text: larkCardText{Tag: "lark_md", Content: fmt.Sprintf("**📊 影响**: %s", nodeA.ImpactLevel)}},
+					{IsShort: true, Text: &larkCardText{Tag: "lark_md", Content: fmt.Sprintf("**📌 A: %s**", nodeA.Title)}},
+					{IsShort: true, Text: &larkCardText{Tag: "lark_md", Content: fmt.Sprintf("**📊 影响**: %s", nodeA.ImpactLevel)}},
 				},
 			},
 			larkCardDiv{
 				Tag: "div",
-				Text: larkCardText{
+				Text: &larkCardText{
 					Tag:     "lark_md",
 					Content: fmt.Sprintf("**决策内容**: %s", truncateStr(nodeA.Decision, 200)),
 				},
@@ -99,13 +99,13 @@ func (r *Renderer) RenderConflictResolutionCard(
 			larkCardDiv{
 				Tag: "div",
 				Fields: []larkCardField{
-					{IsShort: true, Text: larkCardText{Tag: "lark_md", Content: fmt.Sprintf("**📌 B: %s**", nodeB.Title)}},
-					{IsShort: true, Text: larkCardText{Tag: "lark_md", Content: fmt.Sprintf("**📊 影响**: %s", nodeB.ImpactLevel)}},
+					{IsShort: true, Text: &larkCardText{Tag: "lark_md", Content: fmt.Sprintf("**📌 B: %s**", nodeB.Title)}},
+					{IsShort: true, Text: &larkCardText{Tag: "lark_md", Content: fmt.Sprintf("**📊 影响**: %s", nodeB.ImpactLevel)}},
 				},
 			},
 			larkCardDiv{
 				Tag: "div",
-				Text: larkCardText{
+				Text: &larkCardText{
 					Tag:     "lark_md",
 					Content: fmt.Sprintf("**决策内容**: %s", truncateStr(nodeB.Decision, 200)),
 				},
@@ -117,7 +117,7 @@ func (r *Renderer) RenderConflictResolutionCard(
 				Actions: []larkCardButton{
 					{
 						Tag:  "button",
-						Text: larkCardText{Tag: "plain_text", Content: "✅ 保留 A"},
+						Text: &larkCardText{Tag: "plain_text", Content: "✅ 保留 A"},
 						Type: "primary",
 						Value: map[string]interface{}{
 							"action":     "conflict_resolve",
@@ -127,7 +127,7 @@ func (r *Renderer) RenderConflictResolutionCard(
 					},
 					{
 						Tag:  "button",
-						Text: larkCardText{Tag: "plain_text", Content: "✅ 保留 B"},
+						Text: &larkCardText{Tag: "plain_text", Content: "✅ 保留 B"},
 						Type: "primary",
 						Value: map[string]interface{}{
 							"action":     "conflict_resolve",
@@ -176,7 +176,7 @@ func (r *Renderer) RenderDailySummary(
 		cardContent.Elements = append(cardContent.Elements,
 			larkCardDiv{
 				Tag: "div",
-				Text: larkCardText{
+				Text: &larkCardText{
 					Tag:     "lark_md",
 					Content: fmt.Sprintf("**✨ 新增决策 (%d 个)**", len(newDecisions)),
 				},
@@ -190,7 +190,7 @@ func (r *Renderer) RenderDailySummary(
 			cardContent.Elements = append(cardContent.Elements,
 				larkCardDiv{
 					Tag: "div",
-					Text: larkCardText{
+					Text: &larkCardText{
 						Tag:     "lark_md",
 						Content: fmt.Sprintf("• **%s** [%s] - 🔥%.0f", dc.Decision.Title, dc.Decision.SDRID, dc.HotScore),
 					},
@@ -205,7 +205,7 @@ func (r *Renderer) RenderDailySummary(
 			larkCardHr{Tag: "hr"},
 			larkCardDiv{
 				Tag: "div",
-				Text: larkCardText{
+				Text: &larkCardText{
 					Tag:     "lark_md",
 					Content: fmt.Sprintf("**💤 遗忘决策提醒 (%d 个)**", len(forgottenDecisions)),
 				},
@@ -219,7 +219,7 @@ func (r *Renderer) RenderDailySummary(
 			cardContent.Elements = append(cardContent.Elements,
 				larkCardDiv{
 					Tag: "div",
-					Text: larkCardText{
+					Text: &larkCardText{
 						Tag:     "lark_md",
 						Content: fmt.Sprintf("• **%s** [%s] - 🔥%.0f", dc.Decision.Title, dc.Decision.SDRID, dc.HotScore),
 					},
@@ -244,8 +244,8 @@ func (r *Renderer) buildCardElements(node *decision.DecisionNode, hotScore float
 	// 基本信息字段
 	elements = append(elements, larkCardDiv{
 		Tag: "div",
-		Text: larkCardText{
-			Tag:     "lark_md",
+		Text: &larkCardText{
+			Tag: "lark_md",
 			Content: fmt.Sprintf("%s **状态**: `%s` | **影响**: `%s` | **版本**: v%d",
 				r.getStatusEmoji(node.Status), r.getStatusLabel(node.Status),
 				r.getImpactLabel(node.ImpactLevel), node.Version),
@@ -264,28 +264,28 @@ func (r *Renderer) buildCardElements(node *decision.DecisionNode, hotScore float
 		Fields: []larkCardField{
 			{
 				IsShort: true,
-				Text: larkCardText{
+				Text: &larkCardText{
 					Tag:     "lark_md",
 					Content: fmt.Sprintf("**📌 标题**\n%s", node.Title),
 				},
 			},
 			{
 				IsShort: true,
-				Text: larkCardText{
+				Text: &larkCardText{
 					Tag:     "lark_md",
 					Content: fmt.Sprintf("**🏷️ 议题**\n%s", node.Topic),
 				},
 			},
 			{
 				IsShort: true,
-				Text: larkCardText{
+				Text: &larkCardText{
 					Tag:     "lark_md",
 					Content: fmt.Sprintf("**🆔 SDR ID**\n%s", node.SDRID),
 				},
 			},
 			{
 				IsShort: true,
-				Text: larkCardText{
+				Text: &larkCardText{
 					Tag:     "lark_md",
 					Content: fmt.Sprintf("**📅 创建**\n%s%s", node.CreatedAt.Format("01-02 15:04"), conflictInfo),
 				},
@@ -297,7 +297,7 @@ func (r *Renderer) buildCardElements(node *decision.DecisionNode, hotScore float
 	if node.Decision != "" {
 		elements = append(elements, larkCardDiv{
 			Tag: "div",
-			Text: larkCardText{
+			Text: &larkCardText{
 				Tag:     "lark_md",
 				Content: fmt.Sprintf("**📝 决策内容**\n%s", node.Decision),
 			},
@@ -308,7 +308,7 @@ func (r *Renderer) buildCardElements(node *decision.DecisionNode, hotScore float
 	if node.Rationale != "" {
 		elements = append(elements, larkCardDiv{
 			Tag: "div",
-			Text: larkCardText{
+			Text: &larkCardText{
 				Tag:     "lark_md",
 				Content: fmt.Sprintf("**💡 决策依据**\n%s", node.Rationale),
 			},
@@ -326,7 +326,7 @@ func (r *Renderer) buildCardElements(node *decision.DecisionNode, hotScore float
 		}
 		elements = append(elements, larkCardDiv{
 			Tag: "div",
-			Text: larkCardText{
+			Text: &larkCardText{
 				Tag:     "lark_md",
 				Content: peopleInfo,
 			},
@@ -339,9 +339,9 @@ func (r *Renderer) buildCardElements(node *decision.DecisionNode, hotScore float
 	// 操作按钮 - 构建按钮列表
 	buttons := []larkCardButton{
 		{
-			Tag:  "button",
-			Text: larkCardText{Tag: "plain_text", Content: "查看详情"},
-			Type: "primary",
+			Tag:   "button",
+			Text:  &larkCardText{Tag: "plain_text", Content: "查看详情"},
+			Type:  "primary",
 			Value: map[string]interface{}{"action": "view_detail", "sdr_id": node.SDRID},
 		},
 	}
@@ -349,17 +349,17 @@ func (r *Renderer) buildCardElements(node *decision.DecisionNode, hotScore float
 	relatedCount := len(node.Relations)
 	if relatedCount > 0 {
 		buttons = append(buttons, larkCardButton{
-			Tag:  "button",
-			Text: larkCardText{Tag: "plain_text", Content: fmt.Sprintf("关联决策 (%d)", relatedCount)},
-			Type: "default",
+			Tag:   "button",
+			Text:  &larkCardText{Tag: "plain_text", Content: fmt.Sprintf("关联决策 (%d)", relatedCount)},
+			Type:  "default",
 			Value: map[string]interface{}{"action": "view_related", "sdr_id": node.SDRID},
 		})
 	}
 
 	buttons = append(buttons, larkCardButton{
-		Tag:  "button",
-		Text: larkCardText{Tag: "plain_text", Content: "更新状态"},
-		Type: "default",
+		Tag:   "button",
+		Text:  &larkCardText{Tag: "plain_text", Content: "更新状态"},
+		Type:  "default",
 		Value: map[string]interface{}{"action": "update_status", "sdr_id": node.SDRID},
 	})
 
@@ -506,13 +506,13 @@ func (r *Renderer) getImpactLabel(level decision.ImpactLevel) string {
 // 飞书卡片类型定义（小写，内部使用）
 
 type larkCardContent struct {
-	Header  larkCardHeader `json:"header"`
-	Elements []interface{} `json:"elements"`
+	Header   larkCardHeader `json:"header"`
+	Elements []interface{}  `json:"elements"`
 }
 
 type larkCardHeader struct {
 	Title    larkCardText `json:"title"`
-	Template string      `json:"template"`
+	Template string       `json:"template"`
 }
 
 type larkCardText struct {
@@ -521,14 +521,14 @@ type larkCardText struct {
 }
 
 type larkCardDiv struct {
-	Tag    string         `json:"tag"`
-	Text   larkCardText  `json:"text,omitempty"`
+	Tag    string          `json:"tag"`
+	Text   *larkCardText   `json:"text,omitempty"`
 	Fields []larkCardField `json:"fields,omitempty"`
 }
 
 type larkCardField struct {
-	IsShort bool        `json:"is_short"`
-	Text    larkCardText `json:"text"`
+	IsShort bool          `json:"is_short"`
+	Text    *larkCardText `json:"text"`
 }
 
 type larkCardHr struct {
@@ -536,13 +536,13 @@ type larkCardHr struct {
 }
 
 type larkCardAction struct {
-	Tag     string          `json:"tag"`
+	Tag     string           `json:"tag"`
 	Actions []larkCardButton `json:"actions"`
 }
 
 type larkCardButton struct {
 	Tag   string                 `json:"tag"`
-	Text  larkCardText           `json:"text"`
+	Text  *larkCardText          `json:"text"`
 	Type  string                 `json:"type"`
 	Value map[string]interface{} `json:"value"`
 }
