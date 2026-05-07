@@ -1,0 +1,602 @@
+[
+  {
+    "ts": "2017-12-31T00:00:55.000009",
+    "user": "Monroe",
+    "text": "Like Malinoff said, you can use other virtualenv, either way, you'll create an environment, clone the repo, then pip install -r requirements.txt",
+    "conversation_id": "1"
+  },
+  {
+    "ts": "2017-12-31T00:01:18.000021",
+    "user": "Monroe",
+    "text": "The command will change depending on the program of course",
+    "conversation_id": "1"
+  },
+  {
+    "ts": "2017-12-31T00:02:05.000022",
+    "user": "Monroe",
+    "text": "(Off for the night, gn, good luck)",
+    "conversation_id": "1"
+  },
+  {
+    "ts": "2017-12-31T00:55:26.000040",
+    "user": "Rebecca",
+    "text": "Thanks",
+    "conversation_id": "2"
+  },
+  {
+    "ts": "2017-12-31T08:21:48.000049",
+    "user": "Hobert",
+    "text": "In python list extend method,I saw that when we give \"manoj\" ,it is storing in the list as 'm','a','n','o',j' I can understand the difference between this behaviour and the behaviour in list append\n",
+    "conversation_id": "3"
+  },
+  {
+    "ts": "2017-12-31T08:24:17.000013",
+    "user": "Hobert",
+    "text": "My question in append and extend we are inserting single value,but in extend the single value inputs is passed as multiple single values,concept wise I am ok,what is the use case of doing like this in extend method ,can someone explain?",
+    "conversation_id": "3"
+  },
+  {
+    "ts": "2017-12-31T08:45:40.000073",
+    "user": "Floy",
+    "text": "a string is an iterable object",
+    "conversation_id": "3"
+  },
+  {
+    "ts": "2017-12-31T08:45:53.000038",
+    "user": "Floy",
+    "text": "so when you pass it in via extends, it doesn’t add it wholesale",
+    "conversation_id": "3"
+  },
+  {
+    "ts": "2017-12-31T08:46:25.000001",
+    "user": "Floy",
+    "text": "extends iterates over the passed in iterable and adds each index of that iterable to the original list",
+    "conversation_id": "3"
+  },
+  {
+    "ts": "2017-12-31T08:47:06.000036",
+    "user": "Floy",
+    "text": "append just adds the new object to the list",
+    "conversation_id": "3"
+  },
+  {
+    "ts": "2017-12-31T15:53:07.000074",
+    "user": "Kendall",
+    "text": "I don't, but I don't know if I count for an experienced Python dev. :slightly_smiling_face:  I'm an very experienced dev who uses Python.  For my own hacking around, I tend to just install whatever dependencies I need globally using either Pip or conda -- but if I were on a non-trivial shared project I'd rethink that.",
+    "conversation_id": "4"
+  },
+  {
+    "ts": "2017-12-31T16:16:03.000034",
+    "user": "Emmett",
+    "text": "I'm working on a project that uses NamedTuple to interact with different parts. IS it better to use this data structure or dictionaries within python",
+    "conversation_id": "4"
+  },
+  {
+    "ts": "2017-12-31T16:20:41.000042",
+    "user": "Floy",
+    "text": "Depends on your preferences for structure mutability ",
+    "conversation_id": "3"
+  },
+  {
+    "ts": "2017-12-31T16:26:30.000046",
+    "user": "Emmett",
+    "text": "I think I'm more concerned about organization now.",
+    "conversation_id": "5"
+  },
+  {
+    "ts": "2017-12-31T16:26:49.000015",
+    "user": "Emmett",
+    "text": "It's preprocessed data- that is being used to signal events between the modules.",
+    "conversation_id": "5"
+  },
+  {
+    "ts": "2017-12-31T18:27:24.000007",
+    "user": "Emmett",
+    "text": "```  if event and json_data[event]['type'] in route_dict.keys():\n        class_route = route_dict.get(json_data[event]['type'])\n        class_route(event_dict=json_data)\n\n    # verify we have callback_id response and have handler for it\n    if callback_id and json_data[callback_id] in route_dict.keys():\n        route_dict.get(json_data[callback_id])(event_dict=json_data)```\n\n\n```\n    try:\n        class_route = route_dict.get(json_data[event]['type'])\n        class_route(event_dict=json_data)\n    except KeyError as error:\n        pass\n\n    try:\n        class_route = route_dict.get(json_data[callback_id])\n        class_route(event_dict=json_data)\n    except KeyError:\n        pass\n```",
+    "conversation_id": "5"
+  },
+  {
+    "ts": "2017-12-31T18:27:43.000043",
+    "user": "Emmett",
+    "text": "I was reading about not checking dict keys and catching the exception.",
+    "conversation_id": "5"
+  },
+  {
+    "ts": "2017-12-31T18:27:52.000009",
+    "user": "Emmett",
+    "text": "Is this a good way of converting it to be like that?",
+    "conversation_id": "5"
+  },
+  {
+    "ts": "2017-12-31T18:32:28.000042",
+    "user": "Emmett",
+    "text": "I was reading also about using `dict.get(key, default)`",
+    "conversation_id": "5"
+  },
+  {
+    "ts": "2017-12-31T21:15:50.000025",
+    "user": "Nerissa",
+    "text": "I'm hoping someone could point me in the right direction, please. I'm trying to run a project someone else built but i'm getting the following error: \"ImportError: No module named lib.manager\". My googling efforts are coming up short. Can anyone tell me which package/module provides this library, please?",
+    "conversation_id": "6"
+  },
+  {
+    "ts": "2017-12-31T21:16:36.000001",
+    "user": "Nerissa",
+    "text": "I've gone through their documentation to install the dependencies they've listed but the docs seem to have missed something/made an assumption.",
+    "conversation_id": "6"
+  },
+  {
+    "ts": "2017-12-31T21:37:28.000038",
+    "user": "Maryalice",
+    "text": "Does the folder lib and the file manager.py exist in the folder you are running it from? Make sure the downloaded package is available in your Python path",
+    "conversation_id": "7"
+  },
+  {
+    "ts": "2017-12-31T21:45:55.000005",
+    "user": "Nerissa",
+    "text": "That's the thing, i'm not sure what package i'm missing. I'm trying to run this z-wave emulator: <https://github.com/Nico0084/py-zwave-emulator>  and i've followed the install_repo.txt file listing dependencies. I'm doing this on a fresh Ubuntu 16 in aws.",
+    "conversation_id": "6"
+  },
+  {
+    "ts": "2017-12-31T21:46:01.000024",
+    "user": "Nerissa",
+    "text": "The lib and manager.py do exist.",
+    "conversation_id": "6"
+  },
+  {
+    "ts": "2017-12-31T21:49:38.000039",
+    "user": "Nerissa",
+    "text": "I don't do much python so I figure i'm missing something very basic that seasoned folk just always have installed.",
+    "conversation_id": "6"
+  },
+  {
+    "ts": "2017-12-31T21:51:06.000001",
+    "user": "Emmett",
+    "text": "looks like",
+    "conversation_id": "6"
+  },
+  {
+    "ts": "2017-12-31T21:51:14.000082",
+    "user": "Emmett",
+    "text": "it's inside of `lib/Singleton`",
+    "conversation_id": "6"
+  },
+  {
+    "ts": "2017-12-31T21:53:04.000013",
+    "user": "Emmett",
+    "text": "<https://github.com/Nico0084/py-zwave-emulator/blob/master/lib/singleton.py#L14>",
+    "conversation_id": "6"
+  },
+  {
+    "ts": "2017-12-31T22:59:47.000022",
+    "user": "Hobert",
+    "text": "<@Floy> so if we use append,it will always add a element as a single element,in extend it will split the single element into multiple elements and extend the list ",
+    "conversation_id": "8"
+  },
+  {
+    "ts": "2017-12-31T23:00:01.000013",
+    "user": "Hobert",
+    "text": "Am I right ?",
+    "conversation_id": "8"
+  },
+  {
+    "ts": "2018-01-01T08:28:17.000017",
+    "user": "Floy",
+    "text": "<@Hobert> `extend` only works with an iterable, whereas `append` works with everything",
+    "conversation_id": "8"
+  },
+  {
+    "ts": "2018-01-01T08:28:28.000023",
+    "user": "Floy",
+    "text": "other than that, you’re on the right track",
+    "conversation_id": "8"
+  },
+  {
+    "ts": "2018-01-01T08:31:13.000028",
+    "user": "Hobert",
+    "text": "Thank you mate :grin: ",
+    "conversation_id": "8"
+  },
+  {
+    "ts": "2018-01-01T11:29:31.000023",
+    "user": "Kylie",
+    "text": "Hi guys, happy new year everybody! I’m trying to print out to the console only 10 URLs from the long ‘loc’ list -what am i doing wrong? :sparkles:\n`for url in soup.find_all('loc'):`\n`    for x in range(1, 10):`\n`        print(url.text)`\n`        x += 1`",
+    "conversation_id": "9"
+  },
+  {
+    "ts": "2018-01-01T11:31:07.000083",
+    "user": "Zack",
+    "text": "I assume it’s printing out each url ten times?",
+    "conversation_id": "9"
+  },
+  {
+    "ts": "2018-01-01T11:31:28.000055",
+    "user": "Kylie",
+    "text": "yeap",
+    "conversation_id": "9"
+  },
+  {
+    "ts": "2018-01-01T11:31:29.000123",
+    "user": "Zack",
+    "text": "well, actually, no, your `x += 1` kinda borks that as well",
+    "conversation_id": "9"
+  },
+  {
+    "ts": "2018-01-01T11:32:08.000020",
+    "user": "Zack",
+    "text": "so try this instead:\n```\nfor url in soup.find_all('loc')[:10]:\n    print(url.text)\n```",
+    "conversation_id": "9"
+  },
+  {
+    "ts": "2018-01-01T11:33:50.000017",
+    "user": "Kylie",
+    "text": "thnx <@Zack>",
+    "conversation_id": "9"
+  },
+  {
+    "ts": "2018-01-01T11:33:54.000009",
+    "user": "Zack",
+    "text": "did it work?",
+    "conversation_id": "9"
+  },
+  {
+    "ts": "2018-01-01T11:33:57.000007",
+    "user": "Kylie",
+    "text": "yeap",
+    "conversation_id": "9"
+  },
+  {
+    "ts": "2018-01-01T11:34:36.000017",
+    "user": "Zack",
+    "text": "cool - so the key there is that `soup-find_all` is returning a list, which you can slice, only taking the first 10 elements using that `[:10]` notation",
+    "conversation_id": "9"
+  },
+  {
+    "ts": "2018-01-01T11:34:39.000039",
+    "user": "Kylie",
+    "text": "soz for lame q btw",
+    "conversation_id": "9"
+  },
+  {
+    "ts": "2018-01-01T11:34:48.000065",
+    "user": "Zack",
+    "text": "not lame",
+    "conversation_id": "9"
+  },
+  {
+    "ts": "2018-01-01T11:35:28.000009",
+    "user": "Zack",
+    "text": "one bit you might have been confused on though is that iterating using the inner `for` loop was just using the same value for `url` each time.",
+    "conversation_id": "9"
+  },
+  {
+    "ts": "2018-01-01T11:35:56.000053",
+    "user": "Zack",
+    "text": "and further, the `x += 1` wasn’t necessary, because `x` changed automatically for each iteration of that for loop",
+    "conversation_id": "9"
+  },
+  {
+    "ts": "2018-01-01T16:57:30.000053",
+    "user": "Danyel",
+    "text": "heya",
+    "conversation_id": "10"
+  },
+  {
+    "ts": "2018-01-01T17:35:53.000100",
+    "user": "Stefan",
+    "text": "does anyone know if it is possible to stream imap from gmail?",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-01T17:36:15.000095",
+    "user": "Stefan",
+    "text": "as in... reading the message in like &lt; 1s from it being sent without getting blocked",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-01T17:38:37.000019",
+    "user": "Noel",
+    "text": "gmail's imap supports the IDLE extension if thats what you're after",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-01T17:39:44.000055",
+    "user": "Noel",
+    "text": "but theres also things like the gmail push api",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-01T17:41:54.000073",
+    "user": "Stefan",
+    "text": "oh that sounds like the one",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-01T17:42:16.000108",
+    "user": "Stefan",
+    "text": "thanks a lot <@Noel> :taco:",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-01T17:50:00.000100",
+    "user": "Stefan",
+    "text": "<@Noel> this idle extension might be the thing, have you used that?",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-01T17:52:21.000056",
+    "user": "Noel",
+    "text": "not personally but its the standard for connecting to imap and waiting for new stuff",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-01T17:53:00.000056",
+    "user": "Ji",
+    "text": "are we allowed to ask pretty basic questions here as well?",
+    "conversation_id": "12"
+  },
+  {
+    "ts": "2018-01-01T17:53:18.000024",
+    "user": "Noel",
+    "text": "<@Ji> yup!",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-01T17:54:07.000001",
+    "user": "Noel",
+    "text": "<#C07EFMZ1N|help> is generally for basic questions, <#C07EW4DNE|learning_python> is generally for questions about how python works or learning resources and then more specific questions can go into channels for them (like <#C0LN2AD7T|flask> or <#C0LMFRMB5|django> or topics like <#C2J4B66PK|machine_learning>) :slightly_smiling_face:",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-01T17:54:10.000014",
+    "user": "Ji",
+    "text": "ok I'm still learning the language",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-01T17:54:25.000020",
+    "user": "Ji",
+    "text": "def generate_pivot(dataframe, index, values, aggfunc, fill_value=0):\n    return;",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-01T17:54:55.000043",
+    "user": "Ji",
+    "text": "so I've created a function to return pivot_table from pandas",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-01T17:55:16.000033",
+    "user": "Ji",
+    "text": "it keeps getting value of None so I feel like I'm going something wrong",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-01T18:22:56.000020",
+    "user": "Maryalice",
+    "text": "Do you assign the resulting frame to a new variable?",
+    "conversation_id": "13"
+  },
+  {
+    "ts": "2018-01-01T18:39:48.000062",
+    "user": "Ji",
+    "text": "ok I just realized that function won't work b/c it should be in format of pandas.pivot_table(x,y,z,a,b) so is there a way that I can assign all of (z,y,z,a,b) to just 1 variable?",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-01T18:41:50.000030",
+    "user": "Tobias",
+    "text": "You could put it in a class, or a dictionary",
+    "conversation_id": "14"
+  },
+  {
+    "ts": "2018-01-01T18:42:51.000018",
+    "user": "Tobias",
+    "text": "`vars = {x: 6, y: 7, z: 8, a: 1, b: 2}`",
+    "conversation_id": "14"
+  },
+  {
+    "ts": "2018-01-01T18:43:37.000072",
+    "user": "Tobias",
+    "text": "`x = vars.get('x', None)` within the function",
+    "conversation_id": "14"
+  },
+  {
+    "ts": "2018-01-01T19:30:15.000073",
+    "user": "Ji",
+    "text": "ok perfect - that helps a lot!",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-01T19:54:03.000010",
+    "user": "Ji",
+    "text": "I'm trying to put a pivot table (via dash library) and I keep getting  \"TypeError (repr(o) + is not JSON serializable\" - googled and it wasn't of much help",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-01T20:09:17.000015",
+    "user": "Noel",
+    "text": "<@Celia> this usually means you're trying to pass something that can't be converted to JSON to something that is trying to convert it to JSON",
+    "conversation_id": "15"
+  },
+  {
+    "ts": "2018-01-01T20:09:59.000062",
+    "user": "Noel",
+    "text": "typically pandas dataframes have a `to_json()` function, which is more likely what you're going to have to pass to something like dash",
+    "conversation_id": "15"
+  },
+  {
+    "ts": "2018-01-01T20:25:53.000037",
+    "user": "Ji",
+    "text": "ok so I converted my data set from csv to json and created the pivot table from json data - but still same error - I'm guessing I have to convert the variable holding the pivot table to json to get it to work?",
+    "conversation_id": "15"
+  },
+  {
+    "ts": "2018-01-01T22:50:31.000108",
+    "user": "Hai",
+    "text": "Wouldn’t creating a dict from this be the way to go? So if it’s an object, just pass it’s properties as the values and try the json serialisation again <@Ji>",
+    "conversation_id": "11"
+  },
+  {
+    "ts": "2018-01-02T08:36:45.000377",
+    "user": "Michell",
+    "text": "How Important is Testing?",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T08:39:33.000365",
+    "user": "Floy",
+    "text": "well, its nice to know your code is working before you go live :slightly_smiling_face:",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T08:40:09.000045",
+    "user": "Zack",
+    "text": "I think it probably depends on what you are doing, but if you are expecting code to live longer than a short period of time it’s pretty critical",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T08:40:45.000046",
+    "user": "Zack",
+    "text": "It’s the only way to be able to productively refactor without your code turning into a fragile mess",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T08:42:12.000069",
+    "user": "Michell",
+    "text": "Is there any easy to learn testing framework in python for newbies?",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T08:45:20.000208",
+    "user": "Zack",
+    "text": "I think pytest is one of the most common these days",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T08:54:08.000189",
+    "user": "Emmie",
+    "text": "Hi guys, anyone has experience with Tweepy library and could give me a hand with something",
+    "conversation_id": "17"
+  },
+  {
+    "ts": "2018-01-02T08:54:10.000133",
+    "user": "Emmie",
+    "text": "?",
+    "conversation_id": "17"
+  },
+  {
+    "ts": "2018-01-02T08:58:46.000037",
+    "user": "Pei",
+    "text": "Hello folks! now I’m working on one tool, and I have one case, so I need your recommendation.\nI need to dynamically to build endpoints/Blueprints for flask application.\n\nFor example, I have a dict object `{'route': {'name': 'users', 'data': 'array'}`\n\nand for this case I need, create blueprint dynamically.\n\n```\nmy_dict = {'route': {'name': 'users', 'data': 'array'}\nusers = Blueprint('users', __name__')\n\n@users.route(my_dict['route']['name'])\ndef users():\n   return data_from_my_dict_object # my_dict['route']['data']\n```\n\nIt’s just an example, and for example if I’ll have a few routes something like `[{'route': {'name': 'users', 'data': 'array'}, {'route': {'name': 'users', 'data': 'array'}]`, for now it’s not clean for me, how I can implement this:disappointed:",
+    "conversation_id": "18"
+  },
+  {
+    "ts": "2018-01-02T09:00:53.000075",
+    "user": "Zack",
+    "text": "so a couple things with your decorator - you need the `@` before it, and it should be `@users.route` not `add_route`",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T09:01:22.000030",
+    "user": "Pei",
+    "text": "<@Zack> Yeah, just my little mistake.",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T09:01:36.000318",
+    "user": "Tanesha",
+    "text": "Hey guys can i get some help on this.. `rsync -arvz <mailto:root@tsl01.quiet.sh|root@tsl01.quiet.sh>:/data/sites/url/media/* /media`\n\nSo i'm trying to download media files from the server but it does not download them all. I cant figure out why. hopefully someone will know.\n\nSo i travel to the url shown above on the server and there are multiple directories but its not downloading them all. Can anyone shed some light on this problem for me?",
+    "conversation_id": "18"
+  },
+  {
+    "ts": "2018-01-02T09:02:15.000182",
+    "user": "Pei",
+    "text": "<@Zack> but I hope, that you understand my idea, what I want:slightly_smiling_face:",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T09:02:54.000392",
+    "user": "Zack",
+    "text": "so is it just that you want the route path to be from the dictionary?  or do you truly want to dynamically add routes, like not use the decorator",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T09:03:05.000335",
+    "user": "Floy",
+    "text": "<@Tanesha> permission issues?",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T09:04:33.000141",
+    "user": "Tanesha",
+    "text": "it gives me that as an output whilst running the command.",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T09:04:42.000288",
+    "user": "Tanesha",
+    "text": "Does that still seem like permission issues?",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T09:05:12.000142",
+    "user": "Floy",
+    "text": "what are the files that are missing?  are they dotfiles?",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T09:05:23.000281",
+    "user": "Tanesha",
+    "text": "Image files",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T09:06:24.000101",
+    "user": "Tanesha",
+    "text": "Image/Text/pdf",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T09:08:11.000205",
+    "user": "Tanesha",
+    "text": "it makes 0 sense as to why its only downloading certain ones. Its not downloading the complete set of files within the job_files or part_files directories. Very confused haha",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T09:08:34.000075",
+    "user": "Micki",
+    "text": "can you try downloading one of the file it skips ?",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T09:09:05.000405",
+    "user": "Tanesha",
+    "text": "yeah i can give it a go",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T09:09:21.000136",
+    "user": "Tanesha",
+    "text": "oh wait, i dont understand this line of code to great",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T09:09:34.000066",
+    "user": "Tanesha",
+    "text": "`rsync -arvz <mailto:root@tsl01.quiet.sh|root@tsl01.quiet.sh>:/data/sites/static.techniqueservices.com/media/* /media`",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T09:09:51.000266",
+    "user": "Tanesha",
+    "text": "the /media at the very end, is that where the files and being downloaded too?",
+    "conversation_id": "16"
+  },
+  {
+    "ts": "2018-01-02T09:10:21.000361",
+    "user": "Micki",
+    "text": "yes",
+    "conversation_id": "16"
+  }
+]

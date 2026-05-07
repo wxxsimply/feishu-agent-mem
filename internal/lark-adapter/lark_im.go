@@ -1,9 +1,12 @@
 package larkadapter
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
+	"os/exec"
+	"slices"
 	"strings"
 	"time"
 )
@@ -13,6 +16,57 @@ type IMExtractor struct {
 	config  *Config
 	cli     *LarkCLI
 	batcher *MessageBatcher
+}
+
+// LarkEvent 飞书事件结构
+type LarkEvent struct {
+	UUID      string         `json:"uuid"`
+	Timestamp string         `json:"timestamp"`
+	EventType string         `json:"event_type"`
+	Event     map[string]any `json:"event"`
+	Header    map[string]any `json:"header,omitempty"`
+}
+
+// IMMessageReceiveV1 接收消息事件
+type IMMessageReceiveV1 struct {
+	Header struct {
+		EventID    string `json:"event_id"`
+		EventType  string `json:"event_type"`
+		CreateTime string `json:"create_time"`
+		Token      string `json:"token"`
+		AppID      string `json:"app_id"`
+		TenantKey  string `json:"tenant_key"`
+	} `json:"header"`
+	Event struct {
+		Sender struct {
+			SenderID struct {
+				OpenID  string `json:"open_id"`
+				UserID  string `json:"user_id"`
+				UnionID string `json:"union_id"`
+			} `json:"sender_id"`
+			SenderType string `json:"sender_type"`
+			TenantKey  string `json:"tenant_key"`
+		} `json:"sender"`
+		Message struct {
+			MessageID   string `json:"message_id"`
+			RootID      string `json:"root_id"`
+			ParentID    string `json:"parent_id"`
+			CreateTime  string `json:"create_time"`
+			ChatID      string `json:"chat_id"`
+			ChatType    string `json:"chat_type"`
+			MessageType string `json:"message_type"`
+			Content     string `json:"content"`
+			Mentions    []struct {
+				Key       string `json:"key"`
+				ID        struct {
+					OpenID  string `json:"open_id"`
+					UserID  string `json:"user_id"`
+					UnionID string `json:"union_id"`
+				} `json:"id"`
+				Name string `json:"name"`
+			} `json:"mentions"`
+		} `json:"event"`
+	}
 }
 
 // NewIMExtractor 创建群聊提取器
@@ -75,10 +129,18 @@ func (e *IMExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 		lastCheck = time.Now().Add(-1 * time.Hour)
 	}
 
-	cutoff := lastCheck.Unix()
+	// 修复：确保 lastCheck 不是未来时间
+	now := time.Now()
+	if lastCheck.After(now) {
+		log.Printf("[IM] lastCheck is in future (%v), resetting to now", lastCheck)
+		lastCheck = now
+	}
+
+	// 缓冲60秒，避免 create_time 精确到分钟时与 lastCheck 相同而被跳过
+	cutoff := lastCheck.Add(-60 * time.Second).Unix()
 
 	// 1. 检测群聊消息
-	for _, rawChatID := range e.config.ChatIDs {
+	for _, rawChatID := range e.config.DetectChatIDs {
 		chatID := rawChatID
 		if strings.Contains(chatID, ",") {
 			chatID = strings.Split(chatID, ",")[0]
@@ -244,7 +306,7 @@ func entityTypeToLabel(entityType string) string {
 func (e *IMExtractor) Extract() error {
 	rawData := make(map[string]any)
 
-	for _, chatID := range e.config.ChatIDs {
+	for _, chatID := range e.config.DetectChatIDs {
 		items, err := e.getGroupMessageItems(chatID, time.Time{})
 		if err == nil {
 			rawData["chat_messages"] = items
@@ -272,6 +334,10 @@ func (e *IMExtractor) Extract() error {
 func (e *IMExtractor) getP2PMessageItems(lastCheck time.Time) ([]map[string]any, error) {
 	args := []string{"im", "+chat-messages-list", "--user-id", e.config.UserID, "--format", "json"}
 	if !lastCheck.IsZero() {
+		// 确保不传递未来时间
+		if lastCheck.After(time.Now()) {
+			lastCheck = time.Now()
+		}
 		args = append(args, "--start", lastCheck.Format(time.RFC3339))
 	}
 	output, err := e.cli.RunCommand(args...)
@@ -286,6 +352,10 @@ func (e *IMExtractor) getP2PMessageItems(lastCheck time.Time) ([]map[string]any,
 func (e *IMExtractor) getGroupMessageItems(chatID string, lastCheck time.Time) ([]map[string]any, error) {
 	args := []string{"im", "+chat-messages-list", "--chat-id", chatID, "--format", "json"}
 	if !lastCheck.IsZero() {
+		// 确保不传递未来时间
+		if lastCheck.After(time.Now()) {
+			lastCheck = time.Now()
+		}
 		args = append(args, "--start", lastCheck.Format(time.RFC3339))
 	}
 	output, err := e.cli.RunCommand(args...)
@@ -404,9 +474,191 @@ func parseMessageTime(timeStr string) int64 {
 		"2006-01-02T15:04:05-07:00",
 	}
 	for _, f := range formats {
-		if t, err := time.Parse(f, timeStr); err == nil {
+		if t, err := time.ParseInLocation(f, timeStr, time.Local); err == nil {
 			return t.Unix()
 		}
 	}
 	return 0
+}
+
+// ========== 长连接模式 ==========
+
+// LongConnResultHandler 长连接结果处理器
+type LongConnResultHandler func(*DetectResult) error
+
+// StartLongConn 启动长连接监听
+func (e *IMExtractor) StartLongConn(handler LongConnResultHandler) error {
+	log.Printf("[IM] Starting long connection mode")
+
+	args := []string{"event", "+subscribe", "--as", "bot"}
+	cmd := exec.Command("lark-cli", args...)
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("create stdout pipe failed: %w", err)
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("create stderr pipe failed: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start lark-cli failed: %w", err)
+	}
+
+	// 读取 stderr
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			log.Printf("[IM] [lark-cli] %s", scanner.Text())
+		}
+	}()
+
+	// 读取 stdout 处理事件
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			result := e.processEventLine(line)
+			if result != nil && result.HasChanges && handler != nil {
+				if err := handler(result); err != nil {
+					log.Printf("[IM] Handler error: %v", err)
+				}
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			log.Printf("[IM] Scan error: %v", err)
+		}
+	}()
+
+	log.Printf("[IM] Long connection started")
+	return nil
+}
+
+func (e *IMExtractor) processEventLine(line string) *DetectResult {
+	var event LarkEvent
+	if err := json.Unmarshal([]byte(line), &event); err != nil {
+		log.Printf("[IM] Parse event failed: %v", err)
+		return nil
+	}
+
+	switch event.EventType {
+	case "im.message.receive_v1", "im.message.message_receive_v1":
+		return e.processIMMessageEvent(line)
+	default:
+		return nil
+	}
+}
+
+func (e *IMExtractor) processIMMessageEvent(line string) *DetectResult {
+	var msg IMMessageReceiveV1
+	if err := json.Unmarshal([]byte(line), &msg); err != nil {
+		log.Printf("[IM] Parse message event failed: %v", err)
+		return nil
+	}
+
+	chatID := msg.Event.Message.ChatID
+
+	// 检查是否是配置的群聊
+	isWatched := false
+	if len(e.config.DetectChatIDs) > 0 {
+		isWatched = slices.Contains(e.config.DetectChatIDs, chatID)
+	} else {
+		isWatched = true // 没有配置群聊时，处理所有消息
+	}
+
+	if !isWatched {
+		return nil
+	}
+
+	// 构建 MessageRecord
+	record := MessageRecord{
+		MessageID:  msg.Event.Message.MessageID,
+		ChatID:     chatID,
+		CreateTime: parseEventTime(msg.Event.Message.CreateTime),
+		MsgType:    msg.Event.Message.MessageType,
+		ThreadID:   msg.Event.Message.RootID,
+		SenderID:   msg.Event.Sender.SenderID.OpenID,
+	}
+
+	// 解析内容
+	if msg.Event.Message.Content != "" {
+		var content map[string]any
+		if err := json.Unmarshal([]byte(msg.Event.Message.Content), &content); err == nil {
+			if text, ok := content["text"].(string); ok {
+				record.Content = text
+			} else {
+				record.Content = msg.Event.Message.Content
+			}
+		} else {
+			record.Content = msg.Event.Message.Content
+		}
+	}
+
+	// 解析提及
+	for _, m := range msg.Event.Message.Mentions {
+		record.Mentions = append(record.Mentions, m.ID.OpenID)
+		record.SenderName = m.Name // 使用第一个提及的名字？或者从 sender 获取
+	}
+	if record.SenderName == "" {
+		record.SenderName = msg.Event.Sender.SenderID.OpenID
+	}
+
+	// 使用 batcher 聚合
+	e.batcher.UpdateCache(chatID, []MessageRecord{record})
+	groups := e.batcher.GroupMessages([]MessageRecord{record})
+
+	var changes []Change
+	for _, group := range groups {
+		ctxMsg := e.batcher.BuildGroupContext(group)
+		if ctxMsg != nil {
+			changes = append(changes, ctxMsg.Change)
+		}
+	}
+
+	// 如果没有聚合出变化，至少构建单个消息变化
+	if len(changes) == 0 {
+		change := e.classifyMessageChange(
+			"group_message",
+			record.MessageID,
+			record.MsgType,
+			record.SenderName,
+			record.ChatID,
+			record.ThreadID,
+			record.Content,
+			record.CreateTime,
+		)
+		change.SenderID = record.SenderID
+		change.MentionIDs = record.Mentions
+		changes = append(changes, change)
+	}
+
+	return &DetectResult{
+		Source:     e.Name(),
+		HasChanges: len(changes) > 0,
+		DetectedAt: time.Now(),
+		LastCheck:  time.Now(),
+		Changes:    changes,
+	}
+}
+
+func parseEventTime(timeStr string) int64 {
+	if timeStr == "" {
+		return time.Now().Unix()
+	}
+	// 飞书事件时间戳是毫秒
+	if ts, err := time.Parse(time.RFC3339, timeStr); err == nil {
+		return ts.Unix()
+	}
+	// 尝试直接解析为毫秒时间戳
+	var ms int64
+	if _, err := fmt.Sscanf(timeStr, "%d", &ms); err == nil {
+		return ms / 1000
+	}
+	return time.Now().Unix()
 }

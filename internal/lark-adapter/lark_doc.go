@@ -127,7 +127,9 @@ func (e *DocExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 	}
 
 	// 白名单文档 content_hash 变更检测（补充 docs +search 时间戳不更新的问题）
+	log.Printf("[lark_doc] Calling checkWhitelistedDocs...")
 	whitelistChanges := e.checkWhitelistedDocs()
+	log.Printf("[lark_doc] checkWhitelistedDocs returned %d changes", len(whitelistChanges))
 	if len(whitelistChanges) > 0 {
 		log.Printf("[lark_doc] Whitelist check found %d changes", len(whitelistChanges))
 		changes = append(changes, whitelistChanges...)
@@ -190,18 +192,49 @@ func (e *DocExtractor) checkWhitelistedDocs() []Change {
 		// 对比缓存
 		e.cacheLock.Lock()
 		cachedHash, exists := e.contentCache[token]
-		if exists && cachedHash == hash {
+		if !exists {
+			// 首次看到，缓存哈希并跳过（不触发变更）
+			e.contentCache[token] = hash
 			e.cacheLock.Unlock()
-			continue // 内容未变化
+			log.Printf("[lark_doc] Whitelist first seen: %s (hash=%s)", token, hash[:8])
+			continue
 		}
-		// 更新缓存
+		if cachedHash == hash {
+			e.cacheLock.Unlock()
+			// 内容未变化，但检查是否需要防抖检查（用于让防抖计时器递减并在到期时处理）
+			if e.debounceTracker != nil {
+				state := e.debounceTracker.GetState(token)
+				if state != nil && !state.IsStaged {
+					// 防抖等待中的文档，生成一个检查用的 change
+					title := ""
+					if data, ok := fetchResult["data"].(map[string]any); ok {
+						if t, ok := data["title"].(string); ok {
+							title = t
+						}
+					}
+					change := Change{
+						Type:       "doc_updated",
+						EntityType: "doc",
+						EntityID:   token,
+						Summary:    fmt.Sprintf("Whitelist doc debounce check: %s", title),
+						Timestamp:  time.Now().Unix(),
+						Meta: map[string]string{
+							"doc_token":    token,
+							"title":        title,
+							"content_hash": hash,
+							"is_whitelist": "true",
+							"is_check":     "true",
+						},
+					}
+					changes = append(changes, change)
+					continue
+				}
+			}
+			continue
+		}
+		// 内容变更：更新缓存
 		e.contentCache[token] = hash
 		e.cacheLock.Unlock()
-
-		if !exists {
-			log.Printf("[lark_doc] Whitelist first seen: %s (hash=%s)", token, hash[:8])
-			continue // 首次看到，只缓存不触发
-		}
 
 		log.Printf("[lark_doc] Whitelist content changed: %s (old=%s new=%s)", token, cachedHash[:8], hash[:8])
 
@@ -314,6 +347,21 @@ func (e *DocExtractor) searchDocsByTime(lastCheck time.Time) ([]Change, error) {
 				e.processedDocs[docToken] = checkTimestamp
 			}
 			e.processedLock.Unlock()
+		}
+
+		// 解析实际文档 token（Wiki 节点需先解析）
+		var actualDocToken string
+		if resultMeta, ok := itemMap["result_meta"].(map[string]any); ok {
+			actualDocToken = e.resolveActualDocToken(resultMeta, docToken)
+		} else {
+			actualDocToken = docToken
+		}
+
+		// 白名单过滤：如果配置了白名单但当前文档不在白名单中 → 跳过
+		if len(e.docTokensWhitelist) > 0 {
+			if !stringSliceContains(e.docTokensWhitelist, actualDocToken) {
+				continue
+			}
 		}
 
 		filteredCount++

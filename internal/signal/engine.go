@@ -16,6 +16,7 @@ type MemoryGraphInterface interface {
 	UpsertDecision(node *decision.DecisionNode, project string)
 	RecordReference(sdrID string) error
 	UpdateAccessStats(sdrID string) error
+	RecalculateHotScore(sdrID string) error
 }
 
 type PipelineInterface interface {
@@ -163,6 +164,10 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 				newNode.Executor = result.Decision.Executor
 				newNode.ImpactLevel = decision.ImpactLevel(result.Decision.ImpactLevel)
 				newNode.Status = decision.StatusPending
+				// 置信度在 [0.6, 0.8) 之间时设为待确认状态
+				if result.Confidence < 0.8 {
+					newNode.Status = decision.StatusPendingConfirmation
+				}
 
 				// 设置时间相关字段
 				if result.Decision.ProjectPhase != "" {
@@ -233,6 +238,7 @@ func (e *SignalActivationEngine) ProcessSignalForJob(sig *StateChangeSignal, pro
 		if existing := e.findSimilarDecision(newNode, sig, allDecisions); existing != nil {
 			log.Printf("[SignalEngine] Found similar/related decision: %s (%s)", existing.Title, existing.SDRID)
 			_ = e.Memory.RecordReference(existing.SDRID) // 记录被引用
+			_ = e.Memory.RecalculateHotScore(existing.SDRID) // 热点值即时更新
 
 			action := e.evaluateDedupAction(newNode, existing)
 			switch action {
@@ -480,6 +486,10 @@ func (e *SignalActivationEngine) ProcessSignalForDocJob(sig *StateChangeSignal, 
 		newNode.Executor = dec.Executor
 		newNode.ImpactLevel = decision.ImpactLevel(dec.ImpactLevel)
 		newNode.Status = decision.StatusPending
+		// 置信度在 [0.6, 0.8) 之间时设为待确认状态
+		if docResult.Confidence >= 0.6 && docResult.Confidence < 0.8 {
+			newNode.Status = decision.StatusPendingConfirmation
+		}
 
 		// 设置时间相关字段
 		if dec.ProjectPhase != "" {
@@ -524,6 +534,7 @@ func (e *SignalActivationEngine) ProcessSignalForDocJob(sig *StateChangeSignal, 
 		if existing := e.findSimilarDecision(newNode, sig, allDecisions); existing != nil {
 			log.Printf("[SignalEngine] Found similar decision: %s (%s)", existing.Title, existing.SDRID)
 			_ = e.Memory.RecordReference(existing.SDRID) // 记录被引用
+			_ = e.Memory.RecalculateHotScore(existing.SDRID) // 热点值即时更新
 
 			action := e.evaluateDedupAction(newNode, existing)
 			switch action {
@@ -740,12 +751,9 @@ func (e *SignalActivationEngine) findSimilarDecision(
 	log.Printf("[SignalEngine] Checking %d existing decisions for duplicates...", len(allDecisions))
 
 	for _, existing := range allDecisions {
-		log.Printf("[SignalEngine] Comparing with: SDRID=%s, Title=%s, DocTokens=%v",
-			existing.SDRID, existing.Title, existing.FeishuLinks.RelatedDocTokens)
+		// 规则1：同文档匹配由 caller 提前处理
 
-		// 规则1（已移至 findSameDocument）：同文档匹配由 caller 提前处理，不在此处做冲突判断
-
-		// 规则2：Doc/Wiki 降级匹配 — 标题相似（跨文档匹配，可能触发冲突检测）
+		// 规则2：Doc/Wiki 降级匹配 — 标题相似
 		if sig.Adapter == AdapterDocs || sig.Adapter == AdapterWiki {
 			if e.hasSimilarTitle(newNode, existing) {
 				log.Printf("[SignalEngine] Found decision with SIMILAR TITLE (cross-document)!")
@@ -753,7 +761,7 @@ func (e *SignalActivationEngine) findSimilarDecision(
 			}
 		}
 
-		// 规则3：Wiki 同主题匹配（跨文档匹配，可能触发冲突检测）
+		// 规则3：Wiki 同主题匹配
 		if sig.Adapter == AdapterWiki {
 			if e.isSameTopicWikiDocument(newNode, existing) {
 				log.Printf("[SignalEngine] Found decision from SAME TOPIC (Wiki)!")
@@ -761,7 +769,32 @@ func (e *SignalActivationEngine) findSimilarDecision(
 			}
 		}
 
-		// 规则4：不同文档 → 不去重
+		// 规则4：IM/通用消息 — 标题或决策内容重叠（包含/被包含关系 + 关键词 Token 重叠）
+		// 用于轮询检测时的去重：同一段聊天内容在多个轮询周期中提取出的相似决策
+		{
+			existingTitle := strings.TrimSpace(existing.Title)
+			newTitle := strings.TrimSpace(newNode.Title)
+			existingDecision := strings.TrimSpace(existing.Decision)
+			newDecision := strings.TrimSpace(newNode.Decision)
+
+			// 标题互相包含
+			titleMatch := existingTitle != "" && newTitle != "" &&
+				(strings.Contains(existingTitle, newTitle) || strings.Contains(newTitle, existingTitle))
+			// 决策内容互相包含
+			decisionMatch := existingDecision != "" && newDecision != "" &&
+				(strings.Contains(existingDecision, newDecision) || strings.Contains(newDecision, existingDecision))
+			// 关键词 Token 重叠匹配（处理语义相同但措辞不同的重复）
+			tokenMatch := (existingTitle != "" && newTitle != "" && hasHighTokenOverlap(existingTitle, newTitle)) ||
+				(existingDecision != "" && newDecision != "" && hasHighTokenOverlap(existingDecision, newDecision))
+
+			if titleMatch || decisionMatch || tokenMatch {
+				log.Printf("[SignalEngine] Found overlapping decision: %s vs %s (titleMatch=%v, decisionMatch=%v, tokenMatch=%v)",
+					existing.SDRID, newNode.Title, titleMatch, decisionMatch, tokenMatch)
+				return existing
+			}
+		}
+
+		// 规则5：不同文档 → 不去重
 	}
 	log.Printf("[SignalEngine] No similar decision found.")
 	return nil
@@ -1323,4 +1356,70 @@ func appendUniqueStr(slice []string, item string) []string {
 		}
 	}
 	return append(slice, item)
+}
+
+// tokenize 将文本拆分为关键词 Token
+// CJK 字符拆分为单字，英文单词保持完整，标点符号为分隔符
+func tokenize(s string) []string {
+	delimiters := "，。、；：？！\"\"''【】（）()「」『』》《—…·,.;:!?'()[]{}<>/@#$%^&*+=|~` \t\n\r"
+	var tokens []string
+	current := "" // 累积非 CJK 字符（如英文单词）
+	for _, r := range s {
+		if strings.ContainsRune(delimiters, r) {
+			// 标点：刷新当前 token
+			if current != "" {
+				tokens = append(tokens, current)
+				current = ""
+			}
+		} else if r >= 0x4E00 && r <= 0x9FFF {
+			// CJK 统一汉字：刷新当前 token，再添加单字
+			if current != "" {
+				tokens = append(tokens, current)
+				current = ""
+			}
+			tokens = append(tokens, string(r))
+		} else {
+			current += string(r)
+		}
+	}
+	if current != "" {
+		tokens = append(tokens, current)
+	}
+	return tokens
+}
+
+// hasHighTokenOverlap 检查两个文本是否共享高比例的关键词 Token
+// 用于检测语义相同但措辞不同的决策重复（如"确定使用 Gin" vs "选型确定为 Gin"）
+func hasHighTokenOverlap(a, b string) bool {
+	tokensA := tokenize(a)
+	tokensB := tokenize(b)
+	if len(tokensA) == 0 || len(tokensB) == 0 {
+		return false
+	}
+
+	// 用较短的 Token 集去匹配较长的
+	var shorter, longer []string
+	if len(tokensA) <= len(tokensB) {
+		shorter, longer = tokensA, tokensB
+	} else {
+		shorter, longer = tokensB, tokensA
+	}
+
+	if len(shorter) <= 2 {
+		return false // Token 太少，不进行匹配
+	}
+
+	// 统计短 Token 集中有多少出现在长 Token 集中
+	matchCount := 0
+	for _, st := range shorter {
+		for _, lt := range longer {
+			if st == lt || strings.Contains(st, lt) || strings.Contains(lt, st) {
+				matchCount++
+				break
+			}
+		}
+	}
+
+	// 匹配比例 >= 60% 且至少匹配 3 个 Token 则认为重叠
+	return matchCount >= 3 && float64(matchCount)/float64(len(shorter)) >= 0.6
 }

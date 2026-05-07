@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	openai "github.com/sashabaranov/go-openai"
@@ -16,6 +17,16 @@ import (
 
 	"feishu-mem/internal/llm/tools"
 )
+
+
+// LLM 调用计数
+var (
+	llmCallCount atomic.Int64
+)
+
+func GetLLMCallCount() int64 {
+	return llmCallCount.Load()
+}
 
 // GenerateSchema 泛型生成 JSON Schema（供结构化输出使用）
 func GenerateSchema[T any]() *jsonschema.Schema {
@@ -97,6 +108,7 @@ func (c *Client) Call(ctx context.Context, systemPrompt, userPrompt string) (str
 		return "", fmt.Errorf("DEEPSEEK_API_KEY is not set")
 	}
 
+	llmCallCount.Add(1)
 	startTime := time.Now()
 
 	modelName := c.config.Model
@@ -124,6 +136,7 @@ func (c *Client) Call(ctx context.Context, systemPrompt, userPrompt string) (str
 	}
 
 	elapsed := time.Since(startTime)
+	log.Printf("[LLM] ✅ LLM call succeeded in %v (total calls: %d)", elapsed, llmCallCount.Load())
 
 	if len(resp.Choices) == 0 {
 		log.Println("[LLM] ERROR: No response from LLM")

@@ -63,9 +63,15 @@ func (g *GitCLI) GetHeadHash() (string, error) {
 	return g.Run("rev-parse", "HEAD")
 }
 
-// CreateBranch 创建分支
+// CreateBranch 创建分支（从当前 HEAD）
 func (g *GitCLI) CreateBranch(branchName string) error {
 	_, err := g.Run("checkout", "-b", branchName)
+	return err
+}
+
+// CreateBranchFrom 从指定 base 创建分支
+func (g *GitCLI) CreateBranchFrom(branchName, base string) error {
+	_, err := g.Run("checkout", "-b", branchName, base)
 	return err
 }
 

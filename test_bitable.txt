@@ -1,0 +1,5 @@
+
+## 验证: bitable decision_type 字段
+
+本次修改用于验证新增的 decision_type 字段是否可以正常写入。
+决策内容：测试决策类型字段。
