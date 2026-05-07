@@ -244,19 +244,29 @@ func (r *Renderer) buildCardElements(node *decision.DecisionNode, hotScore float
 	// 基本信息字段
 	elements = append(elements, larkCardDiv{
 		Tag: "div",
+		Text: larkCardText{
+			Tag:     "lark_md",
+			Content: fmt.Sprintf("%s **状态**: `%s` | **影响**: `%s` | **版本**: v%d",
+				r.getStatusEmoji(node.Status), r.getStatusLabel(node.Status),
+				r.getImpactLabel(node.ImpactLevel), node.Version),
+		},
+	})
+
+	// 基本信息字段（含冲突状态）
+	conflictInfo := ""
+	if node.ConflictStatus == "active" && node.ConflictWith != "" {
+		conflictInfo = fmt.Sprintf(" | ⚔️ 与 %s 冲突中", node.ConflictWith)
+	} else if node.ConflictStatus == "resolved" {
+		conflictInfo = " | ✅ 冲突已解决"
+	}
+	elements = append(elements, larkCardDiv{
+		Tag: "div",
 		Fields: []larkCardField{
 			{
 				IsShort: true,
 				Text: larkCardText{
 					Tag:     "lark_md",
 					Content: fmt.Sprintf("**📌 标题**\n%s", node.Title),
-				},
-			},
-			{
-				IsShort: true,
-				Text: larkCardText{
-					Tag:     "lark_md",
-					Content: fmt.Sprintf("**📊 状态**\n%s | %s", node.Status, node.ImpactLevel),
 				},
 			},
 			{
@@ -270,7 +280,14 @@ func (r *Renderer) buildCardElements(node *decision.DecisionNode, hotScore float
 				IsShort: true,
 				Text: larkCardText{
 					Tag:     "lark_md",
-					Content: fmt.Sprintf("**📅 创建时间**\n%s", node.CreatedAt.Format("2006-01-02 15:04")),
+					Content: fmt.Sprintf("**🆔 SDR ID**\n%s", node.SDRID),
+				},
+			},
+			{
+				IsShort: true,
+				Text: larkCardText{
+					Tag:     "lark_md",
+					Content: fmt.Sprintf("**📅 创建**\n%s%s", node.CreatedAt.Format("01-02 15:04"), conflictInfo),
 				},
 			},
 		},
@@ -375,11 +392,11 @@ func truncateStr(s string, maxLen int) string {
 
 func (r *Renderer) getStatusTemplate(status decision.DecisionStatus) string {
 	switch status {
-	case decision.StatusCompleted:
+	case decision.StatusCompleted, decision.StatusDecided:
 		return "green"
-	case decision.StatusInDiscussion:
+	case decision.StatusInDiscussion, decision.StatusPendingConfirmation, decision.StatusPending:
 		return "yellow"
-	case decision.StatusRejected, decision.StatusDeprecated, decision.StatusShelved:
+	case decision.StatusRejected, decision.StatusDeprecated, decision.StatusShelved, decision.StatusSuperseded:
 		return "red"
 	default:
 		return "blue"
@@ -411,6 +428,78 @@ func (r *Renderer) getCategoryIcon(category recall.HotCategory) string {
 		return "🪦"
 	default:
 		return "📋"
+	}
+}
+
+// getStatusEmoji 返回状态对应的 emoji
+func (r *Renderer) getStatusEmoji(status decision.DecisionStatus) string {
+	switch status {
+	case decision.StatusPending:
+		return "🕐"
+	case decision.StatusPendingConfirmation:
+		return "❓"
+	case decision.StatusInDiscussion:
+		return "💬"
+	case decision.StatusDecided:
+		return "✅"
+	case decision.StatusExecuting:
+		return "🛠️"
+	case decision.StatusCompleted:
+		return "✅"
+	case decision.StatusShelved:
+		return "📦"
+	case decision.StatusRejected:
+		return "❌"
+	case decision.StatusSuperseded:
+		return "🔄"
+	case decision.StatusDeprecated:
+		return "🚫"
+	default:
+		return "❓"
+	}
+}
+
+// getStatusLabel 返回状态的中文标签
+func (r *Renderer) getStatusLabel(status decision.DecisionStatus) string {
+	switch status {
+	case decision.StatusPending:
+		return "待处理"
+	case decision.StatusPendingConfirmation:
+		return "待确认"
+	case decision.StatusInDiscussion:
+		return "讨论中"
+	case decision.StatusDecided:
+		return "已决定"
+	case decision.StatusExecuting:
+		return "执行中"
+	case decision.StatusCompleted:
+		return "已完成"
+	case decision.StatusShelved:
+		return "已搁置"
+	case decision.StatusRejected:
+		return "已拒绝"
+	case decision.StatusSuperseded:
+		return "已取代"
+	case decision.StatusDeprecated:
+		return "已废弃"
+	default:
+		return "未知"
+	}
+}
+
+// getImpactLabel 返回影响级别的中文标签
+func (r *Renderer) getImpactLabel(level decision.ImpactLevel) string {
+	switch level {
+	case decision.ImpactAdvisory:
+		return "建议"
+	case decision.ImpactMinor:
+		return "次要"
+	case decision.ImpactMajor:
+		return "重要"
+	case decision.ImpactCritical:
+		return "关键"
+	default:
+		return string(level)
 	}
 }
 

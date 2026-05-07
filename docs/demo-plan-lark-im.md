@@ -160,3 +160,4 @@ curl -s -X POST "https://open.feishu.cn/open-apis/bot/v2/hook/fd9dc672-40ae-4bdb
 数据库选型决定采用 PostgreSQL 15，支持复杂查询和 MVCC
 
 数据库选型改为使用 MySQL 8.0，运维团队更熟悉
+

@@ -16,6 +16,14 @@ type DecisionNode struct {
 	Project string `json:"project" yaml:"project"`
 	Topic   string `json:"topic" yaml:"topic"` // 唯一位置锚点
 
+	// === Git 分支管理 ===
+	Branch  string `json:"branch" yaml:"branch"`    // 决策所在 Git 分支，如 "decision/DEC-001"
+	Version int    `json:"version" yaml:"version"`  // 决策版本号（= 该分支上 commits 数）
+
+	// === 冲突状态 ===
+	ConflictStatus string `json:"conflict_status,omitempty" yaml:"conflict_status,omitempty"` // "" | "active" | "resolved"
+	ConflictWith   string `json:"conflict_with,omitempty" yaml:"conflict_with,omitempty"`     // 冲突对端的 SDRID
+
 	// === 时态标签 ===
 	Phase       string      `json:"phase" yaml:"phase"`
 	PhaseScope  PhaseScope  `json:"phase_scope" yaml:"phase_scope"`
@@ -96,6 +104,54 @@ const (
 	StatusPendingConfirmation DecisionStatus = "pending_confirmation"
 )
 
+// 冲突状态常量
+const (
+	ConflictActive   = "active"
+	ConflictResolved = "resolved"
+)
+
+// 分支前缀常量
+const (
+	BranchPrefixDecision = "decision/"
+	DummySDRID           = "DEC-000"
+)
+
+// GetDecisionBranch 返回决策的 Git 分支名
+func (d *DecisionNode) GetDecisionBranch() string {
+	if d.Branch != "" {
+		return d.Branch
+	}
+	return BranchPrefixDecision + d.SDRID
+}
+
+// BumpVersion 版本号递增
+func (d *DecisionNode) BumpVersion() {
+	d.Version++
+}
+
+// SetConflict 设置冲突状态和 CONFLICTS_WITH 关系
+func (d *DecisionNode) SetConflict(otherSDRID string) {
+	d.ConflictStatus = ConflictActive
+	d.ConflictWith = otherSDRID
+	d.AddRelation(RelationConflictsWith, otherSDRID, "")
+}
+
+// ResolveConflict 清除冲突标记
+func (d *DecisionNode) ResolveConflict() {
+	d.ConflictStatus = ConflictResolved
+	d.ConflictWith = ""
+}
+
+// AddRelation 添加关系边
+func (d *DecisionNode) AddRelation(relType RelationType, targetSDRID, description string) {
+	for _, r := range d.Relations {
+		if r.Type == relType && r.TargetSDRID == targetSDRID {
+			return // 已存在，不重复添加
+		}
+	}
+	d.Relations = append(d.Relations, NewRelation(relType, targetSDRID, description))
+}
+
 // VersionRange 版本范围
 type VersionRange struct {
 	From string `json:"from" yaml:"from"`
@@ -143,6 +199,8 @@ func NewDecisionNode(sdrID, title, project, topic string) *DecisionNode {
 		Title:         title,
 		Project:       project,
 		Topic:         topic,
+		Branch:        BranchPrefixDecision + sdrID,
+		Version:       1,
 		PhaseScope:    PhaseScopePoint,
 		ImpactLevel:   ImpactMinor,
 		Status:        StatusPending,
@@ -156,6 +214,23 @@ func NewDecisionNode(sdrID, title, project, topic string) *DecisionNode {
 			HotScore:       100, // 新决策初始热点值为最大值
 			LastCalculated: &now,
 		},
+	}
+}
+
+// NewDummyDecision 创建 Dummy 根决策（main 分支，version 永远为 0）
+func NewDummyDecision() *DecisionNode {
+	now := time.Now()
+	return &DecisionNode{
+		SDRID:       DummySDRID,
+		Title:       "Root Dummy",
+		Project:     "feishu-mem",
+		Topic:       "general",
+		Branch:      "main",
+		Version:     0,
+		Status:      StatusCompleted,
+		PhaseScope:  PhaseScopePoint,
+		ImpactLevel: ImpactMinor,
+		CreatedAt:   now,
 	}
 }
 

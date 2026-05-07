@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -109,11 +110,35 @@ func (gs *GitStorage) initRepo() error {
 		_, _ = gs.cli.Run("commit", "-m", "Initial commit: L0 rules")
 	}
 
+	// 创建 Dummy 决策（仅首次）
+	dummyPath := filepath.Join(gs.workDir, decision.DummySDRID+".md")
+	if _, err := os.Stat(dummyPath); os.IsNotExist(err) {
+		dummy := decision.NewDummyDecision()
+		content := RenderDecisionFile(dummy)
+		_ = os.WriteFile(dummyPath, []byte(content), 0644)
+		_, _ = gs.cli.Run("add", decision.DummySDRID+".md")
+		_, _ = gs.cli.Run("commit", "-m", "dummy: Root Dummy (v0)")
+	}
+
 	return nil
 }
 
-// WriteDecision 写入决策文件 + commit
+// WriteDecision 写入决策文件 + commit（在决策自身分支上操作）
 func (gs *GitStorage) WriteDecision(node *decision.DecisionNode) (string, error) {
+	// 确保决策分支存在并切换过去
+	branch := node.GetDecisionBranch()
+	if err := gs.EnsureDecisionBranch(branch); err != nil {
+		return "", fmt.Errorf("ensure branch %s failed: %w", branch, err)
+	}
+
+	// 切换（确保在正确的分支上）
+	currentBranch, _ := gs.GetCurrentBranch()
+	if currentBranch != branch {
+		if err := gs.SwitchBranch(branch); err != nil {
+			return "", fmt.Errorf("switch to branch %s failed: %w", branch, err)
+		}
+	}
+
 	// 构建文件路径
 	dir := filepath.Join(gs.workDir, "decisions", node.Project, node.Topic)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -121,6 +146,14 @@ func (gs *GitStorage) WriteDecision(node *decision.DecisionNode) (string, error)
 	}
 
 	path := filepath.Join(dir, node.SDRID+".md")
+
+	// 版本号 = 分支上实际 commit 数（从 git 推导，确保与 git 一致）
+	countStr, err := gs.cli.Run("rev-list", "--count", branch, "^main")
+	if err == nil {
+		if count, e := strconv.Atoi(countStr); e == nil && count > 0 {
+			node.Version = count
+		}
+	}
 
 	// 渲染内容
 	content := RenderDecisionFile(node)
@@ -137,6 +170,8 @@ func (gs *GitStorage) WriteDecision(node *decision.DecisionNode) (string, error)
 	}
 
 	node.GitCommitHash = hash
+
+	// 留在决策分支上（后续 ReadDecision 操作将自动读取正确分支）
 
 	// auto push
 	if gs.config.AutoPush && gs.remote != "" {
@@ -308,6 +343,57 @@ func (gs *GitStorage) GetCurrentBranch() (string, error) {
 // ListBranches 列出所有分支
 func (gs *GitStorage) ListBranches() ([]string, error) {
 	return gs.cli.ListBranches()
+}
+
+// EnsureDecisionBranch 确保决策分支存在（从 main 创建）
+func (gs *GitStorage) EnsureDecisionBranch(branchName string) error {
+	// 检查分支是否已存在
+	branches, err := gs.ListBranches()
+	if err != nil {
+		return err
+	}
+	for _, b := range branches {
+		if b == branchName {
+			return nil // 已存在
+		}
+	}
+	// 从 main 创建新分支
+	return gs.cli.CreateBranchFrom(branchName, "main")
+}
+
+// ListDecisionBranches 列出所有 decision/ 前缀的分支
+func (gs *GitStorage) ListDecisionBranches() ([]string, error) {
+	branches, err := gs.ListBranches()
+	if err != nil {
+		return nil, err
+	}
+	var decisionBranches []string
+	for _, b := range branches {
+		if strings.HasPrefix(b, decision.BranchPrefixDecision) {
+			decisionBranches = append(decisionBranches, b)
+		}
+	}
+	return decisionBranches, nil
+}
+
+// ReadDecisionFromBranch 从指定分支读取决策文件
+func (gs *GitStorage) ReadDecisionFromBranch(branch, sdrID string) (*decision.DecisionNode, error) {
+	// 用 git ls-tree 找到分支上的决策文件路径
+	output, err := gs.cli.Run("ls-tree", "-r", "--name-only", branch)
+	if err != nil {
+		return nil, fmt.Errorf("ls-tree on %s failed: %w", branch, err)
+	}
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasSuffix(line, "/"+sdrID+".md") {
+			content, err := gs.cli.ReadFileAtCommit(line, branch)
+			if err != nil {
+				return nil, fmt.Errorf("read %s at %s failed: %w", line, branch, err)
+			}
+			return ParseDecisionFile([]byte(content))
+		}
+	}
+	return nil, fmt.Errorf("decision %s not found on branch %s", sdrID, branch)
 }
 
 // GetCommitLog 获取提交历史

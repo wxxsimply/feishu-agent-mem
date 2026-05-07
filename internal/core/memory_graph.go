@@ -13,6 +13,9 @@ import (
 type GitReader interface {
 	ListDecisions(project, topic string) ([]*decision.DecisionNode, error)
 	ListTopics(project string) ([]string, error)
+	ListDecisionBranches() ([]string, error)
+	ReadDecision(project, topic, sdrID string) (*decision.DecisionNode, error)
+	ReadDecisionFromBranch(branch, sdrID string) (*decision.DecisionNode, error)
 }
 
 // MemoryGraph 内存决策图 — 运行时加速
@@ -51,27 +54,44 @@ func NewMemoryGraph() *MemoryGraph {
 }
 
 // LoadFromGit 启动时从 Git 全量加载决策
+// 遍历所有 decision/ 分支，读取每个分支的最新 HEAD
 func (mg *MemoryGraph) LoadFromGit(reader GitReader, project string) error {
 	mg.mu.Lock()
 	defer mg.mu.Unlock()
 
-	// 列出所有议题
-	topics, err := reader.ListTopics(project)
+	// 列出所有决策分支
+	branches, err := reader.ListDecisionBranches()
 	if err != nil {
-		return err
+		return fmt.Errorf("list decision branches failed: %w", err)
 	}
 
-	for _, topic := range topics {
-		decisions, err := reader.ListDecisions(project, topic)
-		if err != nil {
+	for _, branch := range branches {
+		// 从分支名提取 sdrID: "decision/DEC-001" -> "DEC-001"
+		sdrID := stringsTrimPrefix(branch, decision.BranchPrefixDecision)
+		if sdrID == "" {
 			continue
 		}
-		for _, d := range decisions {
-			mg.addDecisionInternal(d, project)
+		node, err := reader.ReadDecisionFromBranch(branch, sdrID)
+		if err != nil {
+			continue // 跳过读取失败的分支
 		}
+		mg.addDecisionInternal(node, project)
+	}
+
+	// 也加载 Dummy 决策（从 main 分支）
+	if dummy, err := reader.ReadDecision(project, "general", decision.DummySDRID); err == nil && dummy != nil {
+		mg.addDecisionInternal(dummy, project)
 	}
 
 	return nil
+}
+
+// stringsTrimPrefix 是 strings.TrimPrefix 的内联版本（避免 import strings）
+func stringsTrimPrefix(s, prefix string) string {
+	if len(s) >= len(prefix) && s[:len(prefix)] == prefix {
+		return s[len(prefix):]
+	}
+	return s
 }
 
 func (mg *MemoryGraph) addDecisionInternal(node *decision.DecisionNode, project string) {

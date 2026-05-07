@@ -21,7 +21,7 @@ detectors:
     heartbeat_interval: 15s         # 检测器心跳间隔
 
   lark_doc:
-    enabled: false
+    enabled: true
     interval: 10s
     burst_interval: 5s
     burst_timeout: 2m
